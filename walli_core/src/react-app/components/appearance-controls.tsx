@@ -21,7 +21,6 @@ export function AppearanceControls({ className }: { className?: string }) {
   const switchLanguage = async (language: string) => {
     await i18n.changeLanguage(language);
     window.localStorage.setItem("walli_core_language", language);
-    document.documentElement.lang = language;
   };
 
   return (

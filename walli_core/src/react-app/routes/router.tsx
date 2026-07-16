@@ -1,9 +1,11 @@
 import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import { AppLayout } from "./app-layout";
-import { DashboardRoute } from "./dashboard-route";
-import { KeysRoute } from "./keys-route";
-import { LoginRoute } from "./login-route";
-import { PromptRoute } from "./prompt/prompt-route";
+import {
+  LazyDashboardRoute,
+  LazyKeysRoute,
+  LazyLoginRoute,
+  LazyPromptRoute,
+} from "./lazy-routes";
 import { RootLayout } from "./root-layout";
 
 const rootRoute = createRootRoute({
@@ -19,25 +21,25 @@ const appLayoutRoute = createRoute({
 const indexRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: "/",
-  component: DashboardRoute,
+  component: LazyDashboardRoute,
 });
 
 const promptRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: "/prompt",
-  component: PromptRoute,
+  component: LazyPromptRoute,
 });
 
 const keysRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: "/keys",
-  component: KeysRoute,
+  component: LazyKeysRoute,
 });
 
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/login",
-  component: LoginRoute,
+  component: LazyLoginRoute,
 });
 
 const routeTree = rootRoute.addChildren([

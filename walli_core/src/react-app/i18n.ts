@@ -25,6 +25,14 @@ void i18n.use(initReactI18next).init({
   },
 });
 
-document.documentElement.lang = i18n.language;
+const syncDocumentLanguage = (language: string) => {
+  const normalizedLanguage = language.startsWith("zh") ? "zh" : "en";
+
+  document.documentElement.lang = normalizedLanguage;
+  document.title = i18n.t("appBrand", { lng: normalizedLanguage });
+};
+
+syncDocumentLanguage(i18n.language);
+i18n.on("languageChanged", syncDocumentLanguage);
 
 export default i18n;
