@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { adminStatusRoute } from "./api/admin-status";
-import { authRoutes, createAuth, type AppSession, type AppUser } from "./api/auth";
+import { createAuth, type AppSession, type AppUser } from "./api/auth";
 import { meRoute } from "./api/me";
 import { rootRoute } from "./api/root";
 import type { AppBindings } from "./api/types";
@@ -23,7 +23,7 @@ app.use("*", async (c, next) => {
   await next();
 });
 
-app.route("/api/auth", authRoutes);
+app.on(["GET", "POST"], "/api/auth/*", (c) => createAuth(c.env).handler(c.req.raw));
 app.route("/", rootRoute);
 app.route("/", meRoute);
 app.route("/", adminStatusRoute);

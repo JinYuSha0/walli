@@ -90,18 +90,57 @@ Create the database:
 pnpm --filter walli_core exec wrangler d1 create walli_core
 ```
 
-Copy the returned `database_id` into `walli_core/wrangler.toml`, then initialize the schema:
+Copy the returned `database_id` into `walli_core/wrangler.toml`. Drizzle schema lives in `walli_core/src/worker/db/schema.ts`, and SQL migrations are generated into `walli_core/migrations`.
+
+Generate migrations after changing the Drizzle schema:
 
 ```bash
-pnpm --filter walli_core exec wrangler d1 execute walli_core --local --file=./schema.sql
-pnpm --filter walli_core exec wrangler d1 execute walli_core --remote --file=./schema.sql
+pnpm run db:generate:walli_core
+```
+
+Apply migrations locally or remotely:
+
+```bash
+pnpm run db:migrate:walli_core:local
+pnpm run db:migrate:walli_core:remote
 ```
 
 ## Build and Deploy
 
+Create a production env file that is not committed to git:
+
 ```bash
-pnpm --filter walli_core build
-pnpm --filter walli_core deploy
+cp walli_core/.dev.vars.example walli_core/.env
+```
+
+Use production values in `walli_core/.env`:
+
+```text
+BETTER_AUTH_SECRET="generated-secret"
+BETTER_AUTH_URL="https://your-domain.com"
+BETTER_AUTH_TRUSTED_ORIGINS="https://your-domain.com"
+GOOGLE_CLIENT_ID="your-google-client-id"
+GOOGLE_CLIENT_SECRET="your-google-client-secret"
+ADMIN_EMAILS="admin@example.com"
+```
+
+Upload the values to Cloudflare Workers secrets:
+
+```bash
+pnpm run secrets
+```
+
+Then build and deploy:
+
+```bash
+pnpm run build:walli_core
+pnpm run deploy:walli_core
+```
+
+Google OAuth must include this production callback URL:
+
+```text
+https://your-domain.com/api/auth/callback/google
 ```
 
 Cloudflare is the intended deployment target because Workers, D1, and related storage products keep the runtime lightweight and inexpensive for small-to-medium chatbot workloads.

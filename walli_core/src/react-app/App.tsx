@@ -15,10 +15,12 @@ function App() {
   const [isCheckingAdmin, setIsCheckingAdmin] = useState(false);
 
   const signInWithGoogle = async () => {
+    const callbackURL = window.location.href;
+
     await authClient.signIn.social({
       provider: "google",
-      callbackURL: "/",
-      errorCallbackURL: "/",
+      callbackURL,
+      errorCallbackURL: callbackURL,
     });
   };
 

@@ -16,9 +16,12 @@ export const appUserSchema = z
     name: z.string(),
     email: z.string(),
     image: z.string().nullable().optional(),
-    role: z.union([z.string(), z.array(z.string())]).nullable().optional(),
+    role: z
+      .union([z.string(), z.array(z.string())])
+      .nullable()
+      .optional(),
   })
-  .strict();
+  .passthrough();
 
 export const appSessionSchema = z
   .object({

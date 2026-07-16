@@ -1,8 +1,7 @@
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { betterAuth } from "better-auth/minimal";
+import { betterAuth } from "better-auth";
 import { admin } from "better-auth/plugins/admin";
-import { drizzle } from "drizzle-orm/d1";
-import { Hono } from "hono";
+import { createDb } from "../../db/client";
 import * as schema from "../../db/schema";
 
 export type AppUser = {
@@ -31,10 +30,31 @@ const splitList = (value?: string, options?: { lowercase?: boolean }) =>
 export const isAdminEmail = (email: string | undefined, env: Env) =>
   !!email && splitList(env.ADMIN_EMAILS).includes(email.toLowerCase());
 
-
-
 const isConfiguredSecret = (value: string | undefined, placeholder: string) =>
   !!value && value.trim() !== "" && value !== placeholder;
+
+const getTrustedOrigins = (env: Env) =>
+  splitList(env.BETTER_AUTH_TRUSTED_ORIGINS, { lowercase: false });
+
+const getGoogleProvider = (env: Env) => {
+  const clientId = env.GOOGLE_CLIENT_ID?.trim();
+  const clientSecret = env.GOOGLE_CLIENT_SECRET?.trim();
+
+  if (
+    !isConfiguredSecret(clientId, "replace-with-google-client-id") ||
+    !isConfiguredSecret(clientSecret, "replace-with-google-client-secret")
+  ) {
+    return {};
+  }
+
+  return {
+    google: {
+      clientId,
+      clientSecret,
+      prompt: "select_account" as const,
+    },
+  };
+};
 
 export const hasAdminRole = (user: AppUser | null, env: Env) => {
   if (!user) return false;
@@ -48,11 +68,12 @@ export const hasAdminRole = (user: AppUser | null, env: Env) => {
 };
 
 export const createAuth = (env: Env) => {
-  const db = drizzle(env.DB, { schema });
+  const db = createDb(env.DB);
 
   return betterAuth({
     baseURL: env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
+    trustedOrigins: getTrustedOrigins(env),
     database: drizzleAdapter(db, {
       provider: "sqlite",
       schema,
@@ -71,18 +92,7 @@ export const createAuth = (env: Env) => {
         },
       },
     },
-    socialProviders: {
-      ...(isConfiguredSecret(env.GOOGLE_CLIENT_ID, "replace-with-google-client-id") &&
-      isConfiguredSecret(env.GOOGLE_CLIENT_SECRET, "replace-with-google-client-secret")
-        ? {
-            google: {
-              clientId: env.GOOGLE_CLIENT_ID,
-              clientSecret: env.GOOGLE_CLIENT_SECRET,
-              prompt: "select_account",
-            },
-          }
-        : {}),
-    },
+    socialProviders: getGoogleProvider(env),
     plugins: [
       admin({
         defaultRole: "user",
@@ -91,9 +101,3 @@ export const createAuth = (env: Env) => {
     ],
   });
 };
-
-export const authRoutes = new Hono<{ Bindings: Env }>();
-
-authRoutes.on(["GET", "POST"], "/*", async (c) => {
-  return createAuth(c.env).handler(c.req.raw);
-});

@@ -10,8 +10,10 @@ enabled = true
 [assets]
 directory = "./dist/client"
 not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
 
 [[d1_databases]]
 binding = "DB"
 database_name = "walli_core"
 database_id = "a64f7d00-ad98-4e14-ad7f-1162a3e21a11"
+migrations_dir = "migrations"

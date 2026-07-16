@@ -90,18 +90,57 @@ https://your-domain.com/api/auth/callback/google
 pnpm --filter walli_core exec wrangler d1 create walli_core
 ```
 
-将返回的 `database_id` 写入 `walli_core/wrangler.toml`，然后初始化表结构：
+将返回的 `database_id` 写入 `walli_core/wrangler.toml`。Drizzle schema 位于 `walli_core/src/worker/db/schema.ts`，SQL migration 会生成到 `walli_core/migrations`。
+
+修改 Drizzle schema 后生成 migration：
 
 ```bash
-pnpm --filter walli_core exec wrangler d1 execute walli_core --local --file=./schema.sql
-pnpm --filter walli_core exec wrangler d1 execute walli_core --remote --file=./schema.sql
+pnpm run db:generate:walli_core
+```
+
+应用本地或远程 migration：
+
+```bash
+pnpm run db:migrate:walli_core:local
+pnpm run db:migrate:walli_core:remote
 ```
 
 ## 构建与部署
 
+创建一个不会提交到 git 的生产环境变量文件：
+
 ```bash
-pnpm --filter walli_core build
-pnpm --filter walli_core deploy
+cp walli_core/.dev.vars.example walli_core/.env
+```
+
+在 `walli_core/.env` 里填写生产值：
+
+```text
+BETTER_AUTH_SECRET="generated-secret"
+BETTER_AUTH_URL="https://your-domain.com"
+BETTER_AUTH_TRUSTED_ORIGINS="https://your-domain.com"
+GOOGLE_CLIENT_ID="your-google-client-id"
+GOOGLE_CLIENT_SECRET="your-google-client-secret"
+ADMIN_EMAILS="admin@example.com"
+```
+
+上传到 Cloudflare Workers Secrets：
+
+```bash
+pnpm run secrets
+```
+
+然后构建并部署：
+
+```bash
+pnpm run build:walli_core
+pnpm run deploy:walli_core
+```
+
+Google OAuth 需要添加生产回调地址：
+
+```text
+https://your-domain.com/api/auth/callback/google
 ```
 
 本项目优先选择 Cloudflare 作为部署目标，因为 Workers、D1 和相关存储产品适合以较低成本支撑中小规模聊天机器人负载。
