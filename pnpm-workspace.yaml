@@ -1,0 +1,8 @@
+packages:
+  - walli_core
+
+# Pre-approve build scripts for packages used by the Cloudflare stack.
+allowBuilds:
+  esbuild: true
+  workerd: true
+  sharp: true
