@@ -24,8 +24,9 @@ app.use("*", async (c, next) => {
 });
 
 app.on(["GET", "POST"], "/api/auth/*", (c) => createAuth(c.env).handler(c.req.raw));
-app.route("/", rootRoute);
-app.route("/", meRoute);
-app.route("/", adminStatusRoute);
 
-export default app;
+const routes = app.route("/", rootRoute).route("/", meRoute).route("/", adminStatusRoute);
+
+export type AppType = typeof routes;
+
+export default routes;

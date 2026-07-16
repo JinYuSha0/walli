@@ -27,24 +27,26 @@ const meResponseSchema = z.union([
     .strict(),
 ]);
 
-export const meRoute = new Hono<AppBindings>();
+export const meRoute = new Hono<AppBindings>().get(
+  "/api/me",
+  validateQuery(emptyQuerySchema),
+  (c) => {
+    const user = c.get("user");
+    const session = c.get("session");
 
-meRoute.get("/api/me", validateQuery(emptyQuerySchema), (c) => {
-  const user = c.get("user");
-  const session = c.get("session");
+    if (!user || !session) {
+      return c.json(
+        parseResponse(meResponseSchema, { user: null, session: null, isAdmin: false }),
+        401,
+      );
+    }
 
-  if (!user || !session) {
     return c.json(
-      parseResponse(meResponseSchema, { user: null, session: null, isAdmin: false }),
-      401,
+      parseResponse(meResponseSchema, {
+        user,
+        session,
+        isAdmin: hasAdminRole(user, c.env),
+      }),
     );
-  }
-
-  return c.json(
-    parseResponse(meResponseSchema, {
-      user,
-      session,
-      isAdmin: hasAdminRole(user, c.env),
-    }),
-  );
-});
+  },
+);

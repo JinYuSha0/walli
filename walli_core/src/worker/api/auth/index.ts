@@ -16,6 +16,12 @@ export type AppSession = {
   id: string;
   userId: string;
   expiresAt: Date;
+  token?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  impersonatedBy?: string | null;
 };
 
 const splitList = (value?: string, options?: { lowercase?: boolean }) =>

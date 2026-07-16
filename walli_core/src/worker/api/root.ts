@@ -10,13 +10,14 @@ const apiInfoResponseSchema = z
   })
   .strict();
 
-export const rootRoute = new Hono<AppBindings>();
-
-rootRoute.get("/api/", validateQuery(emptyQuerySchema), (c) =>
-  c.json(
-    parseResponse(apiInfoResponseSchema, {
-      name: "walli_core",
-      auth: "better-auth",
-    }),
-  ),
+export const rootRoute = new Hono<AppBindings>().get(
+  "/api/",
+  validateQuery(emptyQuerySchema),
+  (c) =>
+    c.json(
+      parseResponse(apiInfoResponseSchema, {
+        name: "walli_core",
+        auth: "better-auth",
+      }),
+    ),
 );

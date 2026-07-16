@@ -28,8 +28,14 @@ export const appSessionSchema = z
     id: z.string(),
     userId: z.string(),
     expiresAt: z.date(),
+    token: z.string().optional(),
+    createdAt: z.date().optional(),
+    updatedAt: z.date().optional(),
+    ipAddress: z.string().nullable().optional(),
+    userAgent: z.string().nullable().optional(),
+    impersonatedBy: z.string().nullable().optional(),
   })
-  .strict();
+  .passthrough();
 
 export const validateQuery =
   <Schema extends z.ZodType>(schema: Schema): MiddlewareHandler =>

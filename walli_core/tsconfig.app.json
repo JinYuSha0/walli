@@ -14,6 +14,12 @@
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
+    "resolveJsonModule": true,
+    "types": ["vite/client", "./worker-configuration.d.ts"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/react-app/*"]
+    },
 
     /* Linting */
     "strict": true,
@@ -22,5 +28,5 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src/react-app"]
+  "include": ["src/react-app", "src/worker/env.d.ts"]
 }

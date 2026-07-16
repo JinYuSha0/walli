@@ -18,37 +18,35 @@ const adminStatusResponseSchema = z
   })
   .strict();
 
-export const adminStatusRoute = new Hono<AppBindings>();
+export const adminStatusRoute = new Hono<AppBindings>()
+  .use("/api/admin/*", async (c, next) => {
+    const user = c.get("user");
 
-adminStatusRoute.use("/api/admin/*", async (c, next) => {
-  const user = c.get("user");
+    if (!user) {
+      return c.json(parseResponse(errorResponseSchema, { error: "Unauthorized" }), 401);
+    }
 
-  if (!user) {
-    return c.json(parseResponse(errorResponseSchema, { error: "Unauthorized" }), 401);
-  }
+    if (!hasAdminRole(user, c.env)) {
+      return c.json(
+        parseResponse(errorResponseSchema, { error: "Forbidden", requiredRole: "admin" }),
+        403,
+      );
+    }
 
-  if (!hasAdminRole(user, c.env)) {
+    await next();
+  })
+  .get("/api/admin/status", validateQuery(emptyQuerySchema), (c) => {
+    const user = c.get("user");
+
+    if (!user) {
+      return c.json(parseResponse(errorResponseSchema, { error: "Unauthorized" }), 401);
+    }
+
     return c.json(
-      parseResponse(errorResponseSchema, { error: "Forbidden", requiredRole: "admin" }),
-      403,
+      parseResponse(adminStatusResponseSchema, {
+        ok: true,
+        message: "Admin role verified",
+        user,
+      }),
     );
-  }
-
-  await next();
-});
-
-adminStatusRoute.get("/api/admin/status", validateQuery(emptyQuerySchema), (c) => {
-  const user = c.get("user");
-
-  if (!user) {
-    return c.json(parseResponse(errorResponseSchema, { error: "Unauthorized" }), 401);
-  }
-
-  return c.json(
-    parseResponse(adminStatusResponseSchema, {
-      ok: true,
-      message: "Admin role verified",
-      user,
-    }),
-  );
-});
+  });
