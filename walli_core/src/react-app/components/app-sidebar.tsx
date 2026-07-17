@@ -2,8 +2,8 @@ import * as React from "react";
 import { Link } from "@tanstack/react-router";
 import {
   IconDashboard,
-  IconFileAi,
   IconKey,
+  IconSettings,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { BrandMark } from "@/components/brand-mark";
@@ -41,9 +41,9 @@ export function AppSidebar({
         icon: IconDashboard,
       },
       {
-        title: t("navPrompt"),
-        url: "/prompt",
-        icon: IconFileAi,
+        title: t("navSettings"),
+        url: "/settings",
+        icon: IconSettings,
       },
       {
         title: t("navKeys"),

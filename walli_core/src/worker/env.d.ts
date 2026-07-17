@@ -5,4 +5,5 @@ interface Env {
   GOOGLE_CLIENT_SECRET: string;
   BETTER_AUTH_TRUSTED_ORIGINS?: string;
   ADMIN_EMAILS?: string;
+  APP_KV: KVNamespace;
 }

@@ -32,8 +32,8 @@ export const LazyLoginRoute = createLazyRoute(() =>
   }))
 );
 
-export const LazyPromptRoute = createLazyRoute(() =>
-  import("./prompt/prompt-route").then((module) => ({
-    default: module.PromptRoute,
+export const LazySettingsRoute = createLazyRoute(() =>
+  import("./settings/settings-route").then((module) => ({
+    default: module.SettingsRoute,
   }))
 );

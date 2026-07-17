@@ -3,6 +3,7 @@ import { adminStatusRoute } from "./api/admin-status";
 import { createAuth, type AppSession, type AppUser } from "./api/auth";
 import { meRoute } from "./api/me";
 import { rootRoute } from "./api/root";
+import { settingsRoute } from "./api/settings";
 import type { AppBindings } from "./api/types";
 
 const app = new Hono<AppBindings>();
@@ -25,7 +26,11 @@ app.use("*", async (c, next) => {
 
 app.on(["GET", "POST"], "/api/auth/*", (c) => createAuth(c.env).handler(c.req.raw));
 
-const routes = app.route("/", rootRoute).route("/", meRoute).route("/", adminStatusRoute);
+const routes = app
+  .route("/", rootRoute)
+  .route("/", meRoute)
+  .route("/", adminStatusRoute)
+  .route("/", settingsRoute);
 
 export type AppType = typeof routes;
 

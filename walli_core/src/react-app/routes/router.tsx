@@ -4,7 +4,7 @@ import {
   LazyDashboardRoute,
   LazyKeysRoute,
   LazyLoginRoute,
-  LazyPromptRoute,
+  LazySettingsRoute,
 } from "./lazy-routes";
 import { RootLayout } from "./root-layout";
 
@@ -24,10 +24,10 @@ const indexRoute = createRoute({
   component: LazyDashboardRoute,
 });
 
-const promptRoute = createRoute({
+const settingsRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
-  path: "/prompt",
-  component: LazyPromptRoute,
+  path: "/settings",
+  component: LazySettingsRoute,
 });
 
 const keysRoute = createRoute({
@@ -43,7 +43,7 @@ const loginRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
-  appLayoutRoute.addChildren([indexRoute, promptRoute, keysRoute]),
+  appLayoutRoute.addChildren([indexRoute, settingsRoute, keysRoute]),
   loginRoute,
 ]);
 

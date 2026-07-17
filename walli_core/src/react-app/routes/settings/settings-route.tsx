@@ -1,57 +1,57 @@
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import {
-  defaultDialogOpeningMessageKey,
-  defaultDialogSystemPromptKey,
-  defaultSystemPromptKey,
-} from "./system-prompt";
+import { getSettings, updateSettings } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MarkdownEditor } from "@/components/ui/markdown_editor";
 import { TextEditor } from "@/components/ui/text_editor";
 import { Label } from "@/components/ui/label";
+import { RouteLoading } from "../route-loading";
 
-type PromptSettingsForm = {
+type SettingsForm = {
   systemPrompt: string;
   dialogSystemPrompt: string;
   dialogOpeningMessage: string;
 };
 
-const promptSettingsStorageKey = "walli_core_prompt_settings";
-
-const getSavedPromptSettings = (
-  fallbackValues: PromptSettingsForm
-): PromptSettingsForm => {
-  const savedSettings = window.localStorage.getItem(promptSettingsStorageKey);
-
-  if (!savedSettings) {
-    return fallbackValues;
-  }
-
-  try {
-    return { ...fallbackValues, ...JSON.parse(savedSettings) };
-  } catch {
-    return fallbackValues;
-  }
-};
-
-export function PromptRoute() {
+export function SettingsRoute() {
   const { t } = useTranslation();
   const defaultValues = {
-    systemPrompt: t(defaultSystemPromptKey),
-    dialogSystemPrompt: t(defaultDialogSystemPromptKey),
-    dialogOpeningMessage: t(defaultDialogOpeningMessageKey),
+    systemPrompt: '',
+    dialogSystemPrompt: '',
+    dialogOpeningMessage: '',
   };
-  const form = useForm<PromptSettingsForm>({
-    defaultValues: getSavedPromptSettings(defaultValues),
+  const form = useForm<SettingsForm>({
+    defaultValues,
+  });
+  const settingsQuery = useQuery({
+    queryKey: ["settings"],
+    queryFn: getSettings,
+  });
+  const updateSettingsMutation = useMutation({
+    mutationFn: updateSettings,
+    onSuccess: (values) => {
+      form.reset(values);
+      toast.success(t("promptSaveSuccess"));
+    },
   });
 
-  const onSubmit = (values: PromptSettingsForm) => {
-    console.log(JSON.stringify(values));
-    form.reset(values);
-    toast.success(t("promptSaveSuccess"));
+  useEffect(() => {
+    if (settingsQuery.data) {
+      form.reset(settingsQuery.data);
+    }
+  }, [form, settingsQuery.data]);
+
+  const onSubmit = (values: SettingsForm) => {
+    updateSettingsMutation.mutate(values);
   };
+
+  if (settingsQuery.isPending) {
+    return <RouteLoading />;
+  }
 
   return (
     <div className="flex justify-center p-4 lg:p-6">
@@ -64,7 +64,10 @@ export function PromptRoute() {
           <form className="grid gap-8" onSubmit={form.handleSubmit(onSubmit)}>
             <section className="grid gap-3">
               <div className="grid gap-1">
-                <Label htmlFor="system-prompt">{t("promptSystemPromptTitle")}</Label>
+                <Label htmlFor="system-prompt">
+                  {t("promptSystemPromptTitle")}
+                  <span className="text-destructive">*</span>
+                </Label>
                 <p className="text-sm text-muted-foreground">
                   {t("promptSystemPromptDescription")}
                 </p>
@@ -78,6 +81,8 @@ export function PromptRoute() {
                     <TextEditor
                       id="system-prompt"
                       aria-invalid={fieldState.invalid}
+                      disabled={settingsQuery.isPending || updateSettingsMutation.isPending}
+                      placeholder={t("promptSystemPromptPlaceholder")}
                       {...field}
                     />
                     {fieldState.error?.message && (
@@ -103,7 +108,12 @@ export function PromptRoute() {
                 control={form.control}
                 name="dialogSystemPrompt"
                 render={({ field }) => (
-                  <TextEditor id="dialog-system-prompt" {...field} />
+                  <TextEditor
+                    id="dialog-system-prompt"
+                    disabled={settingsQuery.isPending || updateSettingsMutation.isPending}
+                    placeholder={t("promptDialogSystemPromptPlaceholder")}
+                    {...field}
+                  />
                 )}
               />
             </section>
@@ -121,20 +131,23 @@ export function PromptRoute() {
                 control={form.control}
                 name="dialogOpeningMessage"
                 render={({ field }) => (
-                  <MarkdownEditor id="dialog-opening-message" {...field} />
+                  <MarkdownEditor
+                    id="dialog-opening-message"
+                    disabled={settingsQuery.isPending || updateSettingsMutation.isPending}
+                    placeholder={t("promptDialogOpeningMessagePlaceholder")}
+                    {...field}
+                  />
                 )}
               />
             </section>
 
             <div className="flex justify-end gap-2 border-t border-border pt-8">
               <Button
-                type="button"
-                variant="outline"
-                onClick={() => form.reset(defaultValues)}
+                type="submit"
+                disabled={settingsQuery.isPending || updateSettingsMutation.isPending}
               >
-                {t("promptReset")}
+                {t("promptSave")}
               </Button>
-              <Button type="submit">{t("promptSave")}</Button>
             </div>
           </form>
         </CardContent>

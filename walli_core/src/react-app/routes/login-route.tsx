@@ -4,6 +4,7 @@ import { AppearanceControls } from "@/components/appearance-controls";
 import { BrandMark } from "@/components/brand-mark";
 import { LoginForm } from "@/components/login-form";
 import { authClient } from "@/auth-client";
+import { RouteLoading } from "./route-loading";
 
 export function LoginRoute() {
   const navigate = useNavigate();
@@ -24,6 +25,10 @@ export function LoginRoute() {
       errorCallbackURL: window.location.href,
     });
   };
+
+  if (session.isPending) {
+    return <RouteLoading className="h-svh bg-muted" />;
+  }
 
   return (
     <main className="relative flex min-h-svh flex-col items-center justify-center bg-muted p-6 md:p-10">

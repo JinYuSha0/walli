@@ -19,6 +19,14 @@ For all limits and quotas, retrieve from the product's `/platform/limits/` page.
 
 Run `wrangler types` after changing bindings in wrangler.toml.
 
+## Frontend Loading
+
+Every page-level initial data load must render a skeleton screen. Do not show the final form/page with disabled controls or a button spinner while initial page data is still loading.
+
+## Verification
+
+Do not run a full build after every small change. Prefer lint or a targeted lightweight check for minor UI, copy, or styling edits. Run the full build when changing build configuration, routing/code-splitting, Worker/API contracts, dependencies, or when explicitly requested.
+
 ## Node.js Compatibility
 
 https://developers.cloudflare.com/workers/runtime-apis/nodejs/

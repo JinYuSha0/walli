@@ -77,7 +77,7 @@ export function AppLayout() {
   const isForbidden = !meQuery.isPending && meQuery.data?.isAdmin === false;
   const routeTitles: Record<string, string> = {
     "/": t("routeDashboard"),
-    "/prompt": t("routeSystemPrompt"),
+    "/settings": t("routeSettings"),
     "/keys": t("routeKeys"),
   };
   const title = routeTitles[location.pathname] ?? t("routeConsole");

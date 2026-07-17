@@ -17,3 +17,7 @@ binding = "DB"
 database_name = "walli_core"
 database_id = "a64f7d00-ad98-4e14-ad7f-1162a3e21a11"
 migrations_dir = "migrations"
+
+[[kv_namespaces]]
+binding = "APP_KV"
+id = "a3ead2192a94459db359c9d11e47bc92"
