@@ -42,7 +42,7 @@ export function AppSidebar({
       },
       {
         title: t("navSettings"),
-        url: "/settings",
+        url: "/settings/model",
         icon: IconSettings,
       },
       {

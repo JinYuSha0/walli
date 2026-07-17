@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { getSettings } from "@/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,20 +36,6 @@ export function SettingsRoute() {
   });
   const currentTab = location.pathname.split("/").at(-1) ?? "";
   const activeTab = isSettingsTab(currentTab) ? currentTab : "model";
-
-  useEffect(() => {
-    if (isSettingsTab(currentTab)) {
-      return;
-    }
-
-    void navigate({
-      to: "/settings/$tab",
-      params: {
-        tab: "model",
-      },
-      replace: true,
-    });
-  }, [currentTab, navigate]);
 
   if (isPending || !data) {
     return <RouteLoading />;
