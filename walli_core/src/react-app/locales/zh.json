@@ -126,7 +126,7 @@
   "authSettingsEnabledDescription": "关闭后不会调用外部鉴权接口。",
   "authSettingsEndpointUrl": "鉴权接口地址",
   "authSettingsEndpointUrlPlaceholder": "https://api.example.com/auth/verify",
-  "authSettingsEndpointUrlDescription": "系统会用 POST 请求发送 appId 与 token，HTTP 200 表示校验通过，其他状态表示失败。",
+  "authSettingsEndpointUrlDescription": "系统会用 POST 请求发送 appId、userId 与 token，HTTP 200 表示校验通过，其他状态表示失败。",
   "authSettingsEndpointUrlRequired": "启用鉴权时必须填写接口地址",
   "authSettingsEndpointUrlInvalid": "请输入合法的 http 或 https 接口地址",
   "authSettingsNodeExampleTitle": "Node.js 调用示例",

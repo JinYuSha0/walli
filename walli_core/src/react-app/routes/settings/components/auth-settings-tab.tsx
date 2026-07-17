@@ -26,6 +26,7 @@ const createNodeExample = (url: string) => {
   },
   body: JSON.stringify({
     appId,
+    userId,
     token,
   }),
 });

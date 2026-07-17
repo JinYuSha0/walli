@@ -37,13 +37,7 @@ export const modelConfigSchema = z
 
 export type ModelConfig = z.output<typeof modelConfigSchema>;
 
-export const TOOL_SCHEMA_FIELD_TYPES = [
-  "string",
-  "number",
-  "boolean",
-  "array",
-  "object",
-] as const;
+export const TOOL_SCHEMA_FIELD_TYPES = ["string", "number", "boolean", "array", "object"] as const;
 
 export type ToolSchemaFieldType = (typeof TOOL_SCHEMA_FIELD_TYPES)[number];
 
@@ -83,20 +77,19 @@ export type ToolModelInvocation = z.output<typeof toolModelInvocationSchema>;
 export const toolApiInvocationSchema = z
   .object({
     type: z.literal("api"),
-    url: z.url().refine(
-      (url) => url.startsWith("http://") || url.startsWith("https://"),
-      "URL must start with http:// or https://",
-    ),
+    url: z
+      .url()
+      .refine(
+        (url) => url.startsWith("http://") || url.startsWith("https://"),
+        "URL must start with http:// or https://",
+      ),
     method: z.enum(TOOL_API_METHODS),
   })
   .strict();
 
 export type ToolApiInvocation = z.output<typeof toolApiInvocationSchema>;
 
-export const toolInvocationSchema = z.union([
-  toolModelInvocationSchema,
-  toolApiInvocationSchema,
-]);
+export const toolInvocationSchema = z.union([toolModelInvocationSchema, toolApiInvocationSchema]);
 
 export type ToolInvocation = z.output<typeof toolInvocationSchema>;
 
@@ -147,10 +140,9 @@ export const settingsSchema = z.object(settingsFieldSchemaMap).strict();
 
 export const settingsResponseSchema = settingsSchema;
 
-export const settingsPatchSchema = settingsSchema.partial().refine(
-  (settings) => Object.keys(settings).length > 0,
-  "At least one setting is required",
-);
+export const settingsPatchSchema = settingsSchema
+  .partial()
+  .refine((settings) => Object.keys(settings).length > 0, "At least one setting is required");
 
 export type Settings = z.output<typeof settingsSchema>;
 
@@ -174,10 +166,6 @@ export const DEFAULT_SETTINGS = {
     },
     {
       name: "@cf/qwen/qwen3-embedding-0.6b",
-      tags: ["embedding"],
-    },
-    {
-      name: "openai/text-embedding-3-small",
       tags: ["embedding"],
     },
   ],
@@ -240,8 +228,7 @@ export const DEFAULT_SETTINGS = {
           {
             name: "text",
             type: "string",
-            description:
-              "The text to generate audio for. Maximum length is 4096 characters.",
+            description: "The text to generate audio for. Maximum length is 4096 characters.",
             required: true,
             defaultValue: "",
           },

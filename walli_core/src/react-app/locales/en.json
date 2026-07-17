@@ -126,7 +126,7 @@
   "authSettingsEnabledDescription": "When disabled, the external auth endpoint is not called.",
   "authSettingsEndpointUrl": "Auth endpoint URL",
   "authSettingsEndpointUrlPlaceholder": "https://api.example.com/auth/verify",
-  "authSettingsEndpointUrlDescription": "The system sends appId and token with a POST request. HTTP 200 means the check passed; any other status means it failed.",
+  "authSettingsEndpointUrlDescription": "The system sends appId, userId, and token with a POST request. HTTP 200 means the check passed; any other status means it failed.",
   "authSettingsEndpointUrlRequired": "Endpoint URL is required when auth is enabled",
   "authSettingsEndpointUrlInvalid": "Enter a valid http or https endpoint URL",
   "authSettingsNodeExampleTitle": "Node.js example",
