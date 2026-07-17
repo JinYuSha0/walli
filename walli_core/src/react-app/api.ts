@@ -1,5 +1,20 @@
 import { hc, parseResponse } from "hono/client";
 import type { AppType } from "../worker";
+import type { SettingsPatch, SettingsResponse } from "../shared/const";
+
+export type {
+  ModelCapabilityTag,
+  ModelConfig,
+  Settings,
+  SettingsPatch,
+  SettingsResponse,
+  ToolApiInvocation,
+  ToolConfig,
+  ToolInvocation,
+  ToolModelInvocation,
+  ToolSchemaField,
+  ToolSchemaFieldType,
+} from "../shared/const";
 
 const apiClient = hc<AppType>("/", {
   init: {
@@ -18,10 +33,8 @@ export const getMe = query(() => apiClient.api.me.$get());
 
 export const getAdminStatus = query(() => apiClient.api.admin.status.$get());
 
-export const getSettings = query(() => apiClient.api.settings.$get());
+export const getSettings = async (): Promise<SettingsResponse> =>
+  parseResponse(apiClient.api.settings.$get());
 
-export const updateSettings = (json: {
-  systemPrompt: string;
-  dialogSystemPrompt: string;
-  dialogOpeningMessage: string;
-}) => parseResponse(apiClient.api.admin.settings.$put({ json }));
+export const updateSettings = async (json: SettingsPatch): Promise<SettingsResponse> =>
+  parseResponse(apiClient.api.admin.settings.$patch({ json }));

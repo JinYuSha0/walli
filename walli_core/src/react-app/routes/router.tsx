@@ -1,4 +1,9 @@
-import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
+import {
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Navigate,
+} from "@tanstack/react-router";
 import { AppLayout } from "./app-layout";
 import {
   LazyDashboardRoute,
@@ -27,6 +32,20 @@ const indexRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: "/settings",
+  component: () => (
+    <Navigate
+      to="/settings/$tab"
+      params={{
+        tab: "model",
+      }}
+      replace
+    />
+  ),
+});
+
+const settingsTabRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: "/settings/$tab",
   component: LazySettingsRoute,
 });
 
@@ -43,7 +62,7 @@ const loginRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
-  appLayoutRoute.addChildren([indexRoute, settingsRoute, keysRoute]),
+  appLayoutRoute.addChildren([indexRoute, settingsRoute, settingsTabRoute, keysRoute]),
   loginRoute,
 ]);
 

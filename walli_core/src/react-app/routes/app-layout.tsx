@@ -80,7 +80,9 @@ export function AppLayout() {
     "/settings": t("routeSettings"),
     "/keys": t("routeKeys"),
   };
-  const title = routeTitles[location.pathname] ?? t("routeConsole");
+  const title = location.pathname.startsWith("/settings/")
+    ? t("routeSettings")
+    : routeTitles[location.pathname] ?? t("routeConsole");
 
   return (
     <SidebarProvider

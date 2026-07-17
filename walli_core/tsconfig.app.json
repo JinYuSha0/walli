@@ -28,5 +28,5 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src/react-app", "src/worker/env.d.ts"]
+  "include": ["src/react-app", "src/shared", "src/worker/env.d.ts"]
 }
