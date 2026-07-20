@@ -32,9 +32,17 @@ const createNodeExample = (url: string) => {
 });
 
 if (response.status === 200) {
-  // Auth passed.
+  return Response.json({
+    userInfo: {
+      id: userId,
+      name: "Demo User",
+      plan: "pro",
+    },
+  });
 } else {
-  // Auth failed.
+  return new Response("Forbidden", {
+    status: 403,
+  });
 }`;
 };
 

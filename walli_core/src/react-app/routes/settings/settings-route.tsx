@@ -13,6 +13,7 @@ import { ToolSettingsTab } from "./components/tool-settings-tab";
 import { UsageSettingsTab } from "./components/usage-settings-tab";
 
 const settingsTabs = [
+  "basic",
   "model",
   "tool",
   "usage",
@@ -35,7 +36,11 @@ export function SettingsRoute() {
     queryFn: getSettings,
   });
   const currentTab = location.pathname.split("/").at(-1) ?? "";
-  const activeTab = isSettingsTab(currentTab) ? currentTab : "model";
+  const activeTab = currentTab === "system-prompt"
+    ? "basic"
+    : isSettingsTab(currentTab)
+      ? currentTab
+      : "basic";
 
   if (isPending || !data) {
     return <RouteLoading />;
@@ -65,6 +70,9 @@ export function SettingsRoute() {
             }}
           >
             <TabsList className="w-full sm:w-fit">
+              <TabsTrigger value="basic">
+                {t("settingsBasicTab")}
+              </TabsTrigger>
               <TabsTrigger value="model">
                 {t("modelSettingsTab")}
               </TabsTrigger>
@@ -80,10 +88,11 @@ export function SettingsRoute() {
               <TabsTrigger value="cors">
                 {t("corsSettingsTab")}
               </TabsTrigger>
-              <TabsTrigger value="system-prompt">
-                {t("settingsSystemPromptTab")}
-              </TabsTrigger>
             </TabsList>
+
+            <TabsContent value="basic">
+              <SystemPromptSettingsTab settings={data} />
+            </TabsContent>
 
             <TabsContent value="model">
               <ModelSettingsTab settings={data} />
@@ -103,10 +112,6 @@ export function SettingsRoute() {
 
             <TabsContent value="cors">
               <CorsSettingsTab settings={data} />
-            </TabsContent>
-
-            <TabsContent value="system-prompt">
-              <SystemPromptSettingsTab settings={data} />
             </TabsContent>
 
           </Tabs>

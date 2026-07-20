@@ -7,12 +7,12 @@ import { updateSettings } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { TextEditor } from "@/components/ui/text_editor";
-import type { Settings } from "../../../../shared/const";
+import type { SettingsResponse } from "../../../../shared/const";
 
-type SystemPromptSettingsForm = Pick<Settings, "globalPrompt">;
+type SystemPromptSettingsForm = Pick<SettingsResponse, "globalPrompt">;
 
 type SystemPromptSettingsTabProps = {
-  settings: Settings;
+  settings: SettingsResponse;
 };
 
 export function SystemPromptSettingsTab({ settings }: SystemPromptSettingsTabProps) {
@@ -46,6 +46,18 @@ export function SystemPromptSettingsTab({ settings }: SystemPromptSettingsTabPro
 
   return (
     <form className="grid gap-8" onSubmit={form.handleSubmit(onSubmit)}>
+      <section className="grid gap-3">
+        <div className="grid gap-1">
+          <Label>{t("basicSettingsApiTokenTitle")}</Label>
+          <p className="text-sm text-muted-foreground">
+            {t("basicSettingsApiTokenDescription")}
+          </p>
+        </div>
+        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 font-mono text-sm">
+          {settings.apiTokenMask || t("basicSettingsApiTokenEmpty")}
+        </div>
+      </section>
+
       <section className="grid gap-3">
         <div className="grid gap-1">
           <Label htmlFor="system-prompt">

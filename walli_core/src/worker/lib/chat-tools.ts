@@ -9,6 +9,7 @@ import {
 
 type ChatToolRuntime = {
   AI: Ai;
+  fetch?: typeof fetch;
 };
 
 const parseDefaultValue = (fieldType: ToolSchemaFieldType, value: string): unknown => {
@@ -134,7 +135,7 @@ const runConfiguredTool = async (
     init.body = JSON.stringify(apiInput);
   }
 
-  const response = await fetch(url, init);
+  const response = await (runtime.fetch ?? fetch)(url, init);
   const contentType = response.headers.get("content-type") ?? "";
   const body = contentType.includes("application/json")
     ? await response.json()
@@ -153,7 +154,7 @@ const runConfiguredTool = async (
 
 export const buildChatTools = (toolConfigs: ToolConfig[], runtime: ChatToolRuntime): ToolSet => {
   const entries = toolConfigs
-    .filter((toolConfig) => isValidChatToolName(toolConfig.name))
+    .filter((toolConfig) => toolConfig.enabled !== false && isValidChatToolName(toolConfig.name))
     .map((toolConfig) => [
       toolConfig.name,
       dynamicTool({

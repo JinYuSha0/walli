@@ -9,7 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
+  BUILT_IN_TOOLS,
   TOOL_API_METHODS,
   TOOL_INVOCATION_TYPES,
   TOOL_NAME_PATTERN,
@@ -23,6 +25,7 @@ import {
 type ToolSettingsForm = {
   tools: Array<{
     formId?: string;
+    enabled: boolean;
     name: string;
     description: string;
     invocation: {
@@ -60,6 +63,7 @@ const createEmptyApiHeader = (): ToolApiHeader => ({
 });
 
 const createEmptyTool = () => ({
+  enabled: true,
   name: "",
   description: "",
   invocation: {
@@ -95,6 +99,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
     defaultValues: {
       tools: tools.map((tool) => ({
         ...tool,
+        enabled: tool.enabled,
         invocation: {
           type: tool.invocation.type,
           model: tool.invocation.type === "model" ? tool.invocation.model : "",
@@ -116,6 +121,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
       form.reset({
         tools: values.tools.map((tool) => ({
           ...tool,
+          enabled: tool.enabled,
           invocation: {
             type: tool.invocation.type,
             model: tool.invocation.type === "model" ? tool.invocation.model : "",
@@ -134,6 +140,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
     form.reset({
       tools: tools.map((tool) => ({
         ...tool,
+        enabled: tool.enabled,
         invocation: {
           type: tool.invocation.type,
           model: tool.invocation.type === "model" ? tool.invocation.model : "",
@@ -343,6 +350,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
                   ];
 
           return {
+            enabled: tool.enabled,
             name: tool.name.trim(),
             description: tool.description.trim(),
             invocation:
@@ -403,10 +411,35 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
         </div>
 
         <div className="grid gap-4">
+          {BUILT_IN_TOOLS.map((tool) => (
+            <div
+              key={tool.name}
+              className="grid gap-3 rounded-lg border border-border bg-muted/30 p-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="grid min-w-0 gap-1">
+                  <h3 className="truncate text-sm font-medium">{tool.name}</h3>
+                  <p className="line-clamp-2 text-sm text-muted-foreground">
+                    {tool.description}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("toolSettingsBuiltInTool")}
+                  </p>
+                </div>
+                <span className="rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground">
+                  {t("toolSettingsBuiltIn")}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid gap-4">
           {fields.map((field, index) => {
             const schemaFields = form.watch(`tools.${index}.schema.fields`);
             const invocationType = form.watch(`tools.${index}.invocation.type`);
             const apiHeaders = form.watch(`tools.${index}.invocation.headers`);
+            const toolEnabled = form.watch(`tools.${index}.enabled`);
             const toolName = form.watch(`tools.${index}.name`);
             const toolDescription = form.watch(`tools.${index}.description`);
             const toolFormId = field.formId ?? field.id;
@@ -415,7 +448,11 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
             return (
               <div
                 key={field.id}
-                className="grid gap-4 rounded-lg border border-border p-4"
+                className={
+                  toolEnabled
+                    ? "grid gap-4 rounded-lg border border-border p-4"
+                    : "grid gap-4 rounded-lg border border-border bg-muted/30 p-4 opacity-75"
+                }
               >
                 <div className="flex items-start gap-3">
                   <div className="grid min-w-0 flex-1 gap-1">
@@ -432,7 +469,28 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
                     </p>
                   </div>
 
-                  <div className="flex shrink-0 gap-1">
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Controller
+                      control={form.control}
+                      name={`tools.${index}.enabled`}
+                      render={({ field: enabledField }) => (
+                        <label className="flex items-center gap-2 text-sm">
+                          <span className="text-xs text-muted-foreground">
+                            {enabledField.value
+                              ? t("toolSettingsEnabledStatus")
+                              : t("toolSettingsDisabledStatus")}
+                          </span>
+                          <Switch
+                            checked={enabledField.value}
+                            disabled={updateSettingsMutation.isPending}
+                            onCheckedChange={enabledField.onChange}
+                          />
+                          <span className="sr-only">
+                            {t("toolSettingsEnabled")}
+                          </span>
+                        </label>
+                      )}
+                    />
                     <Button
                       type="button"
                       variant={isEditing ? "secondary" : "ghost"}

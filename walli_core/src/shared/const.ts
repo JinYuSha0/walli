@@ -132,6 +132,7 @@ const defaultToolInvocation = {
 
 export const toolConfigSchema = z
   .object({
+    enabled: z.boolean().default(true),
     name: z.string().trim().min(1),
     description: z.string().trim().min(1),
     invocation: toolInvocationSchema.default(defaultToolInvocation),
@@ -148,10 +149,38 @@ export const toolConfigSchema = z
   .strict()
   .transform((tool) => ({
     ...tool,
+    enabled: tool.enabled ?? true,
     invocation: tool.invocation ?? defaultToolInvocation,
   }));
 
 export type ToolConfig = z.output<typeof toolConfigSchema>;
+
+export const BUILT_IN_TOOLS = [
+  {
+    enabled: true,
+    name: "timestamp",
+    description:
+      "Get the current Unix timestamp and formatted date time for any IANA time zone. Use the returned datetime directly instead of converting it yourself.",
+    invocation: {
+      type: "api",
+      url: "/api/tools/timestamp",
+      method: "GET",
+      headers: [],
+    },
+    schema: {
+      fields: [
+        {
+          name: "timeZone",
+          type: "string",
+          description:
+            "Optional IANA time zone, for example UTC, Asia/Shanghai, America/New_York, or Europe/London. Defaults to UTC.",
+          required: false,
+          defaultValue: "UTC",
+        },
+      ],
+    },
+  },
+] satisfies ToolConfig[];
 
 export const settingsFieldSchemaMap = {
   models: z.array(modelConfigSchema),
@@ -171,7 +200,9 @@ export const settingsFieldSchemaMap = {
 
 export const settingsSchema = z.object(settingsFieldSchemaMap).strict();
 
-export const settingsResponseSchema = settingsSchema;
+export const settingsResponseSchema = settingsSchema.extend({
+  apiTokenMask: z.string(),
+});
 
 export const settingsPatchSchema = settingsSchema
   .partial()
@@ -212,6 +243,7 @@ export const DEFAULT_SETTINGS = {
   },
   tools: [
     {
+      enabled: true,
       name: "voice_to_text",
       description: "A speech-to-text model, output text",
       invocation: {
@@ -256,6 +288,7 @@ export const DEFAULT_SETTINGS = {
       },
     },
     {
+      enabled: true,
       name: "text_to_voice",
       description: "text-to-speech model, output audio url",
       invocation: {
@@ -298,6 +331,7 @@ export const DEFAULT_SETTINGS = {
       },
     },
     {
+      enabled: true,
       name: "image_to_text",
       description: "image-to-text model, output text",
       invocation: {

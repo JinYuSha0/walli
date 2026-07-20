@@ -138,6 +138,26 @@ export const getSettings = async (appKv: KVNamespace) => {
   return settings;
 };
 
+const maskApiToken = (token: string | undefined) => {
+  const value = token?.trim() ?? "";
+
+  if (!value) {
+    return "";
+  }
+
+  if (value.length <= 8) {
+    return "*".repeat(value.length);
+  }
+
+  return `${value.slice(0, 4)}${"*".repeat(Math.max(value.length - 8, 4))}${value.slice(-4)}`;
+};
+
+const createSettingsResponse = (settings: Settings, env: Env) =>
+  parseResponse(settingsResponseSchema, {
+    ...settings,
+    apiTokenMask: maskApiToken(env.API_TOKEN),
+  });
+
 const requireAdmin: MiddlewareHandler<AppBindings> = async (c, next) => {
   const user = c.get("user");
 
@@ -159,7 +179,7 @@ export const settingsRoute = new Hono<AppBindings>()
   .get("/api/settings", validateQuery(emptyQuerySchema), async (c) => {
     const settings = await getSettings(c.env.APP_KV);
 
-    return c.json(parseResponse(settingsResponseSchema, settings));
+    return c.json(createSettingsResponse(settings, c.env));
   })
   .use("/api/admin/settings", requireAdmin)
   .patch("/api/admin/settings", async (c) => {
@@ -182,5 +202,5 @@ export const settingsRoute = new Hono<AppBindings>()
 
     await c.env.APP_KV.put(SETTINGS_KV_KEY, JSON.stringify(settings));
 
-    return c.json(parseResponse(settingsResponseSchema, settings));
+    return c.json(createSettingsResponse(settings, c.env));
   });

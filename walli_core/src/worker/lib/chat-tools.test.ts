@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_SETTINGS } from "../../shared/const";
+import { BUILT_IN_TOOLS, DEFAULT_SETTINGS } from "../../shared/const";
 import { buildChatTools, createToolInputSchema, isValidChatToolName } from "./chat-tools.ts";
 
 const [voiceToTextTool, textToVoiceTool] = DEFAULT_SETTINGS.tools;
@@ -21,6 +21,17 @@ describe("chat tools", () => {
 
   it("keeps the expected default tool order", () => {
     expect(DEFAULT_SETTINGS.tools.map((toolConfig) => toolConfig.name)).toEqual([
+      "voice_to_text",
+      "text_to_voice",
+      "image_to_text",
+    ]);
+  });
+
+  it("keeps built-in tools before configured tools", () => {
+    const tools = buildChatTools([...BUILT_IN_TOOLS, ...DEFAULT_SETTINGS.tools], fakeRuntime);
+
+    expect(Object.keys(tools)).toEqual([
+      "timestamp",
       "voice_to_text",
       "text_to_voice",
       "image_to_text",
@@ -107,6 +118,21 @@ describe("chat tools", () => {
     const tools = buildChatTools(DEFAULT_SETTINGS.tools, fakeRuntime);
 
     expect(Object.keys(tools)).toEqual(["voice_to_text", "text_to_voice", "image_to_text"]);
+  });
+
+  it("skips disabled tools", () => {
+    const tools = buildChatTools(
+      [
+        {
+          ...voiceToTextTool,
+          enabled: false,
+        },
+        textToVoiceTool,
+      ],
+      fakeRuntime,
+    );
+
+    expect(Object.keys(tools)).toEqual(["text_to_voice"]);
   });
 
   it("keeps default tool descriptions on generated chat tools", () => {
@@ -277,5 +303,54 @@ describe("chat tools", () => {
       },
     );
     fetchMock.mockRestore();
+  });
+
+  it("executes api tools through the runtime fetch when provided", async () => {
+    const runtimeFetch = vi.fn(async () =>
+      new Response(JSON.stringify({ timestamp: 123 }), {
+        headers: {
+          "content-type": "application/json",
+        },
+      }),
+    );
+    const tools = buildChatTools(
+      [
+        {
+          ...voiceToTextTool,
+          invocation: {
+            type: "api",
+            url: "https://example.com/api/tools/timestamp",
+            method: "GET",
+            headers: [
+              {
+                name: "authorization",
+                defaultValue: "Bearer test-token",
+              },
+            ],
+          },
+          schema: {
+            fields: [],
+          },
+        },
+      ],
+      {
+        ...fakeRuntime,
+        fetch: runtimeFetch,
+      },
+    );
+    const executionOptions = {} as Parameters<NonNullable<typeof tools.voice_to_text.execute>>[1];
+
+    await expect(tools.voice_to_text.execute?.({}, executionOptions)).resolves.toEqual({
+      timestamp: 123,
+    });
+    expect(runtimeFetch).toHaveBeenCalledWith(
+      new URL("https://example.com/api/tools/timestamp"),
+      {
+        method: "GET",
+        headers: {
+          authorization: "Bearer test-token",
+        },
+      },
+    );
   });
 });

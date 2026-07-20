@@ -8,6 +8,7 @@ interface Env {
   CLOUDFLARE_ACCOUNT_ID: string;
   AI_GATEWAY_ID: string;
   CF_AIG_TOKEN?: string;
+  API_TOKEN: string;
   AI: Ai;
   APP_KV: KVNamespace;
 }

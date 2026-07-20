@@ -47,7 +47,7 @@ export function AppSidebar({
         title: t("navSettings"),
         to: "/settings/$tab",
         params: {
-          tab: "model",
+          tab: "basic",
         },
         icon: IconSettings,
       },

@@ -37,7 +37,7 @@ const settingsRoute = createRoute({
     <Navigate
       to="/settings/$tab"
       params={{
-        tab: "model",
+        tab: "basic",
       }}
       replace
     />

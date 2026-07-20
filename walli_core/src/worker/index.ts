@@ -6,6 +6,7 @@ import { clientsRoute } from "./api/clients";
 import { meRoute } from "./api/me";
 import { rootRoute } from "./api/root";
 import { settingsRoute } from "./api/settings";
+import { toolsRoute } from "./api/tools";
 import type { AppBindings } from "./api/types";
 
 const app = new Hono<AppBindings>();
@@ -32,6 +33,7 @@ const routes = app
   .route("/", rootRoute)
   .route("/", meRoute)
   .route("/", adminStatusRoute)
+  .route("/", toolsRoute)
   .route("/", chatRoute)
   .route("/", clientsRoute)
   .route("/", settingsRoute);
