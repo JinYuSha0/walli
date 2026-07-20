@@ -8,6 +8,7 @@ import { updateSettings } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import {
   Tooltip,
   TooltipContent,
@@ -345,9 +346,8 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
           }}
           render={({ field, fieldState }) => (
             <div className="grid gap-2">
-              <select
+              <Select
                 id="primary-model"
-                className="h-9 w-full rounded-lg border border-input bg-input/30 px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label={t("modelSettingsPrimaryModel")}
                 aria-invalid={fieldState.invalid}
                 disabled={updateSettingsMutation.isPending}
@@ -361,7 +361,7 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
                     {model.name}
                   </option>
                 ))}
-              </select>
+              </Select>
               {fieldState.error?.message && (
                 <p className="text-sm text-destructive">
                   {fieldState.error.message}
@@ -393,9 +393,8 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
           }}
           render={({ field, fieldState }) => (
             <div className="grid gap-2">
-              <select
+              <Select
                 id="embedding-model"
-                className="h-9 w-full rounded-lg border border-input bg-input/30 px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label={t("modelSettingsEmbeddingModel")}
                 aria-invalid={fieldState.invalid}
                 disabled={updateSettingsMutation.isPending}
@@ -409,7 +408,7 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
                     {model.name}
                   </option>
                 ))}
-              </select>
+              </Select>
               {fieldState.error?.message && (
                 <p className="text-sm text-destructive">
                   {fieldState.error.message}

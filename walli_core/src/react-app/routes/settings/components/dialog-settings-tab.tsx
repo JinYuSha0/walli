@@ -1,46 +1,43 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { updateSettings } from "@/api";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MarkdownEditor } from "@/components/ui/markdown_editor";
 import { Switch } from "@/components/ui/switch";
 import { TextEditor } from "@/components/ui/text_editor";
-import type { Settings } from "../../../../shared/const";
+import type { ClientDialogSettings } from "../../../../shared/client";
 
-type DialogSettingsForm = Pick<
-  Settings,
-  | "dialogSystemPrompt"
-  | "dialogOpeningMessage"
-  | "dialogSpeechEnabled"
-  | "dialogImageEnabled"
->;
+type DialogSettingsForm = ClientDialogSettings;
 
 type DialogSettingsTabProps = {
-  settings: Settings;
+  settings: DialogSettingsForm;
+  onSave: (values: DialogSettingsForm) => Promise<DialogSettingsForm>;
 };
 
-export function DialogSettingsTab({ settings }: DialogSettingsTabProps) {
+export function DialogSettingsTab({ settings, onSave }: DialogSettingsTabProps) {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
   const form = useForm<DialogSettingsForm>({
     defaultValues: {
       dialogSystemPrompt: settings.dialogSystemPrompt,
       dialogOpeningMessage: settings.dialogOpeningMessage,
+      dialogInputMaxLength: settings.dialogInputMaxLength,
+      dialogPlaceholder: settings.dialogPlaceholder,
       dialogSpeechEnabled: settings.dialogSpeechEnabled,
       dialogImageEnabled: settings.dialogImageEnabled,
     },
   });
   const updateSettingsMutation = useMutation({
-    mutationFn: updateSettings,
+    mutationFn: onSave,
     onSuccess: (values) => {
-      queryClient.setQueryData(["settings"], values);
       form.reset({
         dialogSystemPrompt: values.dialogSystemPrompt,
         dialogOpeningMessage: values.dialogOpeningMessage,
+        dialogInputMaxLength: values.dialogInputMaxLength,
+        dialogPlaceholder: values.dialogPlaceholder,
         dialogSpeechEnabled: values.dialogSpeechEnabled,
         dialogImageEnabled: values.dialogImageEnabled,
       });
@@ -52,19 +49,26 @@ export function DialogSettingsTab({ settings }: DialogSettingsTabProps) {
     form.reset({
       dialogSystemPrompt: settings.dialogSystemPrompt,
       dialogOpeningMessage: settings.dialogOpeningMessage,
+      dialogInputMaxLength: settings.dialogInputMaxLength,
+      dialogPlaceholder: settings.dialogPlaceholder,
       dialogSpeechEnabled: settings.dialogSpeechEnabled,
       dialogImageEnabled: settings.dialogImageEnabled,
     });
   }, [
     form,
     settings.dialogImageEnabled,
+    settings.dialogInputMaxLength,
     settings.dialogOpeningMessage,
+    settings.dialogPlaceholder,
     settings.dialogSpeechEnabled,
     settings.dialogSystemPrompt,
   ]);
 
   const onSubmit = (values: DialogSettingsForm) => {
-    updateSettingsMutation.mutate(values);
+    updateSettingsMutation.mutate({
+      ...values,
+      dialogInputMaxLength: Math.max(1, values.dialogInputMaxLength),
+    });
   };
 
   return (
@@ -113,6 +117,61 @@ export function DialogSettingsTab({ settings }: DialogSettingsTabProps) {
             />
           )}
         />
+      </section>
+
+      <section className="grid gap-4 border-t border-border pt-8">
+        <div className="grid gap-1">
+          <h2 className="text-sm font-medium">
+            {t("promptDialogInputTitle")}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {t("promptDialogInputDescription")}
+          </p>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor="dialog-input-max-length">
+              {t("promptDialogInputMaxLengthTitle")}
+            </Label>
+            <Controller
+              control={form.control}
+              name="dialogInputMaxLength"
+              render={({ field }) => (
+                <Input
+                  id="dialog-input-max-length"
+                  type="number"
+                  min={1}
+                  step={1}
+                  disabled={updateSettingsMutation.isPending}
+                  value={field.value}
+                  onBlur={field.onBlur}
+                  onChange={(event) => {
+                    field.onChange(Number(event.target.value));
+                  }}
+                />
+              )}
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="dialog-placeholder">
+              {t("promptDialogPlaceholderTitle")}
+            </Label>
+            <Controller
+              control={form.control}
+              name="dialogPlaceholder"
+              render={({ field }) => (
+                <Input
+                  id="dialog-placeholder"
+                  disabled={updateSettingsMutation.isPending}
+                  placeholder={t("promptDialogPlaceholderPlaceholder")}
+                  {...field}
+                />
+              )}
+            />
+          </div>
+        </div>
       </section>
 
       <section className="grid gap-4 border-t border-border pt-8">

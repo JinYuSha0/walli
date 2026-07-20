@@ -78,11 +78,13 @@ export function AppLayout() {
   const routeTitles: Record<string, string> = {
     "/": t("routeDashboard"),
     "/settings": t("routeSettings"),
-    "/keys": t("routeKeys"),
+    "/clients": t("routeKeys"),
   };
   const title = location.pathname.startsWith("/settings/")
     ? t("routeSettings")
-    : routeTitles[location.pathname] ?? t("routeConsole");
+    : location.pathname.startsWith("/clients/")
+      ? t("routeKeys")
+      : routeTitles[location.pathname] ?? t("routeConsole");
 
   return (
     <SidebarProvider

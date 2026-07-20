@@ -47,7 +47,7 @@ export function AppSidebar({
       },
       {
         title: t("navKeys"),
-        url: "/keys",
+        url: "/clients/web/client-id",
         icon: IconKey,
       },
     ],

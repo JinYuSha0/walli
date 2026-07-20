@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { adminStatusRoute } from "./api/admin-status";
 import { createAuth, type AppSession, type AppUser } from "./api/auth";
+import { clientsRoute } from "./api/clients";
 import { meRoute } from "./api/me";
 import { rootRoute } from "./api/root";
 import { settingsRoute } from "./api/settings";
@@ -30,6 +31,7 @@ const routes = app
   .route("/", rootRoute)
   .route("/", meRoute)
   .route("/", adminStatusRoute)
+  .route("/", clientsRoute)
   .route("/", settingsRoute);
 
 export type AppType = typeof routes;

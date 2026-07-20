@@ -5,6 +5,7 @@ export const SETTINGS_KEY_MAP = {
   primaryModel: "settings:primary-model",
   embeddingModel: "settings:embedding-model",
   tools: "settings:tools",
+  primaryModelUsageLimit: "settings:primary-model-usage-limit",
   globalPrompt: "settings:global-prompt",
   dialogSystemPrompt: "settings:dialog-system-prompt",
   dialogOpeningMessage: "settings:dialog-opening-message",
@@ -36,6 +37,19 @@ export const modelConfigSchema = z
   .strict();
 
 export type ModelConfig = z.output<typeof modelConfigSchema>;
+
+export const primaryModelUsageLimitConfigSchema = z
+  .object({
+    perRequestInputLimit: z.number().int().min(0),
+    perRequestOutputLimit: z.number().int().min(0),
+    perUserDailyInputLimit: z.number().int().min(0),
+    perUserDailyOutputLimit: z.number().int().min(0),
+  })
+  .strict();
+
+export type PrimaryModelUsageLimitConfig = z.output<
+  typeof primaryModelUsageLimitConfigSchema
+>;
 
 export const TOOL_SCHEMA_FIELD_TYPES = ["string", "number", "boolean", "array", "object"] as const;
 
@@ -126,6 +140,7 @@ export const settingsFieldSchemaMap = {
   primaryModel: z.string(),
   embeddingModel: z.string(),
   tools: z.array(toolConfigSchema),
+  primaryModelUsageLimit: primaryModelUsageLimitConfigSchema,
   globalPrompt: z.string(),
   dialogSystemPrompt: z.string(),
   dialogOpeningMessage: z.string(),
@@ -171,6 +186,12 @@ export const DEFAULT_SETTINGS = {
   ],
   primaryModel: "openai/gpt-5.4-mini",
   embeddingModel: "@cf/qwen/qwen3-embedding-0.6b",
+  primaryModelUsageLimit: {
+    perRequestInputLimit: 0,
+    perRequestOutputLimit: 0,
+    perUserDailyInputLimit: 0,
+    perUserDailyOutputLimit: 0,
+  },
   tools: [
     {
       name: "voice_to_text",

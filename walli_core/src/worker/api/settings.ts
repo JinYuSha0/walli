@@ -23,7 +23,35 @@ import {
 const settingsKey = "settings";
 const settingKeys = Object.keys(SETTINGS_KEY_MAP) as SettingsKey[];
 const legacyGlobalPromptKey = "settings:system-prompt";
+const legacyUsageLimitsKey = "settings:usage-limits";
 const legacySettingsSchema = settingsSchema.partial().passthrough();
+
+const getPrimaryModelUsageLimit = (settings: Partial<Settings>) => {
+  const usageLimits = (
+    settings as Partial<Settings> & {
+      usageLimits?: Array<{
+        model: string;
+        perRequestInputLimit: number;
+        perRequestOutputLimit?: number;
+        perUserDailyInputLimit: number;
+        perUserDailyOutputLimit: number;
+      }>;
+    }
+  ).usageLimits;
+  const primaryModel = settings.primaryModel ?? DEFAULT_SETTINGS.primaryModel;
+  const legacyLimit = usageLimits?.find((limit) => limit.model === primaryModel);
+
+  if (!legacyLimit) {
+    return DEFAULT_SETTINGS.primaryModelUsageLimit;
+  }
+
+  return {
+    perRequestInputLimit: legacyLimit.perRequestInputLimit,
+    perRequestOutputLimit: legacyLimit.perRequestOutputLimit ?? 0,
+    perUserDailyInputLimit: legacyLimit.perUserDailyInputLimit,
+    perUserDailyOutputLimit: legacyLimit.perUserDailyOutputLimit,
+  };
+};
 
 const getLegacySettings = async (appKv: KVNamespace) => {
   const savedSettings = await appKv.get<unknown>(settingsKey, "json");
@@ -40,6 +68,8 @@ const getLegacySettings = async (appKv: KVNamespace) => {
   return {
     ...DEFAULT_SETTINGS,
     ...settings,
+    primaryModelUsageLimit:
+      settings.primaryModelUsageLimit ?? getPrimaryModelUsageLimit(settings),
     globalPrompt:
       settings.globalPrompt ?? systemPrompt ?? DEFAULT_SETTINGS.globalPrompt,
   };
@@ -57,7 +87,7 @@ const parseStoredSetting = (value: string | null) => {
   }
 };
 
-const getSettings = async (appKv: KVNamespace) => {
+export const getSettings = async (appKv: KVNamespace) => {
   const legacySettings = await getLegacySettings(appKv);
   const entries = await Promise.all(
     settingKeys.map(async (settingKey) => {
@@ -66,9 +96,19 @@ const getSettings = async (appKv: KVNamespace) => {
         storedValue ??
         (settingKey === "globalPrompt"
           ? await appKv.get(legacyGlobalPromptKey)
-          : null);
+          : settingKey === "primaryModelUsageLimit"
+            ? await appKv.get(legacyUsageLimitsKey)
+            : null);
+      const parsedValue = parseStoredSetting(value);
+      const settingValue =
+        settingKey === "primaryModelUsageLimit" && Array.isArray(parsedValue)
+          ? getPrimaryModelUsageLimit({
+              ...legacySettings,
+              usageLimits: parsedValue,
+            } as Partial<Settings> & { usageLimits: typeof parsedValue })
+          : parsedValue;
       const result = settingsFieldSchemaMap[settingKey].safeParse(
-        parseStoredSetting(value),
+        settingValue,
       );
 
       return [

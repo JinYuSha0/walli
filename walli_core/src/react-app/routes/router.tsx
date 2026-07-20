@@ -7,7 +7,7 @@ import {
 import { AppLayout } from "./app-layout";
 import {
   LazyDashboardRoute,
-  LazyKeysRoute,
+  LazyClientsRoute,
   LazyLoginRoute,
   LazySettingsRoute,
 } from "./lazy-routes";
@@ -49,10 +49,50 @@ const settingsTabRoute = createRoute({
   component: LazySettingsRoute,
 });
 
-const keysRoute = createRoute({
+const clientsRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: "/clients",
+  component: () => (
+    <Navigate
+      to="/clients/$platform/$tab"
+      params={{
+        platform: "web",
+        tab: "client-id",
+      }}
+      replace
+    />
+  ),
+});
+
+const clientsPlatformRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: "/clients/$platform",
+  component: () => {
+    const { platform } = clientsPlatformRoute.useParams();
+
+    return (
+      <Navigate
+        to="/clients/$platform/$tab"
+        params={{
+          platform,
+          tab: "client-id",
+        }}
+        replace
+      />
+    );
+  },
+});
+
+const clientsPlatformTabRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: "/clients/$platform/$tab",
+  component: LazyClientsRoute,
+});
+
+const legacyKeysRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: "/keys",
-  component: LazyKeysRoute,
+  component: () => <Navigate to="/clients" replace />,
 });
 
 const loginRoute = createRoute({
@@ -62,7 +102,15 @@ const loginRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
-  appLayoutRoute.addChildren([indexRoute, settingsRoute, settingsTabRoute, keysRoute]),
+  appLayoutRoute.addChildren([
+    indexRoute,
+    settingsRoute,
+    settingsTabRoute,
+    clientsRoute,
+    clientsPlatformRoute,
+    clientsPlatformTabRoute,
+    legacyKeysRoute,
+  ]),
   loginRoute,
 ]);
 

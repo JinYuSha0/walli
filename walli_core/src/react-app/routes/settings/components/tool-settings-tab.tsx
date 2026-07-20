@@ -8,6 +8,7 @@ import { updateSettings } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import {
   TOOL_API_METHODS,
   TOOL_INVOCATION_TYPES,
@@ -460,7 +461,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
                           <div className="grid gap-2">
                             <textarea
                               id={`tool-description-${field.id}`}
-                              className="min-h-20 w-full rounded-lg border border-input bg-input/30 px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="min-h-20 w-full rounded-lg border border-input bg-input/30 px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40"
                               aria-invalid={fieldState.invalid}
                               disabled={updateSettingsMutation.isPending}
                               placeholder={t(
@@ -498,8 +499,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
                         control={form.control}
                         name={`tools.${index}.invocation.type`}
                         render={({ field: invocationTypeField }) => (
-                          <select
-                            className="h-9 w-full rounded-lg border border-input bg-input/30 px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                          <Select
                             disabled={updateSettingsMutation.isPending}
                             {...invocationTypeField}
                           >
@@ -508,7 +508,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
                                 {t(`toolInvocationType.${type}`)}
                               </option>
                             ))}
-                          </select>
+                          </Select>
                         )}
                       />
                     </div>
@@ -524,8 +524,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
                           }}
                           render={({ field: invocationModelField, fieldState }) => (
                             <div className="grid gap-2">
-                              <select
-                                className="h-9 w-full rounded-lg border border-input bg-input/30 px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                              <Select
                                 aria-invalid={fieldState.invalid}
                                 disabled={updateSettingsMutation.isPending}
                                 {...invocationModelField}
@@ -538,7 +537,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
                                     {model.name}
                                   </option>
                                 ))}
-                              </select>
+                              </Select>
                               {fieldState.error?.message && (
                                 <p className="text-sm text-destructive">
                                   {fieldState.error.message}
@@ -556,8 +555,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
                             control={form.control}
                             name={`tools.${index}.invocation.method`}
                             render={({ field: invocationMethodField }) => (
-                              <select
-                                className="h-9 w-full rounded-lg border border-input bg-input/30 px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                              <Select
                                 disabled={updateSettingsMutation.isPending}
                                 {...invocationMethodField}
                               >
@@ -566,7 +564,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
                                     {method}
                                   </option>
                                 ))}
-                              </select>
+                              </Select>
                             )}
                           />
                         </div>
@@ -682,8 +680,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
                             control={form.control}
                             name={`tools.${index}.schema.fields.${schemaFieldIndex}.type`}
                             render={({ field: schemaTypeField }) => (
-                              <select
-                                className="h-9 w-full rounded-lg border border-input bg-input/30 px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                              <Select
                                 disabled={updateSettingsMutation.isPending}
                                 {...schemaTypeField}
                               >
@@ -692,7 +689,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
                                     {t(`toolSchemaType.${type}`)}
                                   </option>
                                 ))}
-                              </select>
+                              </Select>
                             )}
                           />
                         </div>

@@ -1,6 +1,18 @@
 import { hc, parseResponse } from "hono/client";
 import type { AppType } from "../worker";
+import type {
+  ClientConfigResponse,
+  ClientDialogSettingsPatch,
+  ClientPlatform,
+} from "../shared/client";
 import type { SettingsPatch, SettingsResponse } from "../shared/const";
+
+export type {
+  ClientConfigResponse,
+  ClientDialogSettings,
+  ClientDialogSettingsPatch,
+  ClientPlatform,
+} from "../shared/client";
 
 export type {
   ModelCapabilityTag,
@@ -38,3 +50,19 @@ export const getSettings = async (): Promise<SettingsResponse> =>
 
 export const updateSettings = async (json: SettingsPatch): Promise<SettingsResponse> =>
   parseResponse(apiClient.api.admin.settings.$patch({ json }));
+
+export const getClientConfig = async (
+  platform: ClientPlatform,
+): Promise<ClientConfigResponse> =>
+  parseResponse(apiClient.api.admin.clients[":platform"].$get({ param: { platform } }));
+
+export const updateClientDialogSettings = async (
+  platform: ClientPlatform,
+  json: ClientDialogSettingsPatch,
+): Promise<ClientConfigResponse> =>
+  parseResponse(
+    apiClient.api.admin.clients[":platform"].$patch({
+      param: { platform },
+      json,
+    }),
+  );

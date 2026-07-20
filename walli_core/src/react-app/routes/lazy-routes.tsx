@@ -20,9 +20,9 @@ export const LazyDashboardRoute = createLazyRoute(() =>
   }))
 );
 
-export const LazyKeysRoute = createLazyRoute(() =>
+export const LazyClientsRoute = createLazyRoute(() =>
   import("./keys-route").then((module) => ({
-    default: module.KeysRoute,
+    default: module.ClientsRoute,
   }))
 );
 

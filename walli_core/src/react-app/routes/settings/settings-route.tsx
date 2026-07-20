@@ -7,18 +7,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RouteLoading } from "../route-loading";
 import { AuthSettingsTab } from "./components/auth-settings-tab";
 import { CorsSettingsTab } from "./components/cors-settings-tab";
-import { DialogSettingsTab } from "./components/dialog-settings-tab";
 import { ModelSettingsTab } from "./components/model-settings-tab";
 import { SystemPromptSettingsTab } from "./components/system-prompt-settings-tab";
 import { ToolSettingsTab } from "./components/tool-settings-tab";
+import { UsageSettingsTab } from "./components/usage-settings-tab";
 
 const settingsTabs = [
   "model",
   "tool",
+  "usage",
   "auth",
   "cors",
   "system-prompt",
-  "dialog",
 ] as const;
 
 type SettingsTab = (typeof settingsTabs)[number];
@@ -71,6 +71,9 @@ export function SettingsRoute() {
               <TabsTrigger value="tool">
                 {t("toolSettingsTab")}
               </TabsTrigger>
+              <TabsTrigger value="usage">
+                {t("usageSettingsTab")}
+              </TabsTrigger>
               <TabsTrigger value="auth">
                 {t("authSettingsTab")}
               </TabsTrigger>
@@ -80,9 +83,6 @@ export function SettingsRoute() {
               <TabsTrigger value="system-prompt">
                 {t("settingsSystemPromptTab")}
               </TabsTrigger>
-              <TabsTrigger value="dialog">
-                {t("settingsDialogTab")}
-              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="model">
@@ -91,6 +91,10 @@ export function SettingsRoute() {
 
             <TabsContent value="tool">
               <ToolSettingsTab {...data} />
+            </TabsContent>
+
+            <TabsContent value="usage">
+              <UsageSettingsTab settings={data} />
             </TabsContent>
 
             <TabsContent value="auth">
@@ -105,9 +109,6 @@ export function SettingsRoute() {
               <SystemPromptSettingsTab settings={data} />
             </TabsContent>
 
-            <TabsContent value="dialog">
-              <DialogSettingsTab settings={data} />
-            </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
