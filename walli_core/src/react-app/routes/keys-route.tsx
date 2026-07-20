@@ -5,7 +5,7 @@ import {
   type TablerIcon,
 } from "@tabler/icons-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Navigate, useLocation, useNavigate } from "@tanstack/react-router";
+import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import {
   getClientConfig,
@@ -65,19 +65,6 @@ export function ClientsRoute() {
     queryKey: ["client-config", platform],
     queryFn: () => getClientConfig(platform),
   });
-
-  if (!isClientPlatform(currentPlatform) || !isClientTab(currentTab)) {
-    return (
-      <Navigate
-        to="/clients/$platform/$tab"
-        params={{
-          platform,
-          tab: activeTab,
-        }}
-        replace
-      />
-    );
-  }
 
   return (
     <div className="flex justify-center p-4 lg:p-6">

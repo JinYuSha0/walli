@@ -1,5 +1,6 @@
 import { type Icon } from "@tabler/icons-react";
-import { useLocation } from "@tanstack/react-router";
+import { useLocation, useNavigate } from "@tanstack/react-router";
+import type { MouseEvent } from "react";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -11,18 +12,75 @@ import {
 export function NavMain({
   items,
 }: {
-  items: {
-    title: string;
-    url: string;
-    icon?: Icon;
-  }[];
+  items: Array<
+    {
+      activePrefix: string;
+      icon?: Icon;
+      title: string;
+    } & (
+      | {
+          params?: never;
+          to: "/";
+        }
+      | {
+          params: {
+            tab: string;
+          };
+          to: "/settings/$tab";
+        }
+      | {
+          params: {
+            platform: string;
+            tab: string;
+          };
+          to: "/clients/$platform/$tab";
+        }
+    )
+  >;
 }) {
   const location = useLocation();
-  const isItemActive = (url: string) =>
-    location.pathname === url ||
-    (url.startsWith("/settings") &&
-      location.pathname.startsWith("/settings")) ||
-    (url.startsWith("/clients") && location.pathname.startsWith("/clients"));
+  const navigate = useNavigate();
+  const isItemActive = (activePrefix: string) =>
+    activePrefix === "/"
+      ? location.pathname === "/"
+      : location.pathname.startsWith(activePrefix);
+  const getHref = (item: (typeof items)[number]) => {
+    if (item.to === "/") {
+      return "/";
+    }
+
+    if (item.to === "/settings/$tab") {
+      return `/settings/${item.params.tab}`;
+    }
+
+    return `/clients/${item.params.platform}/${item.params.tab}`;
+  };
+  const handleNavigate = (
+    event: MouseEvent<HTMLAnchorElement>,
+    item: (typeof items)[number],
+  ) => {
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.shiftKey
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (item.to === "/") {
+      void navigate({ to: item.to });
+      return;
+    }
+
+    void navigate({
+      to: item.to,
+      params: item.params,
+    });
+  };
 
   return (
     <SidebarGroup>
@@ -32,10 +90,12 @@ export function NavMain({
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton
                 asChild
-                isActive={isItemActive(item.url)}
-                tooltip={item.title}
+                isActive={isItemActive(item.activePrefix)}
               >
-                <a href={item.url}>
+                <a
+                  href={getHref(item)}
+                  onClickCapture={(event) => handleNavigate(event, item)}
+                >
                   {item.icon && <item.icon />}
                   <span>{item.title}</span>
                 </a>

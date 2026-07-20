@@ -36,18 +36,28 @@ export function AppSidebar({
   const data = {
     navMain: [
       {
+        activePrefix: "/",
         title: t("navDashboard"),
-        url: "/",
+        to: "/",
         icon: IconDashboard,
       },
       {
+        activePrefix: "/settings",
         title: t("navSettings"),
-        url: "/settings/model",
+        to: "/settings/$tab",
+        params: {
+          tab: "model",
+        },
         icon: IconSettings,
       },
       {
+        activePrefix: "/clients",
         title: t("navKeys"),
-        url: "/clients/web/client-id",
+        to: "/clients/$platform/$tab",
+        params: {
+          platform: "web",
+          tab: "client-id",
+        },
         icon: IconKey,
       },
     ],

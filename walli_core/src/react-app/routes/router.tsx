@@ -52,35 +52,13 @@ const settingsTabRoute = createRoute({
 const clientsRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: "/clients",
-  component: () => (
-    <Navigate
-      to="/clients/$platform/$tab"
-      params={{
-        platform: "web",
-        tab: "client-id",
-      }}
-      replace
-    />
-  ),
+  component: LazyClientsRoute,
 });
 
 const clientsPlatformRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: "/clients/$platform",
-  component: () => {
-    const { platform } = clientsPlatformRoute.useParams();
-
-    return (
-      <Navigate
-        to="/clients/$platform/$tab"
-        params={{
-          platform,
-          tab: "client-id",
-        }}
-        replace
-      />
-    );
-  },
+  component: LazyClientsRoute,
 });
 
 const clientsPlatformTabRoute = createRoute({
@@ -92,7 +70,16 @@ const clientsPlatformTabRoute = createRoute({
 const legacyKeysRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: "/keys",
-  component: () => <Navigate to="/clients" replace />,
+  component: () => (
+    <Navigate
+      to="/clients/$platform/$tab"
+      params={{
+        platform: "web",
+        tab: "client-id",
+      }}
+      replace
+    />
+  ),
 });
 
 const loginRoute = createRoute({
