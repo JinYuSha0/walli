@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/select";
 import {
   TOOL_API_METHODS,
   TOOL_INVOCATION_TYPES,
+  TOOL_NAME_PATTERN,
   TOOL_SCHEMA_FIELD_TYPES,
   type ModelConfig,
   type ToolConfig,
@@ -171,6 +172,11 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
       if (tool.name.trim().length === 0) {
         form.setError(`tools.${toolIndex}.name`, {
           message: t("toolSettingsToolNameRequired"),
+        });
+        markInvalidTool();
+      } else if (!TOOL_NAME_PATTERN.test(tool.name.trim())) {
+        form.setError(`tools.${toolIndex}.name`, {
+          message: t("toolSettingsToolNameInvalid"),
         });
         markInvalidTool();
       }
@@ -427,7 +433,13 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
                       <Controller
                         control={form.control}
                         name={`tools.${index}.name`}
-                        rules={{ required: t("toolSettingsToolNameRequired") }}
+                        rules={{
+                          required: t("toolSettingsToolNameRequired"),
+                          pattern: {
+                            value: TOOL_NAME_PATTERN,
+                            message: t("toolSettingsToolNameInvalid"),
+                          },
+                        }}
                         render={({ field: nameField, fieldState }) => (
                           <div className="grid gap-2">
                             <Input

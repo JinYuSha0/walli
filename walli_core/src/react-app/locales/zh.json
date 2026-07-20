@@ -112,6 +112,7 @@
   "toolSettingsToolName": "工具名称",
   "toolSettingsToolNamePlaceholder": "例如：search_web",
   "toolSettingsToolNameRequired": "工具名称不能为空",
+  "toolSettingsToolNameInvalid": "工具名称只能以字母或下划线开头，并且只能包含字母、数字、下划线或连字符，最长 64 个字符",
   "toolSettingsToolDescription": "工具描述",
   "toolSettingsToolDescriptionPlaceholder": "描述这个工具能做什么，以及什么时候应该调用。",
   "toolSettingsToolDescriptionRequired": "工具描述不能为空",

@@ -7,6 +7,9 @@ upload_source_maps = true
 [observability]
 enabled = true
 
+[ai]
+binding = "AI"
+
 [assets]
 directory = "./dist/client"
 not_found_handling = "single-page-application"

@@ -81,6 +81,8 @@ export const TOOL_API_METHODS = ["GET", "POST"] as const;
 
 export type ToolApiMethod = (typeof TOOL_API_METHODS)[number];
 
+export const TOOL_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$/;
+
 export const toolModelInvocationSchema = z
   .object({
     type: z.literal("model"),

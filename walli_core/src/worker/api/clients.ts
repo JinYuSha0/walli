@@ -21,7 +21,7 @@ const clientDialogSettingsKey = (platform: ClientPlatform) =>
   `client:${platform}:dialog-settings`;
 
 const createClientId = (platform: ClientPlatform) =>
-  `${platform}_${globalThis.crypto.randomUUID().replaceAll("-", "")}`;
+  `${platform}_${crypto.randomUUID().replaceAll("-", "")}`;
 
 const getDefaultDialogSettings = async (
   appKv: KVNamespace,

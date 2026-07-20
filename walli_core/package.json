@@ -18,6 +18,8 @@
     "@tabler/icons-react": "^3.44.0",
     "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-router": "^1.170.18",
+    "ai": "^7.0.31",
+    "ai-gateway-provider": "^3.2.0",
     "better-auth": "^1.6.23",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -57,6 +59,7 @@
     "typescript": "5.9.3",
     "typescript-eslint": "8.48.0",
     "vite": "^7.0.0",
+    "vitest": "^4.1.10",
     "wrangler": "4.111.0"
   },
   "private": true,
@@ -75,7 +78,8 @@
     "db:migrate:local": "wrangler d1 migrations apply walli_core --local",
     "db:migrate:remote": "wrangler d1 migrations apply walli_core --remote",
     "db:migrations:list:local": "wrangler d1 migrations list walli_core --local",
-    "db:migrations:list:remote": "wrangler d1 migrations list walli_core --remote"
+    "db:migrations:list:remote": "wrangler d1 migrations list walli_core --remote",
+    "test": "vitest run"
   },
   "type": "module"
 }

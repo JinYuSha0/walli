@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { adminStatusRoute } from "./api/admin-status";
 import { createAuth, type AppSession, type AppUser } from "./api/auth";
+import { chatRoute } from "./api/chat";
 import { clientsRoute } from "./api/clients";
 import { meRoute } from "./api/me";
 import { rootRoute } from "./api/root";
@@ -31,6 +32,7 @@ const routes = app
   .route("/", rootRoute)
   .route("/", meRoute)
   .route("/", adminStatusRoute)
+  .route("/", chatRoute)
   .route("/", clientsRoute)
   .route("/", settingsRoute);
 

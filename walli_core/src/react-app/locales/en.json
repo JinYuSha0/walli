@@ -112,6 +112,7 @@
   "toolSettingsToolName": "Tool name",
   "toolSettingsToolNamePlaceholder": "For example: search_web",
   "toolSettingsToolNameRequired": "Tool name is required",
+  "toolSettingsToolNameInvalid": "Tool name must start with a letter or underscore and only contain letters, numbers, underscores, or hyphens. Maximum 64 characters.",
   "toolSettingsToolDescription": "Tool description",
   "toolSettingsToolDescriptionPlaceholder": "Describe what this tool does and when it should be called.",
   "toolSettingsToolDescriptionRequired": "Tool description is required",
