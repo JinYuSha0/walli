@@ -11,6 +11,7 @@ import {
 } from "./validation";
 import {
   DEFAULT_SETTINGS,
+  SETTINGS_KV_KEY,
   SETTINGS_KEY_MAP,
   settingsFieldSchemaMap,
   settingsPatchSchema,
@@ -20,11 +21,10 @@ import {
   type SettingsKey,
 } from "../../shared/const";
 
-const settingsKey = "settings";
 const settingKeys = Object.keys(SETTINGS_KEY_MAP) as SettingsKey[];
 const legacyGlobalPromptKey = "settings:system-prompt";
 const legacyUsageLimitsKey = "settings:usage-limits";
-const legacySettingsSchema = settingsSchema.partial().passthrough();
+const legacySettingsSchema = settingsSchema.partial().loose();
 
 const getPrimaryModelUsageLimit = (settings: Partial<Settings>) => {
   const usageLimits = (
@@ -54,7 +54,7 @@ const getPrimaryModelUsageLimit = (settings: Partial<Settings>) => {
 };
 
 const getLegacySettings = async (appKv: KVNamespace) => {
-  const savedSettings = await appKv.get<unknown>(settingsKey, "json");
+  const savedSettings = await appKv.get<unknown>(SETTINGS_KV_KEY, "json");
   const result = legacySettingsSchema.safeParse(savedSettings);
 
   if (!result.success) {
@@ -75,6 +75,13 @@ const getLegacySettings = async (appKv: KVNamespace) => {
   };
 };
 
+const getFullStoredSettings = async (appKv: KVNamespace) => {
+  const savedSettings = await appKv.get<unknown>(SETTINGS_KV_KEY, "json");
+  const result = settingsSchema.safeParse(savedSettings);
+
+  return result.success ? result.data : undefined;
+};
+
 const parseStoredSetting = (value: string | null) => {
   if (value === null) {
     return undefined;
@@ -88,6 +95,12 @@ const parseStoredSetting = (value: string | null) => {
 };
 
 export const getSettings = async (appKv: KVNamespace) => {
+  const fullStoredSettings = await getFullStoredSettings(appKv);
+
+  if (fullStoredSettings) {
+    return fullStoredSettings;
+  }
+
   const legacySettings = await getLegacySettings(appKv);
   const entries = await Promise.all(
     settingKeys.map(async (settingKey) => {
@@ -118,7 +131,11 @@ export const getSettings = async (appKv: KVNamespace) => {
     }),
   );
 
-  return Object.fromEntries(entries) as Settings;
+  const settings = Object.fromEntries(entries) as Settings;
+
+  await appKv.put(SETTINGS_KV_KEY, JSON.stringify(settings));
+
+  return settings;
 };
 
 const requireAdmin: MiddlewareHandler<AppBindings> = async (c, next) => {
@@ -158,16 +175,12 @@ export const settingsRoute = new Hono<AppBindings>()
       );
     }
 
-    await Promise.all(
-      Object.entries(result.data).map(([settingKey, value]) =>
-        c.env.APP_KV.put(
-          SETTINGS_KEY_MAP[settingKey as SettingsKey],
-          JSON.stringify(value),
-        ),
-      ),
-    );
+    const settings = {
+      ...(await getSettings(c.env.APP_KV)),
+      ...result.data,
+    };
 
-    const settings = await getSettings(c.env.APP_KV);
+    await c.env.APP_KV.put(SETTINGS_KV_KEY, JSON.stringify(settings));
 
     return c.json(parseResponse(settingsResponseSchema, settings));
   });

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const SETTINGS_KV_KEY = "settings";
+
 export const SETTINGS_KEY_MAP = {
   models: "settings:models",
   primaryModel: "settings:primary-model",

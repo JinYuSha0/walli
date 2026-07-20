@@ -21,7 +21,7 @@ export const appUserSchema = z
       .nullable()
       .optional(),
   })
-  .passthrough();
+  .loose();
 
 export const appSessionSchema = z
   .object({
@@ -35,7 +35,7 @@ export const appSessionSchema = z
     userAgent: z.string().nullable().optional(),
     impersonatedBy: z.string().nullable().optional(),
   })
-  .passthrough();
+  .loose();
 
 export const validateQuery =
   <Schema extends z.ZodType>(schema: Schema): MiddlewareHandler =>
