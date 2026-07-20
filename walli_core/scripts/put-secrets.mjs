@@ -84,17 +84,26 @@ if (entries.length === 0) {
 
 console.log("Using env file: " + relative(coreDir, envFile));
 
-for (const [key, value] of entries) {
-  const result = spawnSync("wrangler", ["secret", "put", key], {
+const chunkSize = 100;
+const chunks = [];
+
+for (let index = 0; index < entries.length; index += chunkSize) {
+  chunks.push(entries.slice(index, index + chunkSize));
+}
+
+for (const [index, chunk] of chunks.entries()) {
+  const secrets = Object.fromEntries(chunk);
+  const result = spawnSync("wrangler", ["secret", "bulk"], {
     cwd: coreDir,
-    input: value,
+    input: JSON.stringify(secrets),
     stdio: ["pipe", "inherit", "inherit"],
   });
 
   if (result.status !== 0) {
-    console.error("Failed to put secret: " + key);
+    console.error("Failed to bulk put secrets");
     process.exit(result.status ?? 1);
   }
 
-  console.log("Updated " + key);
+  const suffix = chunks.length > 1 ? " (" + (index + 1) + "/" + chunks.length + ")" : "";
+  console.log("Updated " + chunk.length + " secrets" + suffix);
 }

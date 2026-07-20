@@ -26,6 +26,12 @@ export const LazyClientsRoute = createLazyRoute(() =>
   }))
 );
 
+export const LazyChatTestRoute = createLazyRoute(() =>
+  import("./chat-test-route").then((module) => ({
+    default: module.ChatTestRoute,
+  }))
+);
+
 export const LazyLoginRoute = createLazyRoute(() =>
   import("./login-route").then((module) => ({
     default: module.LoginRoute,

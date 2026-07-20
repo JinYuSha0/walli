@@ -79,6 +79,7 @@ export function AppLayout() {
     "/": t("routeDashboard"),
     "/settings": t("routeSettings"),
     "/clients": t("routeKeys"),
+    "/chat-test": t("routeChatTest"),
   };
   const title = location.pathname.startsWith("/settings/")
     ? t("routeSettings")

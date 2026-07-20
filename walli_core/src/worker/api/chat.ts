@@ -17,6 +17,9 @@ const chatMessageSchema = z
 
 const chatRequestSchema = z
   .object({
+    appId: z.string().optional(),
+    userId: z.string().optional(),
+    token: z.string().optional(),
     messages: z.array(chatMessageSchema).min(1),
   })
   .strict();
@@ -36,10 +39,49 @@ const serializeError = (error: unknown) => {
 
 const stringifySseData = (data: unknown) => JSON.stringify(data);
 
+const verifyChatAuth = async (
+  settings: Awaited<ReturnType<typeof getSettings>>,
+  credentials: {
+    appId?: string;
+    userId?: string;
+    token?: string;
+  },
+) => {
+  if (!settings.authEnabled) {
+    return true;
+  }
+
+  if (
+    !settings.authEndpointUrl.trim() ||
+    !credentials.appId?.trim() ||
+    !credentials.userId?.trim() ||
+    !credentials.token?.trim()
+  ) {
+    return false;
+  }
+
+  try {
+    const response = await fetch(settings.authEndpointUrl, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        appId: credentials.appId,
+        userId: credentials.userId,
+        token: credentials.token,
+      }),
+    });
+
+    return response.status === 200;
+  } catch (error) {
+    console.error(error);
+    return false;
+  }
+};
+
 export const chatRoute = new Hono<AppBindings>().post("/api/chat", async (c) => {
-  const bodyResult = chatRequestSchema.safeParse(
-    await c.req.json().catch(() => null),
-  );
+  const bodyResult = chatRequestSchema.safeParse(await c.req.json().catch(() => null));
 
   if (!bodyResult.success) {
     return c.json(
@@ -52,6 +94,16 @@ export const chatRoute = new Hono<AppBindings>().post("/api/chat", async (c) => 
   }
 
   const settings = await getSettings(c.env.APP_KV);
+  const isAuthorized = await verifyChatAuth(settings, {
+    appId: bodyResult.data.appId,
+    userId: bodyResult.data.userId,
+    token: bodyResult.data.token,
+  });
+
+  if (!isAuthorized) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
   const gateway = createGateway(c);
   const tools = buildChatTools(settings.tools, c.env);
   c.header("X-Accel-Buffering", "no");
@@ -61,7 +113,7 @@ export const chatRoute = new Hono<AppBindings>().post("/api/chat", async (c) => 
       let fullContent = "";
       const result = streamText({
         model: gateway(unified(settings.primaryModel)),
-        system: settings.globalPrompt || undefined,
+        instructions: settings.globalPrompt || undefined,
         messages: bodyResult.data.messages as ModelMessage[],
         tools,
         toolChoice: "auto",

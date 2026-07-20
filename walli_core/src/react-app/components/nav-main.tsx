@@ -20,7 +20,7 @@ export function NavMain({
     } & (
       | {
           params?: never;
-          to: "/";
+          to: "/" | "/chat-test";
         }
       | {
           params: {
@@ -45,8 +45,8 @@ export function NavMain({
       ? location.pathname === "/"
       : location.pathname.startsWith(activePrefix);
   const getHref = (item: (typeof items)[number]) => {
-    if (item.to === "/") {
-      return "/";
+    if (item.to === "/" || item.to === "/chat-test") {
+      return item.to;
     }
 
     if (item.to === "/settings/$tab") {
@@ -71,7 +71,7 @@ export function NavMain({
 
     event.preventDefault();
 
-    if (item.to === "/") {
+    if (item.to === "/" || item.to === "/chat-test") {
       void navigate({ to: item.to });
       return;
     }
