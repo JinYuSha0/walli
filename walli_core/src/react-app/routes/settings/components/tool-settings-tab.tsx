@@ -15,6 +15,7 @@ import {
   TOOL_NAME_PATTERN,
   TOOL_SCHEMA_FIELD_TYPES,
   type ModelConfig,
+  type ToolApiHeader,
   type ToolConfig,
   type ToolSchemaField,
 } from "../../../../shared/const";
@@ -29,6 +30,7 @@ type ToolSettingsForm = {
       model: string;
       url: string;
       method: "GET" | "POST";
+      headers: ToolApiHeader[];
     };
     schema: ToolConfig["schema"];
   }>;
@@ -52,6 +54,11 @@ const createRequiredSchemaField = (): ToolSchemaField => ({
   required: true,
 });
 
+const createEmptyApiHeader = (): ToolApiHeader => ({
+  name: "",
+  defaultValue: "",
+});
+
 const createEmptyTool = () => ({
   name: "",
   description: "",
@@ -60,6 +67,7 @@ const createEmptyTool = () => ({
     model: "",
     url: "",
     method: "POST" as const,
+    headers: [],
   },
   schema: {
     fields: [createRequiredSchemaField()],
@@ -92,6 +100,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
           model: tool.invocation.type === "model" ? tool.invocation.model : "",
           url: tool.invocation.type === "api" ? tool.invocation.url : "",
           method: tool.invocation.type === "api" ? tool.invocation.method : "POST",
+          headers: tool.invocation.type === "api" ? tool.invocation.headers : [],
         },
       })),
     },
@@ -112,6 +121,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
             model: tool.invocation.type === "model" ? tool.invocation.model : "",
             url: tool.invocation.type === "api" ? tool.invocation.url : "",
             method: tool.invocation.type === "api" ? tool.invocation.method : "POST",
+            headers: tool.invocation.type === "api" ? tool.invocation.headers : [],
           },
         })),
       });
@@ -129,6 +139,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
           model: tool.invocation.type === "model" ? tool.invocation.model : "",
           url: tool.invocation.type === "api" ? tool.invocation.url : "",
           method: tool.invocation.type === "api" ? tool.invocation.method : "POST",
+          headers: tool.invocation.type === "api" ? tool.invocation.headers : [],
         },
       })),
     });
@@ -156,6 +167,23 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
     form.setValue(
       fieldsPath,
       fields.filter((_, index) => index !== fieldIndex),
+    );
+  };
+
+  const addApiHeader = (toolIndex: number) => {
+    const headersPath = `tools.${toolIndex}.invocation.headers` as const;
+    form.setValue(headersPath, [
+      ...form.getValues(headersPath),
+      createEmptyApiHeader(),
+    ]);
+  };
+
+  const removeApiHeader = (toolIndex: number, headerIndex: number) => {
+    const headersPath = `tools.${toolIndex}.invocation.headers` as const;
+
+    form.setValue(
+      headersPath,
+      form.getValues(headersPath).filter((_, index) => index !== headerIndex),
     );
   };
 
@@ -217,6 +245,30 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
           message: t("toolSettingsInvocationUrlInvalid"),
         });
         markInvalidTool();
+      }
+
+      if (tool.invocation.type === "api") {
+        tool.invocation.headers.forEach((header, headerIndex) => {
+          if (header.name.trim().length === 0) {
+            form.setError(
+              `tools.${toolIndex}.invocation.headers.${headerIndex}.name`,
+              {
+                message: t("toolSettingsInvocationHeaderNameRequired"),
+              },
+            );
+            markInvalidTool();
+          }
+
+          if (header.defaultValue.trim().length === 0) {
+            form.setError(
+              `tools.${toolIndex}.invocation.headers.${headerIndex}.defaultValue`,
+              {
+                message: t("toolSettingsInvocationHeaderValueRequired"),
+              },
+            );
+            markInvalidTool();
+          }
+        });
       }
 
       const namedSchemaFields = tool.schema.fields.filter(
@@ -303,6 +355,15 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
                     type: "api" as const,
                     url: tool.invocation.url.trim(),
                     method: tool.invocation.method,
+                    headers: tool.invocation.headers
+                      .map((header) => ({
+                        name: header.name.trim(),
+                        defaultValue: header.defaultValue.trim(),
+                      }))
+                      .filter(
+                        (header) =>
+                          header.name.length > 0 && header.defaultValue.length > 0,
+                      ),
                   },
             schema: {
               fields: normalizedSchemaFields,
@@ -345,6 +406,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
           {fields.map((field, index) => {
             const schemaFields = form.watch(`tools.${index}.schema.fields`);
             const invocationType = form.watch(`tools.${index}.invocation.type`);
+            const apiHeaders = form.watch(`tools.${index}.invocation.headers`);
             const toolName = form.watch(`tools.${index}.name`);
             const toolDescription = form.watch(`tools.${index}.description`);
             const toolFormId = field.formId ?? field.id;
@@ -560,65 +622,68 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
                         />
                       </div>
                     ) : (
-                      <div className="grid gap-4 lg:grid-cols-[8rem_minmax(0,1fr)]">
-                        <div className="grid gap-2">
-                          <Label>{t("toolSettingsInvocationMethod")}</Label>
-                          <Controller
-                            control={form.control}
-                            name={`tools.${index}.invocation.method`}
-                            render={({ field: invocationMethodField }) => (
-                              <Select
-                                disabled={updateSettingsMutation.isPending}
-                                {...invocationMethodField}
-                              >
-                                {TOOL_API_METHODS.map((method) => (
-                                  <option key={method} value={method}>
-                                    {method}
-                                  </option>
-                                ))}
-                              </Select>
-                            )}
-                          />
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label>{t("toolSettingsInvocationUrl")}</Label>
-                          <Controller
-                            control={form.control}
-                            name={`tools.${index}.invocation.url`}
-                            rules={{
-                              validate: (value) => {
-                                const trimmedValue = value.trim();
-
-                                if (trimmedValue.length === 0) {
-                                  return t("toolSettingsInvocationUrlRequired");
-                                }
-
-                                return (
-                                  isValidHttpUrl(trimmedValue) ||
-                                  t("toolSettingsInvocationUrlInvalid")
-                                );
-                              },
-                            }}
-                            render={({ field: invocationUrlField, fieldState }) => (
-                              <div className="grid gap-2">
-                                <Input
-                                  aria-invalid={fieldState.invalid}
+                      <div className="grid gap-4">
+                        <div className="grid gap-4 lg:grid-cols-[8rem_minmax(0,1fr)]">
+                          <div className="grid gap-2">
+                            <Label>{t("toolSettingsInvocationMethod")}</Label>
+                            <Controller
+                              control={form.control}
+                              name={`tools.${index}.invocation.method`}
+                              render={({ field: invocationMethodField }) => (
+                                <Select
                                   disabled={updateSettingsMutation.isPending}
-                                  placeholder={t(
-                                    "toolSettingsInvocationUrlPlaceholder",
+                                  {...invocationMethodField}
+                                >
+                                  {TOOL_API_METHODS.map((method) => (
+                                    <option key={method} value={method}>
+                                      {method}
+                                    </option>
+                                  ))}
+                                </Select>
+                              )}
+                            />
+                          </div>
+
+                          <div className="grid gap-2">
+                            <Label>{t("toolSettingsInvocationUrl")}</Label>
+                            <Controller
+                              control={form.control}
+                              name={`tools.${index}.invocation.url`}
+                              rules={{
+                                validate: (value) => {
+                                  const trimmedValue = value.trim();
+
+                                  if (trimmedValue.length === 0) {
+                                    return t("toolSettingsInvocationUrlRequired");
+                                  }
+
+                                  return (
+                                    isValidHttpUrl(trimmedValue) ||
+                                    t("toolSettingsInvocationUrlInvalid")
+                                  );
+                                },
+                              }}
+                              render={({ field: invocationUrlField, fieldState }) => (
+                                <div className="grid gap-2">
+                                  <Input
+                                    aria-invalid={fieldState.invalid}
+                                    disabled={updateSettingsMutation.isPending}
+                                    placeholder={t(
+                                      "toolSettingsInvocationUrlPlaceholder",
+                                    )}
+                                    {...invocationUrlField}
+                                  />
+                                  {fieldState.error?.message && (
+                                    <p className="text-sm text-destructive">
+                                      {fieldState.error.message}
+                                    </p>
                                   )}
-                                  {...invocationUrlField}
-                                />
-                                {fieldState.error?.message && (
-                                  <p className="text-sm text-destructive">
-                                    {fieldState.error.message}
-                                  </p>
-                                )}
-                              </div>
-                            )}
-                          />
+                                </div>
+                              )}
+                            />
+                          </div>
                         </div>
+
                       </div>
                     )}
                   </div>
@@ -808,6 +873,112 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
                     )}
                   </div>
                 </div>
+
+                {invocationType === "api" && (
+                  <div className="grid gap-3 border-t border-border pt-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-medium">
+                        {t("toolSettingsInvocationHeaders")}
+                      </h3>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => addApiHeader(index)}
+                        disabled={updateSettingsMutation.isPending}
+                      >
+                        <Plus />
+                        {t("toolSettingsInvocationAddHeader")}
+                      </Button>
+                    </div>
+
+                    {apiHeaders.length > 0 ? (
+                      <div className="grid gap-3">
+                        {apiHeaders.map((_, headerIndex) => (
+                          <div
+                            key={`${field.id}-header-${headerIndex}`}
+                            className="grid gap-3 rounded-lg bg-muted/40 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end"
+                          >
+                            <div className="grid gap-2">
+                              <Label>{t("toolSettingsInvocationHeaderName")}</Label>
+                              <Controller
+                                control={form.control}
+                                name={`tools.${index}.invocation.headers.${headerIndex}.name`}
+                                rules={{
+                                  required: t(
+                                    "toolSettingsInvocationHeaderNameRequired",
+                                  ),
+                                }}
+                                render={({ field: headerNameField, fieldState }) => (
+                                  <div className="grid gap-2">
+                                    <Input
+                                      aria-invalid={fieldState.invalid}
+                                      disabled={updateSettingsMutation.isPending}
+                                      placeholder={t(
+                                        "toolSettingsInvocationHeaderNamePlaceholder",
+                                      )}
+                                      {...headerNameField}
+                                    />
+                                    {fieldState.error?.message && (
+                                      <p className="text-sm text-destructive">
+                                        {fieldState.error.message}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                              />
+                            </div>
+
+                            <div className="grid gap-2">
+                              <Label>{t("toolSettingsInvocationHeaderValue")}</Label>
+                              <Controller
+                                control={form.control}
+                                name={`tools.${index}.invocation.headers.${headerIndex}.defaultValue`}
+                                rules={{
+                                  required: t(
+                                    "toolSettingsInvocationHeaderValueRequired",
+                                  ),
+                                }}
+                                render={({ field: headerValueField, fieldState }) => (
+                                  <div className="grid gap-2">
+                                    <Input
+                                      aria-invalid={fieldState.invalid}
+                                      disabled={updateSettingsMutation.isPending}
+                                      placeholder={t(
+                                        "toolSettingsInvocationHeaderValuePlaceholder",
+                                      )}
+                                      {...headerValueField}
+                                    />
+                                    {fieldState.error?.message && (
+                                      <p className="text-sm text-destructive">
+                                        {fieldState.error.message}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                              />
+                            </div>
+
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label={t("toolSettingsInvocationRemoveHeader")}
+                              onClick={() => removeApiHeader(index, headerIndex)}
+                              disabled={updateSettingsMutation.isPending}
+                            >
+                              <Trash2 />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
+                        {t("toolSettingsInvocationHeadersEmpty")}
+                      </div>
+                    )}
+                  </div>
+                )}
                   </div>
                 )}
               </div>

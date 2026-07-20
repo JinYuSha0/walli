@@ -75,6 +75,26 @@ export const createToolInputSchema = (toolConfig: ToolConfig) =>
     ),
   );
 
+const createApiInvocationInput = (toolConfig: ToolConfig, input: unknown) => {
+  const schemaDefaults = Object.fromEntries(
+    toolConfig.schema.fields
+      .map((field) => [field.name, parseDefaultValue(field.type, field.defaultValue)] as const)
+      .filter(([, value]) => value !== undefined),
+  );
+
+  if (typeof input === "object" && input !== null) {
+    return {
+      ...schemaDefaults,
+      ...(input as Record<string, unknown>),
+    };
+  }
+
+  return {
+    ...schemaDefaults,
+    input,
+  };
+};
+
 const runConfiguredTool = async (
   toolConfig: ToolConfig,
   input: unknown,
@@ -88,23 +108,30 @@ const runConfiguredTool = async (
   }
 
   const url = new URL(toolConfig.invocation.url);
+  const apiInput = createApiInvocationInput(toolConfig, input);
+  const headers = Object.fromEntries(
+    toolConfig.invocation.headers.map((header) => [
+      header.name,
+      header.defaultValue,
+    ]),
+  );
   const init: RequestInit = {
     method: toolConfig.invocation.method,
+    headers,
   };
 
   if (toolConfig.invocation.method === "GET") {
-    if (typeof input === "object" && input !== null) {
-      Object.entries(input as Record<string, unknown>).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          url.searchParams.set(key, String(value));
-        }
-      });
-    }
+    Object.entries(apiInput).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        url.searchParams.set(key, String(value));
+      }
+    });
   } else {
     init.headers = {
+      ...headers,
       "content-type": "application/json",
     };
-    init.body = JSON.stringify(input);
+    init.body = JSON.stringify(apiInput);
   }
 
   const response = await fetch(url, init);

@@ -83,6 +83,15 @@ export type ToolApiMethod = (typeof TOOL_API_METHODS)[number];
 
 export const TOOL_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$/;
 
+export const toolApiHeaderSchema = z
+  .object({
+    name: z.string().trim().min(1),
+    defaultValue: z.string().trim().min(1),
+  })
+  .strict();
+
+export type ToolApiHeader = z.output<typeof toolApiHeaderSchema>;
+
 export const toolModelInvocationSchema = z
   .object({
     type: z.literal("model"),
@@ -102,8 +111,13 @@ export const toolApiInvocationSchema = z
         "URL must start with http:// or https://",
       ),
     method: z.enum(TOOL_API_METHODS),
+    headers: z.array(toolApiHeaderSchema).default([]),
   })
-  .strict();
+  .strict()
+  .transform((invocation) => ({
+    ...invocation,
+    headers: invocation.headers ?? [],
+  }));
 
 export type ToolApiInvocation = z.output<typeof toolApiInvocationSchema>;
 

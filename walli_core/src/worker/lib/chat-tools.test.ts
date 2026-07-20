@@ -220,6 +220,31 @@ describe("chat tools", () => {
             type: "api",
             url: "https://example.com/tool",
             method: "POST",
+            headers: [
+              {
+                name: "x-api-key",
+                defaultValue: "secret",
+              },
+            ],
+          },
+          schema: {
+            fields: [
+              ...voiceToTextTool.schema.fields,
+              {
+                name: "format",
+                type: "string",
+                description: "Response format",
+                required: false,
+                defaultValue: "json",
+              },
+              {
+                name: "include_timestamps",
+                type: "boolean",
+                description: "Whether to include timestamps",
+                required: false,
+                defaultValue: "true",
+              },
+            ],
           },
         },
       ],
@@ -241,9 +266,12 @@ describe("chat tools", () => {
       {
         method: "POST",
         headers: {
+          "x-api-key": "secret",
           "content-type": "application/json",
         },
         body: JSON.stringify({
+          format: "json",
+          include_timestamps: true,
           file: "https://example.com/audio.mp3",
         }),
       },
