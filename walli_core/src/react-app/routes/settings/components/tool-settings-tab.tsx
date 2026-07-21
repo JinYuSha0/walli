@@ -16,6 +16,7 @@ import {
   TOOL_INVOCATION_TYPES,
   TOOL_NAME_PATTERN,
   TOOL_SCHEMA_FIELD_TYPES,
+  type BuiltInToolSetting,
   type ModelConfig,
   type ToolApiHeader,
   type ToolConfig,
@@ -23,6 +24,7 @@ import {
 } from "../../../../shared/const";
 
 type ToolSettingsForm = {
+  builtInTools: BuiltInToolSetting[];
   tools: Array<{
     formId?: string;
     enabled: boolean;
@@ -40,6 +42,7 @@ type ToolSettingsForm = {
 };
 
 type ToolSettingsTabProps = {
+  builtInTools: BuiltInToolSetting[];
   models: ModelConfig[];
   tools: ToolConfig[];
 };
@@ -78,6 +81,15 @@ const createEmptyTool = () => ({
   },
 });
 
+const createBuiltInToolFormValues = (builtInTools: BuiltInToolSetting[]) => {
+  const enabledByName = new Map(builtInTools.map((tool) => [tool.name, tool.enabled]));
+
+  return BUILT_IN_TOOLS.map((tool) => ({
+    name: tool.name,
+    enabled: enabledByName.get(tool.name) ?? tool.enabled,
+  }));
+};
+
 const createToolFormId = () =>
   globalThis.crypto?.randomUUID?.() ?? `tool-${Date.now()}`;
 
@@ -91,12 +103,13 @@ const isValidHttpUrl = (value: string) => {
   }
 };
 
-export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
+export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTabProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [editingToolId, setEditingToolId] = useState<string | null>(null);
   const form = useForm<ToolSettingsForm>({
     defaultValues: {
+      builtInTools: createBuiltInToolFormValues(builtInTools),
       tools: tools.map((tool) => ({
         ...tool,
         enabled: tool.enabled,
@@ -119,6 +132,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
     onSuccess: (values) => {
       queryClient.setQueryData(["settings"], values);
       form.reset({
+        builtInTools: createBuiltInToolFormValues(values.builtInTools),
         tools: values.tools.map((tool) => ({
           ...tool,
           enabled: tool.enabled,
@@ -138,6 +152,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
 
   useEffect(() => {
     form.reset({
+      builtInTools: createBuiltInToolFormValues(builtInTools),
       tools: tools.map((tool) => ({
         ...tool,
         enabled: tool.enabled,
@@ -150,7 +165,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
         },
       })),
     });
-  }, [form, tools]);
+  }, [builtInTools, form, tools]);
 
   const addSchemaField = (toolIndex: number) => {
     const fieldsPath = `tools.${toolIndex}.schema.fields` as const;
@@ -325,6 +340,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
     }
 
     updateSettingsMutation.mutate({
+      builtInTools: values.builtInTools,
       tools: values.tools
         .map((tool) => {
           const schemaFields = tool.schema.fields
@@ -411,10 +427,14 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
         </div>
 
         <div className="grid gap-4">
-          {BUILT_IN_TOOLS.map((tool) => (
+          {BUILT_IN_TOOLS.map((tool, index) => (
             <div
               key={tool.name}
-              className="grid gap-3 rounded-lg border border-border bg-muted/30 p-4"
+              className={
+                form.watch(`builtInTools.${index}.enabled`)
+                  ? "grid gap-3 rounded-lg border border-border bg-muted/30 p-4"
+                  : "grid gap-3 rounded-lg border border-border bg-muted/30 p-4 opacity-75"
+              }
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="grid min-w-0 flex-1 gap-1">
@@ -426,9 +446,32 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
                     {t("toolSettingsBuiltInTool")}
                   </p>
                 </div>
-                <span className="shrink-0 whitespace-nowrap rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground">
-                  {t("toolSettingsBuiltIn")}
-                </span>
+                <div className="flex shrink-0 items-center gap-3">
+                  <Controller
+                    control={form.control}
+                    name={`builtInTools.${index}.enabled`}
+                    render={({ field: enabledField }) => (
+                      <label className="flex items-center gap-2 text-sm">
+                        <span className="text-xs text-muted-foreground">
+                          {enabledField.value
+                            ? t("toolSettingsEnabledStatus")
+                            : t("toolSettingsDisabledStatus")}
+                        </span>
+                        <Switch
+                          checked={enabledField.value}
+                          disabled={updateSettingsMutation.isPending}
+                          onCheckedChange={enabledField.onChange}
+                        />
+                        <span className="sr-only">
+                          {t("toolSettingsEnabled")}
+                        </span>
+                      </label>
+                    )}
+                  />
+                  <span className="whitespace-nowrap rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground">
+                    {t("toolSettingsBuiltIn")}
+                  </span>
+                </div>
               </div>
             </div>
           ))}

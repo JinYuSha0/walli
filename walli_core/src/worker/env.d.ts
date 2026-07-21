@@ -11,4 +11,5 @@ interface Env {
   API_TOKEN: string;
   AI: Ai;
   APP_KV: KVNamespace;
+  USER: DurableObjectNamespace<import("./durable-objects/user").User>;
 }

@@ -24,3 +24,11 @@ migrations_dir = "migrations"
 [[kv_namespaces]]
 binding = "APP_KV"
 id = "a3ead2192a94459db359c9d11e47bc92"
+
+[[durable_objects.bindings]]
+name = "USER"
+class_name = "User"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["User"]

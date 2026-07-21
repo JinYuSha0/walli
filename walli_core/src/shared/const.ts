@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { BUILT_IN_TOOLS } from "./tools";
+export { BUILT_IN_TOOLS } from "./tools";
 
 export const SETTINGS_KV_KEY = "settings";
 
@@ -6,6 +8,7 @@ export const SETTINGS_KEY_MAP = {
   models: "settings:models",
   primaryModel: "settings:primary-model",
   embeddingModel: "settings:embedding-model",
+  builtInTools: "settings:built-in-tools",
   tools: "settings:tools",
   primaryModelUsageLimit: "settings:primary-model-usage-limit",
   globalPrompt: "settings:global-prompt",
@@ -155,37 +158,24 @@ export const toolConfigSchema = z
 
 export type ToolConfig = z.output<typeof toolConfigSchema>;
 
-export const BUILT_IN_TOOLS = [
-  {
-    enabled: true,
-    name: "timestamp",
-    description:
-      "Get the current Unix timestamp and formatted date time for any IANA time zone. Use the returned datetime directly instead of converting it yourself.",
-    invocation: {
-      type: "api",
-      url: "/api/tools/timestamp",
-      method: "GET",
-      headers: [],
-    },
-    schema: {
-      fields: [
-        {
-          name: "timeZone",
-          type: "string",
-          description:
-            "Optional IANA time zone, for example UTC, Asia/Shanghai, America/New_York, or Europe/London. Defaults to UTC.",
-          required: false,
-          defaultValue: "UTC",
-        },
-      ],
-    },
-  },
-] satisfies ToolConfig[];
+export const builtInToolSettingSchema = z
+  .object({
+    name: z.string().trim().min(1),
+    enabled: z.boolean().default(true),
+  })
+  .strict()
+  .transform((tool) => ({
+    ...tool,
+    enabled: tool.enabled ?? true,
+  }));
+
+export type BuiltInToolSetting = z.output<typeof builtInToolSettingSchema>;
 
 export const settingsFieldSchemaMap = {
   models: z.array(modelConfigSchema),
   primaryModel: z.string(),
   embeddingModel: z.string(),
+  builtInTools: z.array(builtInToolSettingSchema),
   tools: z.array(toolConfigSchema),
   primaryModelUsageLimit: primaryModelUsageLimitConfigSchema,
   globalPrompt: z.string(),
@@ -235,6 +225,10 @@ export const DEFAULT_SETTINGS = {
   ],
   primaryModel: "openai/gpt-5.4-mini",
   embeddingModel: "@cf/qwen/qwen3-embedding-0.6b",
+  builtInTools: BUILT_IN_TOOLS.map((tool) => ({
+    name: tool.name,
+    enabled: tool.enabled,
+  })),
   primaryModelUsageLimit: {
     perRequestInputLimit: 0,
     perRequestOutputLimit: 0,

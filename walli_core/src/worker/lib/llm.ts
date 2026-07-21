@@ -5,11 +5,13 @@ import type { AppBindings } from "../api/types";
 
 export { generateText } from "ai";
 
-export const createGateway = (c: Context<AppBindings>) =>
+export const createGatewayFromEnv = (env: Env) =>
   createAiGateway({
-    accountId: c.env.CLOUDFLARE_ACCOUNT_ID,
-    gateway: c.env.AI_GATEWAY_ID,
-    apiKey: c.env.CF_AIG_TOKEN,
+    accountId: env.CLOUDFLARE_ACCOUNT_ID,
+    gateway: env.AI_GATEWAY_ID,
+    apiKey: env.CF_AIG_TOKEN,
   });
+
+export const createGateway = (c: Context<AppBindings>) => createGatewayFromEnv(c.env);
 
 export { unified };

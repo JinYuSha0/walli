@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BUILT_IN_TOOLS, DEFAULT_SETTINGS } from "../../shared/const";
-import { buildChatTools, createToolInputSchema, isValidChatToolName } from "./chat-tools.ts";
+import { createChatRunnerTools } from "../lib/chat-runner";
+import { buildChatTools, createToolInputSchema, isValidChatToolName } from "../lib/chat-tools.ts";
+import { toolsRoute } from ".";
+import { getNextCronScheduledAt } from "./cron";
 
+const env = {
+  API_TOKEN: "test-token",
+} as Env;
 const [voiceToTextTool, textToVoiceTool] = DEFAULT_SETTINGS.tools;
 const imageToTextTool = DEFAULT_SETTINGS.tools[2];
 const aiRun = vi.fn(async (_model: string, input: Record<string, unknown>) => ({
@@ -29,6 +35,54 @@ describe("chat tools", () => {
 
   it("keeps built-in tools before configured tools", () => {
     const tools = buildChatTools([...BUILT_IN_TOOLS, ...DEFAULT_SETTINGS.tools], fakeRuntime);
+
+    expect(Object.keys(tools)).toEqual([
+      "timestamp",
+      "scheduled_task",
+      "voice_to_text",
+      "text_to_voice",
+      "image_to_text",
+    ]);
+  });
+
+  it("can exclude the scheduled task tool from generated runner tools", () => {
+    const tools = createChatRunnerTools(
+      DEFAULT_SETTINGS,
+      {
+        AI: fakeRuntime.AI,
+        API_TOKEN: "test-token",
+      } as Env,
+      "https://example.com",
+      ["scheduled_task"],
+    );
+
+    expect(Object.keys(tools)).toEqual([
+      "timestamp",
+      "voice_to_text",
+      "text_to_voice",
+      "image_to_text",
+    ]);
+  });
+
+  it("can disable the scheduled task built-in tool through settings", () => {
+    const tools = createChatRunnerTools(
+      {
+        ...DEFAULT_SETTINGS,
+        builtInTools: DEFAULT_SETTINGS.builtInTools.map((tool) =>
+          tool.name === "scheduled_task"
+            ? {
+                ...tool,
+                enabled: false,
+              }
+            : tool,
+        ),
+      },
+      {
+        AI: fakeRuntime.AI,
+        API_TOKEN: "test-token",
+      } as Env,
+      "https://example.com",
+    );
 
     expect(Object.keys(tools)).toEqual([
       "timestamp",
@@ -352,5 +406,219 @@ describe("chat tools", () => {
         },
       },
     );
+  });
+});
+
+describe("tools route", () => {
+  it("calculates the next monthly cron run in the requested time zone", () => {
+    const nextRun = getNextCronScheduledAt(
+      "0 17 1 * *",
+      "Asia/Shanghai",
+      Date.parse("2026-01-02T00:00:00.000Z"),
+    );
+
+    expect(new Date(nextRun).toISOString()).toBe("2026-02-01T09:00:00.000Z");
+  });
+
+  it("rejects timestamp requests without the internal API token", async () => {
+    const response = await toolsRoute.request("/api/tools/timestamp", {}, env);
+
+    expect(response.status).toBe(403);
+  });
+
+  it("returns the current timestamp with the requested time zone", async () => {
+    const response = await toolsRoute.request(
+      "/api/tools/timestamp?timeZone=Asia%2FShanghai",
+      {
+        headers: {
+          authorization: "Bearer test-token",
+        },
+      },
+      env,
+    );
+    const body = await response.json() as {
+      timestamp: number;
+      unixSeconds: number;
+      iso: string;
+      timeZone: string;
+      datetime: string;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.timestamp).toBeGreaterThan(0);
+    expect(body.unixSeconds).toBe(Math.floor(body.timestamp / 1000));
+    expect(body.iso).toBe(new Date(body.timestamp).toISOString());
+    expect(body.timeZone).toBe("Asia/Shanghai");
+    expect(body.datetime).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+  });
+
+  it("rejects invalid time zones", async () => {
+    const response = await toolsRoute.request(
+      "/api/tools/timestamp?timeZone=Nope%2FNowhere",
+      {
+        headers: {
+          authorization: "Bearer test-token",
+        },
+      },
+      env,
+    );
+
+    expect(response.status).toBe(400);
+  });
+
+  it("creates recurring scheduled tasks with end and retry options", async () => {
+    const createTask = vi.fn(async (input) => ({
+      ...input,
+      id: "task-1",
+      recurrenceEndAt: input.recurrenceEndAt ?? null,
+      maxRuns: input.maxRuns ?? null,
+      runNumber: input.runNumber ?? 1,
+      maxRetry: input.maxRetry ?? 1,
+      retryCount: input.retryCount ?? 0,
+      status: "pending",
+      createdAt: 0,
+      updatedAt: 0,
+      executedAt: null,
+      canceledAt: null,
+      lastError: null,
+    }));
+    const scheduledTaskEnv = {
+      ...env,
+      USER: {
+        getByName: vi.fn(() => ({
+          createTask,
+        })),
+      },
+    } as unknown as Env;
+
+    const response = await toolsRoute.request(
+      "/api/tools/scheduled-tasks",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "create",
+          userId: "user-1",
+          type: "reminder",
+          description: "Send the weekly report reminder.",
+          scheduledAt: 1000,
+          cron: "0 17 * * 1",
+          timeZone: "Asia/Shanghai",
+          recurrenceEndAt: 100000,
+          maxRuns: 3,
+          maxRetry: 2,
+          payload: {
+            channel: "email",
+          },
+        }),
+      },
+      scheduledTaskEnv,
+    );
+
+    expect(response.status).toBe(201);
+    expect(createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user-1",
+        description: "Send the weekly report reminder.",
+        scheduledAt: 1000,
+        cron: "0 17 * * 1",
+        timeZone: "Asia/Shanghai",
+        recurrenceEndAt: 100000,
+        maxRuns: 3,
+        maxRetry: 2,
+      }),
+    );
+  });
+
+  it("lists pending scheduled tasks by default", async () => {
+    const listTasks = vi.fn(async () => []);
+    const scheduledTaskEnv = {
+      ...env,
+      USER: {
+        getByName: vi.fn(() => ({
+          listTasks,
+        })),
+      },
+    } as unknown as Env;
+
+    const response = await toolsRoute.request(
+      "/api/tools/scheduled-tasks",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "list",
+          userId: "user-1",
+        }),
+      },
+      scheduledTaskEnv,
+    );
+
+    expect(response.status).toBe(200);
+    expect(listTasks).toHaveBeenCalledWith("pending");
+  });
+
+  it("supports listing scheduled tasks across all statuses", async () => {
+    const listTasks = vi.fn(async () => []);
+    const scheduledTaskEnv = {
+      ...env,
+      USER: {
+        getByName: vi.fn(() => ({
+          listTasks,
+        })),
+      },
+    } as unknown as Env;
+
+    const response = await toolsRoute.request(
+      "/api/tools/scheduled-tasks",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "list",
+          userId: "user-1",
+          status: "all",
+        }),
+      },
+      scheduledTaskEnv,
+    );
+
+    expect(response.status).toBe(200);
+    expect(listTasks).toHaveBeenCalledWith("all");
+  });
+
+  it("rejects recurring scheduled tasks with an invalid end time", async () => {
+    const response = await toolsRoute.request(
+      "/api/tools/scheduled-tasks",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "create",
+          userId: "user-1",
+          description: "Send the weekly report reminder.",
+          scheduledAt: 1000,
+          cron: "0 17 * * 1",
+          recurrenceEndAt: 1000,
+        }),
+      },
+      env,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(body)).toContain("recurrenceEndAt must be greater than scheduledAt");
   });
 });

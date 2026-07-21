@@ -6,8 +6,9 @@ import { clientsRoute } from "./api/clients";
 import { meRoute } from "./api/me";
 import { rootRoute } from "./api/root";
 import { settingsRoute } from "./api/settings";
-import { toolsRoute } from "./api/tools";
 import type { AppBindings } from "./api/types";
+import { toolsRoute } from "./tools";
+export { User } from "./durable-objects/user";
 
 const app = new Hono<AppBindings>();
 
