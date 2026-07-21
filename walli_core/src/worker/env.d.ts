@@ -9,6 +9,8 @@ interface Env {
   AI_GATEWAY_ID: string;
   CF_AIG_TOKEN?: string;
   API_TOKEN: string;
+  TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_WEBHOOK_SECRET?: string;
   AI: Ai;
   APP_KV: KVNamespace;
   USER: DurableObjectNamespace<import("./durable-objects/user").User>;

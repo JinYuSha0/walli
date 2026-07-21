@@ -158,7 +158,7 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
         <div className="grid gap-4">
           {fields.map((field, index) => {
             const modelName = watchedModels[index]?.name.trim() ?? "";
-            const usingToolNames = settings.tools
+            const usingToolNames = [...settings.builtInTools, ...settings.tools]
               .filter(
                 (tool) =>
                   tool.invocation.type === "model" &&

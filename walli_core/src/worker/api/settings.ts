@@ -10,13 +10,15 @@ import {
   validateQuery,
 } from "./validation";
 import {
+  BUILT_IN_TOOLS,
   DEFAULT_SETTINGS,
   SETTINGS_KV_KEY,
   SETTINGS_KEY_MAP,
+  settingsBaseSchema,
   settingsFieldSchemaMap,
   settingsPatchSchema,
   settingsResponseSchema,
-  settingsSchema,
+  timeZoneConfigSchema,
   type Settings,
   type SettingsKey,
 } from "../../shared/const";
@@ -24,7 +26,34 @@ import {
 const settingKeys = Object.keys(SETTINGS_KEY_MAP) as SettingsKey[];
 const legacyGlobalPromptKey = "settings:system-prompt";
 const legacyUsageLimitsKey = "settings:usage-limits";
-const legacySettingsSchema = settingsSchema.partial().loose();
+const legacySettingsSchema = settingsBaseSchema.partial().loose();
+const builtInToolNames = new Set(BUILT_IN_TOOLS.map((tool) => tool.name));
+
+const normalizeBuiltInTools = (settings: Settings) => {
+  const configuredBuiltIns = new Map(
+    [...settings.builtInTools, ...settings.tools.filter((tool) => builtInToolNames.has(tool.name))]
+      .map((tool) => [tool.name, tool]),
+  );
+
+  return BUILT_IN_TOOLS.map((defaultTool) => {
+    const configuredTool = configuredBuiltIns.get(defaultTool.name);
+
+    if (!configuredTool) {
+      return defaultTool;
+    }
+
+    return {
+      ...configuredTool,
+      name: defaultTool.name,
+    };
+  });
+};
+
+const normalizeSettings = (settings: Settings): Settings => ({
+  ...settings,
+  builtInTools: normalizeBuiltInTools(settings),
+  tools: settings.tools.filter((tool) => !builtInToolNames.has(tool.name)),
+});
 
 const getPrimaryModelUsageLimit = (settings: Partial<Settings>) => {
   const usageLimits = (
@@ -46,11 +75,41 @@ const getPrimaryModelUsageLimit = (settings: Partial<Settings>) => {
   }
 
   return {
-    perRequestInputLimit: legacyLimit.perRequestInputLimit,
-    perRequestOutputLimit: legacyLimit.perRequestOutputLimit ?? 0,
-    perUserDailyInputLimit: legacyLimit.perUserDailyInputLimit,
-    perUserDailyOutputLimit: legacyLimit.perUserDailyOutputLimit,
+    dailyInputLimit: legacyLimit.perUserDailyInputLimit,
+    dailyOutputLimit: legacyLimit.perUserDailyOutputLimit,
   };
+};
+
+const getLegacyPrimaryModelUsageLimit = (settings: Partial<Settings> | unknown) => {
+  if (typeof settings !== "object" || settings === null || Array.isArray(settings)) {
+    return undefined;
+  }
+
+  const record = settings as Record<string, unknown>;
+  const primaryModelUsageLimit = record.primaryModelUsageLimit;
+
+  if (
+    typeof primaryModelUsageLimit === "object" &&
+    primaryModelUsageLimit !== null &&
+    !Array.isArray(primaryModelUsageLimit)
+  ) {
+    return primaryModelUsageLimit as Record<string, unknown>;
+  }
+
+  return undefined;
+};
+
+const getLegacyTimeZone = (settings: Partial<Settings> | unknown) => {
+  if (typeof settings !== "object" || settings === null || Array.isArray(settings)) {
+    return DEFAULT_SETTINGS.timeZone;
+  }
+
+  const record = settings as Record<string, unknown>;
+  const timeZone =
+    record.timeZone ?? getLegacyPrimaryModelUsageLimit(settings)?.timeZone;
+  const result = timeZoneConfigSchema.safeParse(timeZone);
+
+  return result.success ? result.data : DEFAULT_SETTINGS.timeZone;
 };
 
 const getLegacySettings = async (appKv: KVNamespace) => {
@@ -58,7 +117,7 @@ const getLegacySettings = async (appKv: KVNamespace) => {
   const result = legacySettingsSchema.safeParse(savedSettings);
 
   if (!result.success) {
-    return DEFAULT_SETTINGS;
+    return normalizeSettings(DEFAULT_SETTINGS);
   }
 
   const { systemPrompt, ...settings } = result.data as Partial<Settings> & {
@@ -70,6 +129,7 @@ const getLegacySettings = async (appKv: KVNamespace) => {
     ...settings,
     primaryModelUsageLimit:
       settings.primaryModelUsageLimit ?? getPrimaryModelUsageLimit(settings),
+    timeZone: settings.timeZone ?? getLegacyTimeZone(savedSettings),
     globalPrompt:
       settings.globalPrompt ?? systemPrompt ?? DEFAULT_SETTINGS.globalPrompt,
   };
@@ -77,9 +137,19 @@ const getLegacySettings = async (appKv: KVNamespace) => {
 
 const getFullStoredSettings = async (appKv: KVNamespace) => {
   const savedSettings = await appKv.get<unknown>(SETTINGS_KV_KEY, "json");
-  const result = settingsSchema.safeParse(savedSettings);
+  const settingsWithMigratedTimeZone =
+    typeof savedSettings === "object" &&
+    savedSettings !== null &&
+    !Array.isArray(savedSettings) &&
+    !("timeZone" in savedSettings)
+      ? {
+          ...savedSettings,
+          timeZone: getLegacyTimeZone(savedSettings),
+        }
+      : savedSettings;
+  const result = settingsBaseSchema.safeParse(settingsWithMigratedTimeZone);
 
-  return result.success ? result.data : undefined;
+  return result.success ? normalizeSettings(result.data) : undefined;
 };
 
 const parseStoredSetting = (value: string | null) => {
@@ -114,7 +184,9 @@ export const getSettings = async (appKv: KVNamespace) => {
             : null);
       const parsedValue = parseStoredSetting(value);
       const settingValue =
-        settingKey === "primaryModelUsageLimit" && Array.isArray(parsedValue)
+        settingKey === "timeZone" && parsedValue === undefined
+          ? getLegacyTimeZone(legacySettings)
+          : settingKey === "primaryModelUsageLimit" && Array.isArray(parsedValue)
           ? getPrimaryModelUsageLimit({
               ...legacySettings,
               usageLimits: parsedValue,
@@ -131,7 +203,7 @@ export const getSettings = async (appKv: KVNamespace) => {
     }),
   );
 
-  const settings = Object.fromEntries(entries) as Settings;
+  const settings = normalizeSettings(Object.fromEntries(entries) as Settings);
 
   await appKv.put(SETTINGS_KV_KEY, JSON.stringify(settings));
 
@@ -195,10 +267,10 @@ export const settingsRoute = new Hono<AppBindings>()
       );
     }
 
-    const settings = {
+    const settings = normalizeSettings({
       ...(await getSettings(c.env.APP_KV)),
       ...result.data,
-    };
+    });
 
     await c.env.APP_KV.put(SETTINGS_KV_KEY, JSON.stringify(settings));
 

@@ -24,7 +24,6 @@ import {
 } from "../../../../shared/const";
 
 type ToolSettingsForm = {
-  builtInTools: BuiltInToolSetting[];
   tools: Array<{
     formId?: string;
     enabled: boolean;
@@ -81,13 +80,28 @@ const createEmptyTool = () => ({
   },
 });
 
-const createBuiltInToolFormValues = (builtInTools: BuiltInToolSetting[]) => {
-  const enabledByName = new Map(builtInTools.map((tool) => [tool.name, tool.enabled]));
+const builtInToolNames = new Set(BUILT_IN_TOOLS.map((tool) => tool.name));
+const builtInToolCount = BUILT_IN_TOOLS.length;
 
-  return BUILT_IN_TOOLS.map((tool) => ({
-    name: tool.name,
-    enabled: enabledByName.get(tool.name) ?? tool.enabled,
-  }));
+const toToolFormValue = (tool: ToolConfig) => ({
+  ...tool,
+  enabled: tool.enabled,
+  invocation: {
+    type: tool.invocation.type,
+    model: tool.invocation.type === "model" ? tool.invocation.model : "",
+    url: tool.invocation.type === "api" ? tool.invocation.url : "",
+    method: tool.invocation.type === "api" ? tool.invocation.method : "POST",
+    headers: tool.invocation.type === "api" ? tool.invocation.headers : [],
+  },
+});
+
+const createToolFormValues = (builtInTools: BuiltInToolSetting[], tools: ToolConfig[]) => {
+  const builtInToolByName = new Map(builtInTools.map((tool) => [tool.name, tool]));
+
+  return [
+    ...BUILT_IN_TOOLS.map((tool) => toToolFormValue(builtInToolByName.get(tool.name) ?? tool)),
+    ...tools.filter((tool) => !builtInToolNames.has(tool.name)).map(toToolFormValue),
+  ];
 };
 
 const createToolFormId = () =>
@@ -109,18 +123,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
   const [editingToolId, setEditingToolId] = useState<string | null>(null);
   const form = useForm<ToolSettingsForm>({
     defaultValues: {
-      builtInTools: createBuiltInToolFormValues(builtInTools),
-      tools: tools.map((tool) => ({
-        ...tool,
-        enabled: tool.enabled,
-        invocation: {
-          type: tool.invocation.type,
-          model: tool.invocation.type === "model" ? tool.invocation.model : "",
-          url: tool.invocation.type === "api" ? tool.invocation.url : "",
-          method: tool.invocation.type === "api" ? tool.invocation.method : "POST",
-          headers: tool.invocation.type === "api" ? tool.invocation.headers : [],
-        },
-      })),
+      tools: createToolFormValues(builtInTools, tools),
     },
   });
   const { fields, append, move, remove } = useFieldArray({
@@ -132,18 +135,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
     onSuccess: (values) => {
       queryClient.setQueryData(["settings"], values);
       form.reset({
-        builtInTools: createBuiltInToolFormValues(values.builtInTools),
-        tools: values.tools.map((tool) => ({
-          ...tool,
-          enabled: tool.enabled,
-          invocation: {
-            type: tool.invocation.type,
-            model: tool.invocation.type === "model" ? tool.invocation.model : "",
-            url: tool.invocation.type === "api" ? tool.invocation.url : "",
-            method: tool.invocation.type === "api" ? tool.invocation.method : "POST",
-            headers: tool.invocation.type === "api" ? tool.invocation.headers : [],
-          },
-        })),
+        tools: createToolFormValues(values.builtInTools, values.tools),
       });
       setEditingToolId(null);
       toast.success(t("toolSettingsSaveSuccess"));
@@ -152,18 +144,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
 
   useEffect(() => {
     form.reset({
-      builtInTools: createBuiltInToolFormValues(builtInTools),
-      tools: tools.map((tool) => ({
-        ...tool,
-        enabled: tool.enabled,
-        invocation: {
-          type: tool.invocation.type,
-          model: tool.invocation.type === "model" ? tool.invocation.model : "",
-          url: tool.invocation.type === "api" ? tool.invocation.url : "",
-          method: tool.invocation.type === "api" ? tool.invocation.method : "POST",
-          headers: tool.invocation.type === "api" ? tool.invocation.headers : [],
-        },
-      })),
+      tools: createToolFormValues(builtInTools, tools),
     });
   }, [builtInTools, form, tools]);
 
@@ -179,10 +160,14 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
     const fieldsPath = `tools.${toolIndex}.schema.fields` as const;
     const fields = form.getValues(fieldsPath);
     const field = fields[fieldIndex];
+    const invocationType = form.getValues(`tools.${toolIndex}.invocation.type`);
     const requiredFieldCount = fields.filter((schemaField) => schemaField.required)
       .length;
 
-    if (fields.length <= 1 || (field?.required && requiredFieldCount <= 1)) {
+    if (
+      invocationType === "model" &&
+      (fields.length <= 1 || (field?.required && requiredFieldCount <= 1))
+    ) {
       return;
     }
 
@@ -213,11 +198,18 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
     form.clearErrors();
 
     let firstInvalidToolId: string | null = null;
+    const toolNameCounts = new Map<string, number>();
     values.tools.forEach((tool, toolIndex) => {
       const toolFormId = tool.formId ?? fields[toolIndex]?.id ?? null;
       const markInvalidTool = () => {
         firstInvalidToolId = firstInvalidToolId ?? toolFormId;
       };
+      const normalizedToolName =
+        toolIndex < builtInToolCount ? BUILT_IN_TOOLS[toolIndex].name : tool.name.trim();
+
+      if (normalizedToolName.length > 0) {
+        toolNameCounts.set(normalizedToolName, (toolNameCounts.get(normalizedToolName) ?? 0) + 1);
+      }
 
       if (tool.name.trim().length === 0) {
         form.setError(`tools.${toolIndex}.name`, {
@@ -293,11 +285,12 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
         });
       }
 
+      const schemaRequired = tool.invocation.type === "model";
       const namedSchemaFields = tool.schema.fields.filter(
         (field) => field.name.trim().length > 0,
       );
 
-      if (namedSchemaFields.length === 0) {
+      if (schemaRequired && namedSchemaFields.length === 0) {
         form.setError(`tools.${toolIndex}.schema.fields.0.name`, {
           message: t("toolSettingsSchemaFieldNameRequired"),
         });
@@ -326,11 +319,24 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
         }
       });
 
-      if (!namedSchemaFields.some((field) => field.required)) {
+      if (schemaRequired && !namedSchemaFields.some((field) => field.required)) {
         form.setError(`tools.${toolIndex}.schema.fields.0.name`, {
           message: t("toolSettingsSchemaRequiredFieldRequired"),
         });
         markInvalidTool();
+      }
+    });
+
+    values.tools.forEach((tool, toolIndex) => {
+      const toolFormId = tool.formId ?? fields[toolIndex]?.id ?? null;
+      const normalizedToolName =
+        toolIndex < builtInToolCount ? BUILT_IN_TOOLS[toolIndex].name : tool.name.trim();
+
+      if (normalizedToolName.length > 0 && (toolNameCounts.get(normalizedToolName) ?? 0) > 1) {
+        form.setError(`tools.${toolIndex}.name`, {
+          message: t("toolSettingsToolNameDuplicate"),
+        });
+        firstInvalidToolId = firstInvalidToolId ?? toolFormId;
       }
     });
 
@@ -339,10 +345,8 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
       return;
     }
 
-    updateSettingsMutation.mutate({
-      builtInTools: values.builtInTools,
-      tools: values.tools
-        .map((tool) => {
+    const normalizedTools = values.tools
+      .map((tool, toolIndex) => {
           const schemaFields = tool.schema.fields
             .map((field) => ({
               name: field.name.trim(),
@@ -353,21 +357,26 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
             }))
             .filter((field) => field.name.length > 0);
           const normalizedSchemaFields =
-            schemaFields.length === 0
-              ? [createRequiredSchemaField()]
-              : schemaFields.some((field) => field.required)
-                ? schemaFields
-                : [
-                    {
-                      ...schemaFields[0],
-                      required: true,
-                    },
-                    ...schemaFields.slice(1),
-                  ];
+            tool.invocation.type === "api"
+              ? schemaFields
+              : schemaFields.length === 0
+                ? [createRequiredSchemaField()]
+                : schemaFields.some((field) => field.required)
+                  ? schemaFields
+                  : [
+                      {
+                        ...schemaFields[0],
+                        required: true,
+                      },
+                      ...schemaFields.slice(1),
+                    ];
 
           return {
             enabled: tool.enabled,
-            name: tool.name.trim(),
+            name:
+              toolIndex < builtInToolCount
+                ? BUILT_IN_TOOLS[toolIndex].name
+                : tool.name.trim(),
             description: tool.description.trim(),
             invocation:
               tool.invocation.type === "model"
@@ -393,7 +402,12 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
               fields: normalizedSchemaFields,
             },
           };
-        })
+        });
+    const normalizedToolByName = new Map(normalizedTools.map((tool) => [tool.name, tool]));
+
+    updateSettingsMutation.mutate({
+      builtInTools: BUILT_IN_TOOLS.map((tool) => normalizedToolByName.get(tool.name) ?? tool),
+      tools: normalizedTools.filter((tool) => !builtInToolNames.has(tool.name)),
     });
   };
 
@@ -427,57 +441,6 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
         </div>
 
         <div className="grid gap-4">
-          {BUILT_IN_TOOLS.map((tool, index) => (
-            <div
-              key={tool.name}
-              className={
-                form.watch(`builtInTools.${index}.enabled`)
-                  ? "grid gap-3 rounded-lg border border-border bg-muted/30 p-4"
-                  : "grid gap-3 rounded-lg border border-border bg-muted/30 p-4 opacity-75"
-              }
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="grid min-w-0 flex-1 gap-1">
-                  <h3 className="truncate text-sm font-medium">{tool.name}</h3>
-                  <p className="line-clamp-2 text-sm text-muted-foreground">
-                    {tool.description}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {t("toolSettingsBuiltInTool")}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  <Controller
-                    control={form.control}
-                    name={`builtInTools.${index}.enabled`}
-                    render={({ field: enabledField }) => (
-                      <label className="flex items-center gap-2 text-sm">
-                        <span className="text-xs text-muted-foreground">
-                          {enabledField.value
-                            ? t("toolSettingsEnabledStatus")
-                            : t("toolSettingsDisabledStatus")}
-                        </span>
-                        <Switch
-                          checked={enabledField.value}
-                          disabled={updateSettingsMutation.isPending}
-                          onCheckedChange={enabledField.onChange}
-                        />
-                        <span className="sr-only">
-                          {t("toolSettingsEnabled")}
-                        </span>
-                      </label>
-                    )}
-                  />
-                  <span className="whitespace-nowrap rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground">
-                    {t("toolSettingsBuiltIn")}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="grid gap-4">
           {fields.map((field, index) => {
             const schemaFields = form.watch(`tools.${index}.schema.fields`);
             const invocationType = form.watch(`tools.${index}.invocation.type`);
@@ -487,6 +450,8 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
             const toolDescription = form.watch(`tools.${index}.description`);
             const toolFormId = field.formId ?? field.id;
             const isEditing = editingToolId === toolFormId;
+            const isBuiltIn = index < builtInToolCount;
+            const firstCustomToolIndex = builtInToolCount;
 
             return (
               <div
@@ -506,9 +471,11 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                       {toolDescription || t("toolSettingsNoDescription")}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {t("toolSettingsSchemaFieldCount", {
-                        count: schemaFields.length,
-                      })}
+                      {isBuiltIn
+                        ? t("toolSettingsBuiltInTool")
+                        : t("toolSettingsSchemaFieldCount", {
+                            count: schemaFields.length,
+                          })}
                     </p>
                   </div>
 
@@ -544,44 +511,56 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                     >
                       <Pencil />
                     </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={t("toolSettingsMoveUp")}
-                      onClick={() => move(index, index - 1)}
-                      disabled={updateSettingsMutation.isPending || index === 0}
-                    >
-                      <ArrowUp />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={t("toolSettingsMoveDown")}
-                      onClick={() => move(index, index + 1)}
-                      disabled={
-                        updateSettingsMutation.isPending ||
-                        index === fields.length - 1
-                      }
-                    >
-                      <ArrowDown />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={t("toolSettingsRemoveTool")}
-                      onClick={() => {
-                        remove(index);
-                        if (isEditing) {
-                          setEditingToolId(null);
-                        }
-                      }}
-                      disabled={updateSettingsMutation.isPending}
-                    >
-                      <Trash2 />
-                    </Button>
+                    {isBuiltIn && (
+                      <span className="whitespace-nowrap rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground">
+                        {t("toolSettingsBuiltIn")}
+                      </span>
+                    )}
+                    {!isBuiltIn && (
+                      <>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={t("toolSettingsMoveUp")}
+                          onClick={() => move(index, index - 1)}
+                          disabled={
+                            updateSettingsMutation.isPending ||
+                            index === firstCustomToolIndex
+                          }
+                        >
+                          <ArrowUp />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={t("toolSettingsMoveDown")}
+                          onClick={() => move(index, index + 1)}
+                          disabled={
+                            updateSettingsMutation.isPending ||
+                            index === fields.length - 1
+                          }
+                        >
+                          <ArrowDown />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={t("toolSettingsRemoveTool")}
+                          onClick={() => {
+                            remove(index);
+                            if (isEditing) {
+                              setEditingToolId(null);
+                            }
+                          }}
+                          disabled={updateSettingsMutation.isPending}
+                        >
+                          <Trash2 />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -608,7 +587,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                             <Input
                               id={`tool-name-${field.id}`}
                               aria-invalid={fieldState.invalid}
-                              disabled={updateSettingsMutation.isPending}
+                              disabled={updateSettingsMutation.isPending || isBuiltIn}
                               placeholder={t("toolSettingsToolNamePlaceholder")}
                               {...nameField}
                             />
@@ -814,8 +793,9 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                       const requiredFieldCount = schemaFields.filter(
                         (field) => field.required,
                       ).length;
+                      const schemaRequired = invocationType === "model";
                       const isLastRequiredField =
-                        schemaField.required && requiredFieldCount <= 1;
+                        schemaRequired && schemaField.required && requiredFieldCount <= 1;
 
                       return (
                       <div
@@ -939,7 +919,9 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                                 }
                                 disabled={
                                   updateSettingsMutation.isPending ||
-                                  (requiredField.value && requiredFieldCount <= 1)
+                                  (schemaRequired &&
+                                    requiredField.value &&
+                                    requiredFieldCount <= 1)
                                 }
                               />
                               {t("toolSettingsSchemaFieldRequired")}
@@ -957,7 +939,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                           }
                           disabled={
                             updateSettingsMutation.isPending ||
-                            schemaFields.length <= 1 ||
+                            (schemaRequired && schemaFields.length <= 1) ||
                             isLastRequiredField
                           }
                         >

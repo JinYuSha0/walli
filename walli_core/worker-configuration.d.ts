@@ -6,6 +6,8 @@ interface __BaseEnv_Env {
 	DB: D1Database;
 	AI: Ai;
 	API_TOKEN: string;
+	TELEGRAM_BOT_TOKEN: string;
+	TELEGRAM_WEBHOOK_SECRET: string;
 	BETTER_AUTH_SECRET: string;
 	BETTER_AUTH_URL: string;
 	BETTER_AUTH_TRUSTED_ORIGINS: string;
@@ -29,7 +31,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "API_TOKEN" | "BETTER_AUTH_SECRET" | "BETTER_AUTH_URL" | "BETTER_AUTH_TRUSTED_ORIGINS" | "GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET" | "ADMIN_EMAILS" | "CLOUDFLARE_ACCOUNT_ID" | "AI_GATEWAY_ID" | "CF_AIG_TOKEN">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "API_TOKEN" | "TELEGRAM_BOT_TOKEN" | "TELEGRAM_WEBHOOK_SECRET" | "BETTER_AUTH_SECRET" | "BETTER_AUTH_URL" | "BETTER_AUTH_TRUSTED_ORIGINS" | "GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET" | "ADMIN_EMAILS" | "CLOUDFLARE_ACCOUNT_ID" | "AI_GATEWAY_ID" | "CF_AIG_TOKEN">> {}
 }
 
 // Begin runtime types

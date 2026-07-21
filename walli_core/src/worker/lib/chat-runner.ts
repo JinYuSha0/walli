@@ -35,8 +35,7 @@ const createChatInstructions = (globalPrompt: string, userInfo: unknown) => {
     .join("\n\n");
 };
 
-const createBuiltInTools = (env: Env, origin: string): ToolConfig[] =>
-  BUILT_IN_TOOLS.map((tool) => ({
+const withInternalApiInvocation = (tool: ToolConfig, env: Env, origin: string): ToolConfig => ({
     ...tool,
     invocation:
       tool.invocation.type === "api"
@@ -51,15 +50,25 @@ const createBuiltInTools = (env: Env, origin: string): ToolConfig[] =>
             ],
           }
         : tool.invocation,
-  }));
+});
 
-const applyBuiltInToolSettings = (tools: ToolConfig[], settings: Settings) => {
-  const enabledByName = new Map(settings.builtInTools.map((tool) => [tool.name, tool.enabled]));
+const createBuiltInTools = (env: Env, origin: string, settings: Settings): ToolConfig[] => {
+  const configuredByName = new Map(settings.builtInTools.map((tool) => [tool.name, tool]));
 
-  return tools.map((tool) => ({
-    ...tool,
-    enabled: enabledByName.get(tool.name) ?? tool.enabled,
-  }));
+  return BUILT_IN_TOOLS.map((tool) => {
+    const configuredTool = configuredByName.get(tool.name);
+
+    return withInternalApiInvocation(
+      configuredTool
+        ? {
+            ...configuredTool,
+            name: tool.name,
+          }
+        : tool,
+      env,
+      origin,
+    );
+  });
 };
 
 const createInternalToolFetch =
@@ -89,7 +98,7 @@ const createToolConfigs = (
 ) => {
   const excludedToolNames = new Set(excludeToolNames);
 
-  return [...applyBuiltInToolSettings(createBuiltInTools(env, origin), settings), ...settings.tools].filter(
+  return [...createBuiltInTools(env, origin, settings), ...settings.tools].filter(
     (tool) => !excludedToolNames.has(tool.name),
   );
 };

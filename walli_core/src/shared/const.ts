@@ -11,6 +11,7 @@ export const SETTINGS_KEY_MAP = {
   builtInTools: "settings:built-in-tools",
   tools: "settings:tools",
   primaryModelUsageLimit: "settings:primary-model-usage-limit",
+  timeZone: "settings:time-zone",
   globalPrompt: "settings:global-prompt",
   dialogSystemPrompt: "settings:dialog-system-prompt",
   dialogOpeningMessage: "settings:dialog-opening-message",
@@ -43,14 +44,89 @@ export const modelConfigSchema = z
 
 export type ModelConfig = z.output<typeof modelConfigSchema>;
 
-export const primaryModelUsageLimitConfigSchema = z
+export const UTC_OFFSET_TIME_ZONES = Array.from(
+  { length: 27 },
+  (_, index) => `UTC${index - 12 >= 0 ? "+" : ""}${index - 12}`,
+) as [string, ...string[]];
+
+const utcOffsetTimeZoneSchema = z.enum(UTC_OFFSET_TIME_ZONES);
+
+const getUtcOffsetTimeZoneFromIana = (timeZone: string) => {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      timeZoneName: "shortOffset",
+    }).formatToParts(new Date());
+    const shortOffset = parts.find((part) => part.type === "timeZoneName")?.value;
+
+    if (!shortOffset) {
+      return undefined;
+    }
+
+    const match = /^GMT(?:(?<sign>[+-])(?<hours>\d{1,2}))?$/.exec(shortOffset);
+
+    if (!match) {
+      return undefined;
+    }
+
+    const sign = match.groups?.sign ?? "+";
+    const hours = Number(match.groups?.hours ?? 0);
+    const offset = sign === "-" ? -hours : hours;
+    const normalized = `UTC${offset >= 0 ? "+" : ""}${offset}`;
+
+    return UTC_OFFSET_TIME_ZONES.includes(normalized) ? normalized : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const normalizeTimeZone = (value: unknown) => {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const timeZone = value.trim();
+
+  if (timeZone === "UTC") {
+    return "UTC+0";
+  }
+
+  if (UTC_OFFSET_TIME_ZONES.includes(timeZone)) {
+    return timeZone;
+  }
+
+  return getUtcOffsetTimeZoneFromIana(timeZone) ?? timeZone;
+};
+
+export const timeZoneConfigSchema = z.preprocess(
+  normalizeTimeZone,
+  utcOffsetTimeZoneSchema.default("UTC+0"),
+);
+
+const normalizePrimaryModelUsageLimitConfig = (value: unknown) => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return value;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  return {
+    dailyInputLimit: record.dailyInputLimit ?? record.perUserDailyInputLimit ?? 0,
+    dailyOutputLimit: record.dailyOutputLimit ?? record.perUserDailyOutputLimit ?? 0,
+  };
+};
+
+export const primaryModelUsageLimitConfigBaseSchema = z
   .object({
-    perRequestInputLimit: z.number().int().min(0),
-    perRequestOutputLimit: z.number().int().min(0),
-    perUserDailyInputLimit: z.number().int().min(0),
-    perUserDailyOutputLimit: z.number().int().min(0),
+    dailyInputLimit: z.number().int().min(0),
+    dailyOutputLimit: z.number().int().min(0),
   })
   .strict();
+
+export const primaryModelUsageLimitConfigSchema = z.preprocess(
+  normalizePrimaryModelUsageLimitConfig,
+  primaryModelUsageLimitConfigBaseSchema,
+);
 
 export type PrimaryModelUsageLimitConfig = z.output<
   typeof primaryModelUsageLimitConfigSchema
@@ -133,32 +209,60 @@ const defaultToolInvocation = {
   model: "",
 } as const;
 
-export const toolConfigSchema = z
+const toolSchemaSchema = z
   .object({
-    enabled: z.boolean().default(true),
-    name: z.string().trim().min(1),
-    description: z.string().trim().min(1),
-    invocation: toolInvocationSchema.default(defaultToolInvocation),
-    schema: z
-      .object({
-        fields: z.array(toolSchemaFieldSchema).min(1),
-      })
-      .strict()
-      .refine(
-        (schema) => schema.fields.some((field) => field.required),
-        "At least one required schema field is required",
-      ),
+    fields: z.array(toolSchemaFieldSchema),
   })
-  .strict()
-  .transform((tool) => ({
-    ...tool,
-    enabled: tool.enabled ?? true,
-    invocation: tool.invocation ?? defaultToolInvocation,
-  }));
+  .strict();
+
+const toolConfigBaseSchema = z.object({
+  enabled: z.boolean().default(true),
+  name: z.string().trim().min(1),
+  description: z.string().trim().min(1),
+  invocation: toolInvocationSchema.default(defaultToolInvocation),
+  schema: toolSchemaSchema,
+}).strict();
+
+const normalizeToolConfig = <Tool extends z.output<typeof toolConfigBaseSchema>>(tool: Tool) => ({
+  ...tool,
+  enabled: tool.enabled ?? true,
+  invocation: tool.invocation ?? defaultToolInvocation,
+});
+
+export const toolConfigSchema = toolConfigBaseSchema
+  .superRefine((tool, ctx) => {
+    if (tool.invocation.type === "api") {
+      return;
+    }
+
+    if (tool.schema.fields.some((field) => field.required)) {
+      return;
+    }
+
+    ctx.addIssue({
+      code: "custom",
+      path: ["schema"],
+      message: "At least one required schema field is required",
+    });
+  })
+  .transform(normalizeToolConfig);
 
 export type ToolConfig = z.output<typeof toolConfigSchema>;
 
-export const builtInToolSettingSchema = z
+const builtInToolApiInvocationSchema = z
+  .object({
+    type: z.literal("api"),
+    url: z.string().trim().min(1),
+    method: z.enum(TOOL_API_METHODS),
+    headers: z.array(toolApiHeaderSchema).default([]),
+  })
+  .strict()
+  .transform((invocation) => ({
+    ...invocation,
+    headers: invocation.headers ?? [],
+  }));
+
+const legacyBuiltInToolSettingSchema = z
   .object({
     name: z.string().trim().min(1),
     enabled: z.boolean().default(true),
@@ -168,6 +272,34 @@ export const builtInToolSettingSchema = z
     ...tool,
     enabled: tool.enabled ?? true,
   }));
+
+const builtInToolConfigSchema = toolConfigBaseSchema
+  .extend({
+    invocation: z.union([toolModelInvocationSchema, builtInToolApiInvocationSchema]),
+  })
+  .transform(normalizeToolConfig);
+
+export const builtInToolSettingSchema = z.union([
+  builtInToolConfigSchema,
+  legacyBuiltInToolSettingSchema,
+]).refine(
+  (tool) => BUILT_IN_TOOLS.some((builtInTool) => builtInTool.name === tool.name),
+  "Unknown built-in tool",
+).transform((tool) => {
+  const defaultTool = BUILT_IN_TOOLS.find((builtInTool) => builtInTool.name === tool.name)!;
+
+  if ("description" in tool) {
+    return {
+      ...tool,
+      name: defaultTool.name,
+    };
+  }
+
+  return {
+    ...defaultTool,
+    enabled: tool.enabled,
+  };
+});
 
 export type BuiltInToolSetting = z.output<typeof builtInToolSettingSchema>;
 
@@ -178,6 +310,7 @@ export const settingsFieldSchemaMap = {
   builtInTools: z.array(builtInToolSettingSchema),
   tools: z.array(toolConfigSchema),
   primaryModelUsageLimit: primaryModelUsageLimitConfigSchema,
+  timeZone: timeZoneConfigSchema,
   globalPrompt: z.string(),
   dialogSystemPrompt: z.string(),
   dialogOpeningMessage: z.string(),
@@ -188,13 +321,34 @@ export const settingsFieldSchemaMap = {
   corsAllowedOrigins: z.array(z.string()),
 } satisfies Record<SettingsKey, z.ZodType>;
 
-export const settingsSchema = z.object(settingsFieldSchemaMap).strict();
+const hasDuplicateToolNames = (settings: {
+  builtInTools: Array<{ name: string }>;
+  tools: Array<{ name: string }>;
+}) => {
+  const names = [...settings.builtInTools, ...settings.tools].map((tool) => tool.name);
+
+  return new Set(names).size !== names.length;
+};
+
+export const settingsBaseSchema = z.object(settingsFieldSchemaMap).strict();
+
+export const settingsSchema = settingsBaseSchema.superRefine((settings, ctx) => {
+  if (!hasDuplicateToolNames(settings)) {
+    return;
+  }
+
+  ctx.addIssue({
+    code: "custom",
+    path: ["tools"],
+    message: "Tool names must be unique",
+  });
+});
 
 export const settingsResponseSchema = settingsSchema.extend({
   apiTokenMask: z.string(),
 });
 
-export const settingsPatchSchema = settingsSchema
+export const settingsPatchSchema = settingsBaseSchema
   .partial()
   .refine((settings) => Object.keys(settings).length > 0, "At least one setting is required");
 
@@ -225,126 +379,13 @@ export const DEFAULT_SETTINGS = {
   ],
   primaryModel: "openai/gpt-5.4-mini",
   embeddingModel: "@cf/qwen/qwen3-embedding-0.6b",
-  builtInTools: BUILT_IN_TOOLS.map((tool) => ({
-    name: tool.name,
-    enabled: tool.enabled,
-  })),
+  builtInTools: BUILT_IN_TOOLS,
   primaryModelUsageLimit: {
-    perRequestInputLimit: 0,
-    perRequestOutputLimit: 0,
-    perUserDailyInputLimit: 0,
-    perUserDailyOutputLimit: 0,
+    dailyInputLimit: 0,
+    dailyOutputLimit: 0,
   },
-  tools: [
-    {
-      enabled: true,
-      name: "voice_to_text",
-      description: "A speech-to-text model, output text",
-      invocation: {
-        type: "model",
-        model: "openai/gpt-4o-transcribe",
-      },
-      schema: {
-        fields: [
-          {
-            name: "file",
-            type: "string",
-            description:
-              "The audio file as a data URI (data:audio/...;base64,...) or HTTPS URL. Supported formats: flac, mp3, mp4, mpeg, mpga, m4a, ogg, wav, webm.",
-            required: true,
-            defaultValue: "",
-          },
-          {
-            name: "language",
-            type: "string",
-            description:
-              "language string The language of the input audio. Supplying the input language in ISO-639-1 format will improve accuracy and latency.",
-            required: false,
-            defaultValue: "",
-          },
-          {
-            name: "prompt",
-            type: "string",
-            description:
-              "An optional text to guide the model's style or continue a previous audio segment. The prompt should match the audio language.",
-            required: false,
-            defaultValue: "",
-          },
-          {
-            name: "temperature",
-            type: "number",
-            description:
-              "The sampling temperature, between 0 and 1. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic. Defaults to 0 if omitted.",
-            required: false,
-            defaultValue: "",
-          },
-        ],
-      },
-    },
-    {
-      enabled: true,
-      name: "text_to_voice",
-      description: "text-to-speech model, output audio url",
-      invocation: {
-        type: "model",
-        model: "openai/tts-1",
-      },
-      schema: {
-        fields: [
-          {
-            name: "text",
-            type: "string",
-            description: "The text to generate audio for. Maximum length is 4096 characters.",
-            required: true,
-            defaultValue: "",
-          },
-          {
-            name: "voice",
-            type: "string",
-            description: "The voice to use when generating the audio. Defaults to alloy.",
-            required: false,
-            defaultValue: "alloy",
-          },
-          {
-            name: "response_format",
-            type: "string",
-            description:
-              "The output format for the audio. Supported formats are mp3, opus, wav, aac and flac.",
-            required: false,
-            defaultValue: "mp3",
-          },
-          {
-            name: "speed",
-            type: "number",
-            description:
-              "The speed of the generated audio. Select a value from 0.25 to 4.0. 1.0 is the default.",
-            required: false,
-            defaultValue: "1",
-          },
-        ],
-      },
-    },
-    {
-      enabled: true,
-      name: "image_to_text",
-      description: "image-to-text model, output text",
-      invocation: {
-        type: "model",
-        model: "openai/gpt-5.4-mini",
-      },
-      schema: {
-        fields: [
-          {
-            name: "file",
-            type: "string",
-            description: "The image HTTPS URL.",
-            required: true,
-            defaultValue: "",
-          },
-        ],
-      },
-    },
-  ],
+  timeZone: "UTC+0",
+  tools: [],
   globalPrompt: "",
   dialogSystemPrompt: "",
   dialogOpeningMessage: "",

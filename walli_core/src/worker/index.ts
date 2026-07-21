@@ -6,6 +6,7 @@ import { clientsRoute } from "./api/clients";
 import { meRoute } from "./api/me";
 import { rootRoute } from "./api/root";
 import { settingsRoute } from "./api/settings";
+import { telegramRoute } from "./api/telegram";
 import type { AppBindings } from "./api/types";
 import { toolsRoute } from "./tools";
 export { User } from "./durable-objects/user";
@@ -37,6 +38,7 @@ const routes = app
   .route("/", toolsRoute)
   .route("/", chatRoute)
   .route("/", clientsRoute)
+  .route("/", telegramRoute)
   .route("/", settingsRoute);
 
 export type AppType = typeof routes;

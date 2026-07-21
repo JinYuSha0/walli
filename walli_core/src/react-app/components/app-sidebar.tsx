@@ -56,8 +56,8 @@ export function AppSidebar({
         title: t("navKeys"),
         to: "/clients/$platform/$tab",
         params: {
-          platform: "web",
-          tab: "client-id",
+          platform: "telegram",
+          tab: "basic",
         },
         icon: IconKey,
       },

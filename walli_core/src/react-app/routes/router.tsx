@@ -81,8 +81,8 @@ const legacyKeysRoute = createRoute({
     <Navigate
       to="/clients/$platform/$tab"
       params={{
-        platform: "web",
-        tab: "client-id",
+        platform: "telegram",
+        tab: "basic",
       }}
       replace
     />

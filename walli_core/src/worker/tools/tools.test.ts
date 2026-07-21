@@ -1,5 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { BUILT_IN_TOOLS, DEFAULT_SETTINGS } from "../../shared/const";
+import {
+  BUILT_IN_TOOLS,
+  DEFAULT_SETTINGS,
+  primaryModelUsageLimitConfigSchema,
+  settingsResponseSchema,
+  timeZoneConfigSchema,
+  toolConfigSchema,
+} from "../../shared/const";
+import { telegramSettingsPatchSchema } from "../../shared/client";
+import { handleTelegramWebhookUpdate } from "../api/telegram";
+import { getSettings } from "../api/settings";
 import { createChatRunnerTools } from "../lib/chat-runner";
 import { buildChatTools, createToolInputSchema, isValidChatToolName } from "../lib/chat-tools.ts";
 import { toolsRoute } from ".";
@@ -8,8 +18,9 @@ import { getNextCronScheduledAt } from "./cron";
 const env = {
   API_TOKEN: "test-token",
 } as Env;
-const [voiceToTextTool, textToVoiceTool] = DEFAULT_SETTINGS.tools;
-const imageToTextTool = DEFAULT_SETTINGS.tools[2];
+const voiceToTextTool = BUILT_IN_TOOLS.find((tool) => tool.name === "voice_to_text")!;
+const textToVoiceTool = BUILT_IN_TOOLS.find((tool) => tool.name === "text_to_voice")!;
+const imageToTextTool = BUILT_IN_TOOLS.find((tool) => tool.name === "image_to_text")!;
 const aiRun = vi.fn(async (_model: string, input: Record<string, unknown>) => ({
   ok: true,
   input,
@@ -25,12 +36,122 @@ describe("chat tools", () => {
     aiRun.mockClear();
   });
 
-  it("keeps the expected default tool order", () => {
-    expect(DEFAULT_SETTINGS.tools.map((toolConfig) => toolConfig.name)).toEqual([
+  it("keeps the expected built-in tool order", () => {
+    expect(BUILT_IN_TOOLS.map((toolConfig) => toolConfig.name)).toEqual([
+      "timestamp",
+      "scheduled_task",
       "voice_to_text",
       "text_to_voice",
       "image_to_text",
     ]);
+    expect(DEFAULT_SETTINGS.tools).toEqual([]);
+  });
+
+  it("parses default settings with editable built-in tools", () => {
+    expect(() =>
+      settingsResponseSchema.parse({
+        ...DEFAULT_SETTINGS,
+        apiTokenMask: "test",
+      }),
+    ).not.toThrow();
+  });
+
+  it("rejects duplicate tool names across built-in and custom tools", () => {
+    expect(() =>
+      settingsResponseSchema.parse({
+        ...DEFAULT_SETTINGS,
+        tools: [
+          {
+            ...voiceToTextTool,
+          },
+        ],
+        apiTokenMask: "test",
+      }),
+    ).toThrow("Tool names must be unique");
+  });
+
+  it("allows api tools without schema fields", () => {
+    expect(() =>
+      toolConfigSchema.parse({
+        enabled: true,
+        name: "empty_api",
+        description: "API tool without input fields",
+        invocation: {
+          type: "api",
+          url: "https://example.com/tool",
+          method: "POST",
+          headers: [],
+        },
+        schema: {
+          fields: [],
+        },
+      }),
+    ).not.toThrow();
+  });
+
+  it("still requires model tools to have a required schema field", () => {
+    expect(() =>
+      toolConfigSchema.parse({
+        enabled: true,
+        name: "empty_model",
+        description: "Model tool without input fields",
+        invocation: {
+          type: "model",
+          model: "openai/gpt-5.4-mini",
+        },
+        schema: {
+          fields: [],
+        },
+      }),
+    ).toThrow("At least one required schema field is required");
+  });
+
+  it("parses total usage limits", () => {
+    expect(
+      primaryModelUsageLimitConfigSchema.parse({
+        dailyInputLimit: 10,
+        dailyOutputLimit: 20,
+      }),
+    ).toEqual({
+      dailyInputLimit: 10,
+      dailyOutputLimit: 20,
+    });
+  });
+
+  it("migrates legacy primary model daily usage fields", () => {
+    expect(
+      primaryModelUsageLimitConfigSchema.parse({
+        perRequestInputLimit: 1,
+        perRequestOutputLimit: 2,
+        perUserDailyInputLimit: 30,
+        perUserDailyOutputLimit: 40,
+      }),
+    ).toEqual({
+      dailyInputLimit: 30,
+      dailyOutputLimit: 40,
+    });
+  });
+
+  it("parses UTC offset time zones and migrates UTC", () => {
+    expect(timeZoneConfigSchema.parse(undefined)).toBe("UTC+0");
+    expect(timeZoneConfigSchema.parse("UTC")).toBe("UTC+0");
+    expect(timeZoneConfigSchema.parse("UTC+8")).toBe("UTC+8");
+  });
+
+  it("rejects invalid UTC offset time zones", () => {
+    expect(() =>
+      timeZoneConfigSchema.parse("Nope/Nowhere"),
+    ).toThrow();
+  });
+
+  it("accepts bot_token as a Telegram settings patch alias", () => {
+    expect(
+      telegramSettingsPatchSchema.parse({
+        bot_token: "123:abc",
+      }),
+    ).toEqual({
+      botToken: "123:abc",
+    });
   });
 
   it("keeps built-in tools before configured tools", () => {
@@ -163,15 +284,21 @@ describe("chat tools", () => {
   });
 
   it("accepts all default tool names as model-friendly names", () => {
-    expect(DEFAULT_SETTINGS.tools.every((toolConfig) => isValidChatToolName(toolConfig.name))).toBe(
+    expect(BUILT_IN_TOOLS.every((toolConfig) => isValidChatToolName(toolConfig.name))).toBe(
       true,
     );
   });
 
-  it("builds chat tools from default settings tools", () => {
-    const tools = buildChatTools(DEFAULT_SETTINGS.tools, fakeRuntime);
+  it("builds chat tools from default built-in tools", () => {
+    const tools = buildChatTools(DEFAULT_SETTINGS.builtInTools, fakeRuntime);
 
-    expect(Object.keys(tools)).toEqual(["voice_to_text", "text_to_voice", "image_to_text"]);
+    expect(Object.keys(tools)).toEqual([
+      "timestamp",
+      "scheduled_task",
+      "voice_to_text",
+      "text_to_voice",
+      "image_to_text",
+    ]);
   });
 
   it("skips disabled tools", () => {
@@ -190,7 +317,7 @@ describe("chat tools", () => {
   });
 
   it("keeps default tool descriptions on generated chat tools", () => {
-    const tools = buildChatTools(DEFAULT_SETTINGS.tools, fakeRuntime);
+    const tools = buildChatTools(DEFAULT_SETTINGS.builtInTools, fakeRuntime);
 
     expect(tools.voice_to_text.description).toBe(voiceToTextTool.description);
     expect(tools.text_to_voice.description).toBe(textToVoiceTool.description);
@@ -198,7 +325,7 @@ describe("chat tools", () => {
   });
 
   it("executes default model tools through env.AI.run", async () => {
-    const tools = buildChatTools(DEFAULT_SETTINGS.tools, fakeRuntime);
+    const tools = buildChatTools(DEFAULT_SETTINGS.builtInTools, fakeRuntime);
     const executionOptions = {} as Parameters<NonNullable<typeof tools.voice_to_text.execute>>[1];
 
     await expect(
@@ -620,5 +747,417 @@ describe("tools route", () => {
 
     expect(response.status).toBe(400);
     expect(JSON.stringify(body)).toContain("recurrenceEndAt must be greater than scheduledAt");
+  });
+});
+
+describe("settings tool migration", () => {
+  it("moves legacy default model tools into built-in tools", async () => {
+    const savedSettings = {
+      ...DEFAULT_SETTINGS,
+      builtInTools: DEFAULT_SETTINGS.builtInTools.map((tool) => ({
+        name: tool.name,
+        enabled: tool.name !== "voice_to_text",
+      })),
+      tools: [voiceToTextTool],
+    };
+    const put = vi.fn();
+    const appKv = {
+      get: vi.fn(async (key: string) => key === "settings" ? savedSettings : null),
+      put,
+    } as unknown as KVNamespace;
+    const settings = await getSettings(appKv);
+
+    expect(settings.builtInTools.map((tool) => tool.name)).toEqual([
+      "timestamp",
+      "scheduled_task",
+      "voice_to_text",
+      "text_to_voice",
+      "image_to_text",
+    ]);
+    expect(settings.builtInTools.find((tool) => tool.name === "voice_to_text")?.enabled).toBe(
+      true,
+    );
+    expect(settings.tools).toEqual([]);
+  });
+
+  it("moves legacy usage time zone into the top-level setting", async () => {
+    const savedSettings: Record<string, unknown> = {
+      ...DEFAULT_SETTINGS,
+      primaryModelUsageLimit: {
+        dailyInputLimit: 0,
+        dailyOutputLimit: 0,
+        timeZone: "Asia/Shanghai",
+      },
+    };
+    delete savedSettings.timeZone;
+    const appKv = {
+      get: vi.fn(async (key: string) => key === "settings" ? savedSettings : null),
+      put: vi.fn(),
+    } as unknown as KVNamespace;
+    const settings = await getSettings(appKv);
+
+    expect(settings.primaryModelUsageLimit).toEqual({
+      dailyInputLimit: 0,
+      dailyOutputLimit: 0,
+    });
+    expect(settings.timeZone).toBe("UTC+8");
+  });
+});
+
+describe("telegram webhook", () => {
+  it("shows typing, then sends the LLM reply for text messages", async () => {
+    const calls: string[] = [];
+    const sendMessage = vi.fn(async (_chatId: string, text: string) => {
+      calls.push(`send:${text}`);
+    });
+    const sendVoice = vi.fn();
+    const sendChatAction = vi.fn(async (_chatId: string, action: "typing") => {
+      calls.push(`action:${action}`);
+    });
+    const runLlm = vi.fn(async () => {
+      calls.push("llm");
+      return "final reply";
+    });
+    const getFileUrl = vi.fn();
+    const hasBuiltInMediaTool = vi.fn();
+    const runBuiltInMediaTool = vi.fn();
+
+    await handleTelegramWebhookUpdate(
+      {
+        update_id: 1,
+        message: {
+          message_id: 10,
+          text: "hello",
+          chat: {
+            id: 123,
+          },
+          from: {
+            id: 456,
+            first_name: "Ada",
+          },
+        },
+      },
+      {
+        sendMessage,
+        sendVoice,
+        sendChatAction,
+        getFileUrl,
+        hasBuiltInMediaTool,
+        runBuiltInMediaTool,
+        runLlm,
+      },
+    );
+
+    expect(calls).toEqual(["action:typing", "llm", "send:final reply"]);
+    expect(sendChatAction).toHaveBeenCalledWith("123", "typing");
+    expect(sendVoice).not.toHaveBeenCalled();
+    expect(hasBuiltInMediaTool).not.toHaveBeenCalled();
+    expect(runBuiltInMediaTool).not.toHaveBeenCalled();
+  });
+
+  it("uses built-in tools to transcribe voice messages and reply with voice", async () => {
+    const calls: string[] = [];
+    const sendMessage = vi.fn();
+    const sendVoice = vi.fn(async () => {
+      calls.push("voice");
+    });
+    const sendChatAction = vi.fn(async (_chatId: string, action: "typing" | "record_voice") => {
+      calls.push(`action:${action}`);
+    });
+    const getFileUrl = vi.fn(async () => {
+      calls.push("file");
+      return "https://api.telegram.org/file/bottest/voice.ogg";
+    });
+    const runLlm = vi.fn(async () => {
+      calls.push("llm");
+      return "voice reply";
+    });
+    const hasBuiltInMediaTool = vi.fn(async (toolName: string) => {
+      calls.push(`has:${toolName}`);
+      return true;
+    });
+    const runBuiltInMediaTool = vi.fn(async (toolName: string) => {
+      calls.push(`tool:${toolName}`);
+
+      if (toolName === "voice_to_text") {
+        return "voice text";
+      }
+
+      return "https://example.com/reply.mp3";
+    });
+
+    await handleTelegramWebhookUpdate(
+      {
+        update_id: 1,
+        message: {
+          message_id: 10,
+          chat: {
+            id: 123,
+          },
+          voice: {
+            file_id: "voice-file",
+            mime_type: "audio/ogg",
+          },
+        },
+      },
+      {
+        sendMessage,
+        sendVoice,
+        sendChatAction,
+        getFileUrl,
+        hasBuiltInMediaTool,
+        runBuiltInMediaTool,
+        runLlm,
+      },
+    );
+
+    expect(calls).toEqual([
+      "action:record_voice",
+      "has:voice_to_text",
+      "has:text_to_voice",
+      "file",
+      "tool:voice_to_text",
+      "llm",
+      "tool:text_to_voice",
+      "voice",
+    ]);
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(sendVoice).toHaveBeenCalledWith("123", {
+      type: "url",
+      voice: "https://example.com/reply.mp3",
+    });
+    expect(runBuiltInMediaTool).toHaveBeenCalledWith("voice_to_text", {
+      file: "https://api.telegram.org/file/bottest/voice.ogg",
+      mime_type: "audio/ogg",
+    });
+    expect(runBuiltInMediaTool).toHaveBeenCalledWith("text_to_voice", {
+      text: "voice reply",
+      voice: "alloy",
+      response_format: "opus",
+    });
+  });
+
+  it("uses the built-in image tool before sending photo messages to the LLM", async () => {
+    const calls: string[] = [];
+    const sendMessage = vi.fn(async (_chatId: string, text: string) => {
+      calls.push(`send:${text}`);
+    });
+    const sendVoice = vi.fn();
+    const sendChatAction = vi.fn(async () => {
+      calls.push("action");
+    });
+    const getFileUrl = vi.fn(async () => {
+      calls.push("file");
+      return "https://api.telegram.org/file/bottest/photo.jpg";
+    });
+    const hasBuiltInMediaTool = vi.fn(async () => {
+      calls.push("has:image_to_text");
+      return true;
+    });
+    const runBuiltInMediaTool = vi.fn(async () => {
+      calls.push("tool:image_to_text");
+      return "a receipt photo";
+    });
+    const runLlm = vi.fn(async (_message, messages) => {
+      calls.push("llm");
+      expect(JSON.stringify(messages)).toContain("Image content: a receipt photo");
+      return "photo reply";
+    });
+
+    await handleTelegramWebhookUpdate(
+      {
+        update_id: 1,
+        message: {
+          message_id: 10,
+          caption: "what is this",
+          chat: {
+            id: 123,
+          },
+          photo: [
+            {
+              file_id: "photo-file",
+              width: 100,
+              height: 100,
+            },
+          ],
+        },
+      },
+      {
+        sendMessage,
+        sendVoice,
+        sendChatAction,
+        getFileUrl,
+        hasBuiltInMediaTool,
+        runBuiltInMediaTool,
+        runLlm,
+      },
+    );
+
+    expect(calls).toEqual([
+      "action",
+      "has:image_to_text",
+      "file",
+      "tool:image_to_text",
+      "llm",
+      "send:photo reply",
+    ]);
+    expect(runBuiltInMediaTool).toHaveBeenCalledWith("image_to_text", {
+      file: "https://api.telegram.org/file/bottest/photo.jpg",
+    });
+    expect(sendVoice).not.toHaveBeenCalled();
+  });
+
+  it("replies with English text when the voice input tool is disabled", async () => {
+    const sendMessage = vi.fn();
+    const sendVoice = vi.fn();
+    const sendChatAction = vi.fn();
+    const getFileUrl = vi.fn();
+    const hasBuiltInMediaTool = vi.fn(async () => false);
+    const runBuiltInMediaTool = vi.fn();
+    const runLlm = vi.fn();
+
+    await handleTelegramWebhookUpdate(
+      {
+        update_id: 1,
+        message: {
+          message_id: 10,
+          chat: {
+            id: 123,
+          },
+          voice: {
+            file_id: "voice-file",
+          },
+        },
+      },
+      {
+        sendMessage,
+        sendVoice,
+        sendChatAction,
+        getFileUrl,
+        hasBuiltInMediaTool,
+        runBuiltInMediaTool,
+        runLlm,
+      },
+    );
+
+    expect(sendMessage).toHaveBeenCalledWith("123", "Audio messages are not supported.");
+    expect(getFileUrl).not.toHaveBeenCalled();
+    expect(runBuiltInMediaTool).not.toHaveBeenCalled();
+    expect(runLlm).not.toHaveBeenCalled();
+    expect(sendVoice).not.toHaveBeenCalled();
+  });
+
+  it("replies with English text when the voice output tool is disabled", async () => {
+    const sendMessage = vi.fn();
+    const sendVoice = vi.fn();
+    const sendChatAction = vi.fn();
+    const getFileUrl = vi.fn();
+    const hasBuiltInMediaTool = vi.fn(async (toolName: string) => toolName === "voice_to_text");
+    const runBuiltInMediaTool = vi.fn();
+    const runLlm = vi.fn();
+
+    await handleTelegramWebhookUpdate(
+      {
+        update_id: 1,
+        message: {
+          message_id: 10,
+          chat: {
+            id: 123,
+          },
+          voice: {
+            file_id: "voice-file",
+          },
+        },
+      },
+      {
+        sendMessage,
+        sendVoice,
+        sendChatAction,
+        getFileUrl,
+        hasBuiltInMediaTool,
+        runBuiltInMediaTool,
+        runLlm,
+      },
+    );
+
+    expect(sendMessage).toHaveBeenCalledWith("123", "Audio replies are not supported.");
+    expect(getFileUrl).not.toHaveBeenCalled();
+    expect(runBuiltInMediaTool).not.toHaveBeenCalled();
+    expect(runLlm).not.toHaveBeenCalled();
+    expect(sendVoice).not.toHaveBeenCalled();
+  });
+
+  it("replies with English text when the image tool is disabled", async () => {
+    const sendMessage = vi.fn();
+    const sendVoice = vi.fn();
+    const sendChatAction = vi.fn();
+    const getFileUrl = vi.fn();
+    const hasBuiltInMediaTool = vi.fn(async () => false);
+    const runBuiltInMediaTool = vi.fn();
+    const runLlm = vi.fn();
+
+    await handleTelegramWebhookUpdate(
+      {
+        update_id: 1,
+        message: {
+          message_id: 10,
+          chat: {
+            id: 123,
+          },
+          photo: [
+            {
+              file_id: "photo-file",
+              width: 100,
+              height: 100,
+            },
+          ],
+        },
+      },
+      {
+        sendMessage,
+        sendVoice,
+        sendChatAction,
+        getFileUrl,
+        hasBuiltInMediaTool,
+        runBuiltInMediaTool,
+        runLlm,
+      },
+    );
+
+    expect(sendMessage).toHaveBeenCalledWith("123", "Image messages are not supported.");
+    expect(getFileUrl).not.toHaveBeenCalled();
+    expect(runBuiltInMediaTool).not.toHaveBeenCalled();
+    expect(runLlm).not.toHaveBeenCalled();
+    expect(sendVoice).not.toHaveBeenCalled();
+  });
+
+  it("ignores Telegram updates without text messages", async () => {
+    const sendMessage = vi.fn();
+    const sendVoice = vi.fn();
+    const sendChatAction = vi.fn();
+    const getFileUrl = vi.fn();
+    const hasBuiltInMediaTool = vi.fn();
+    const runBuiltInMediaTool = vi.fn();
+    const runLlm = vi.fn();
+
+    await handleTelegramWebhookUpdate(
+      {
+        update_id: 1,
+      },
+      {
+        sendMessage,
+        sendVoice,
+        sendChatAction,
+        getFileUrl,
+        hasBuiltInMediaTool,
+        runBuiltInMediaTool,
+        runLlm,
+      },
+    );
+
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(sendVoice).not.toHaveBeenCalled();
+    expect(sendChatAction).not.toHaveBeenCalled();
+    expect(runLlm).not.toHaveBeenCalled();
   });
 });

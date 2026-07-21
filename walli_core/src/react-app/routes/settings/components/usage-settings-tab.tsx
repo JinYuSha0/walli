@@ -11,10 +11,8 @@ import type { Settings } from "../../../../shared/const";
 
 type UsageSettingsForm = {
   primaryModelUsageLimit: {
-    perRequestInputLimit: string;
-    perRequestOutputLimit: string;
-    perUserDailyInputLimit: string;
-    perUserDailyOutputLimit: string;
+    dailyInputLimit: string;
+    dailyOutputLimit: string;
   };
 };
 
@@ -26,18 +24,8 @@ const toLimitValue = (value: number | undefined) => String(value ?? 0);
 
 const toFormValues = (settings: Settings): UsageSettingsForm => ({
   primaryModelUsageLimit: {
-    perRequestInputLimit: toLimitValue(
-      settings.primaryModelUsageLimit.perRequestInputLimit,
-    ),
-    perRequestOutputLimit: toLimitValue(
-      settings.primaryModelUsageLimit.perRequestOutputLimit,
-    ),
-    perUserDailyInputLimit: toLimitValue(
-      settings.primaryModelUsageLimit.perUserDailyInputLimit,
-    ),
-    perUserDailyOutputLimit: toLimitValue(
-      settings.primaryModelUsageLimit.perUserDailyOutputLimit,
-    ),
+    dailyInputLimit: toLimitValue(settings.primaryModelUsageLimit.dailyInputLimit),
+    dailyOutputLimit: toLimitValue(settings.primaryModelUsageLimit.dailyOutputLimit),
   },
 });
 
@@ -69,18 +57,8 @@ export function UsageSettingsTab({ settings }: UsageSettingsTabProps) {
   const onSubmit = (values: UsageSettingsForm) => {
     updateSettingsMutation.mutate({
       primaryModelUsageLimit: {
-        perRequestInputLimit: parseLimit(
-          values.primaryModelUsageLimit.perRequestInputLimit,
-        ),
-        perRequestOutputLimit: parseLimit(
-          values.primaryModelUsageLimit.perRequestOutputLimit,
-        ),
-        perUserDailyInputLimit: parseLimit(
-          values.primaryModelUsageLimit.perUserDailyInputLimit,
-        ),
-        perUserDailyOutputLimit: parseLimit(
-          values.primaryModelUsageLimit.perUserDailyOutputLimit,
-        ),
+        dailyInputLimit: parseLimit(values.primaryModelUsageLimit.dailyInputLimit),
+        dailyOutputLimit: parseLimit(values.primaryModelUsageLimit.dailyOutputLimit),
       },
     });
   };
@@ -102,54 +80,14 @@ export function UsageSettingsTab({ settings }: UsageSettingsTabProps) {
             </h3>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-4">
-            <div className="grid gap-2">
-              <Label htmlFor="usage-single-input">
-                {t("usageSettingsPerRequestInputLimit")}
-              </Label>
-              <Controller
-                control={form.control}
-                name="primaryModelUsageLimit.perRequestInputLimit"
-                render={({ field }) => (
-                  <Input
-                    id="usage-single-input"
-                    type="number"
-                    min={0}
-                    step={1}
-                    disabled={updateSettingsMutation.isPending}
-                    {...field}
-                  />
-                )}
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="usage-single-output">
-                {t("usageSettingsPerRequestOutputLimit")}
-              </Label>
-              <Controller
-                control={form.control}
-                name="primaryModelUsageLimit.perRequestOutputLimit"
-                render={({ field }) => (
-                  <Input
-                    id="usage-single-output"
-                    type="number"
-                    min={0}
-                    step={1}
-                    disabled={updateSettingsMutation.isPending}
-                    {...field}
-                  />
-                )}
-              />
-            </div>
-
+          <div className="grid gap-4 lg:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="usage-daily-input">
-                {t("usageSettingsDailyInputLimit")}
+                {t("usageSettingsTotalDailyInputLimit")}
               </Label>
               <Controller
                 control={form.control}
-                name="primaryModelUsageLimit.perUserDailyInputLimit"
+                name="primaryModelUsageLimit.dailyInputLimit"
                 render={({ field }) => (
                   <Input
                     id="usage-daily-input"
@@ -165,11 +103,11 @@ export function UsageSettingsTab({ settings }: UsageSettingsTabProps) {
 
             <div className="grid gap-2">
               <Label htmlFor="usage-daily-output">
-                {t("usageSettingsDailyOutputLimit")}
+                {t("usageSettingsTotalDailyOutputLimit")}
               </Label>
               <Controller
                 control={form.control}
-                name="primaryModelUsageLimit.perUserDailyOutputLimit"
+                name="primaryModelUsageLimit.dailyOutputLimit"
                 render={({ field }) => (
                   <Input
                     id="usage-daily-output"

@@ -4,6 +4,8 @@ import type {
   ClientConfigResponse,
   ClientDialogSettingsPatch,
   ClientPlatform,
+  ClientUsageLimitPatch,
+  TelegramSettingsPatch,
 } from "../shared/client";
 import type { SettingsPatch, SettingsResponse } from "../shared/const";
 
@@ -12,6 +14,9 @@ export type {
   ClientDialogSettings,
   ClientDialogSettingsPatch,
   ClientPlatform,
+  ClientUsageLimit,
+  ClientUsageLimitPatch,
+  TelegramSettingsPatch,
 } from "../shared/client";
 
 export type {
@@ -63,6 +68,27 @@ export const updateClientDialogSettings = async (
   parseResponse(
     apiClient.api.admin.clients[":platform"].$patch({
       param: { platform },
+      json,
+    }),
+  );
+
+export const updateClientUsageLimit = async (
+  platform: ClientPlatform,
+  json: ClientUsageLimitPatch,
+): Promise<ClientConfigResponse> =>
+  parseResponse(
+    apiClient.api.admin.clients[":platform"].$patch({
+      param: { platform },
+      json,
+    }),
+  );
+
+export const updateTelegramSettings = async (
+  json: TelegramSettingsPatch,
+): Promise<ClientConfigResponse> =>
+  parseResponse(
+    apiClient.api.admin.clients[":platform"].$patch({
+      param: { platform: "telegram" },
       json,
     }),
   );

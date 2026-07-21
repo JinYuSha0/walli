@@ -8,8 +8,14 @@ import {
   clientDialogSettingsSchema,
   clientConfigResponseSchema,
   clientPlatformSchema,
+  clientUsageLimitPatchSchema,
+  clientUsageLimitSchema,
+  telegramSettingsPatchSchema,
+  telegramSettingsSchema,
   type ClientDialogSettings,
   type ClientPlatform,
+  type ClientUsageLimit,
+  type TelegramSettingsPatch,
 } from "../../shared/client";
 import { getSettings } from "./settings";
 import { errorResponseSchema, parseResponse } from "./validation";
@@ -20,8 +26,28 @@ const clientConfigKey = (platform: ClientPlatform) =>
 const clientDialogSettingsKey = (platform: ClientPlatform) =>
   `client:${platform}:dialog-settings`;
 
+const clientUsageLimitKey = (platform: ClientPlatform) =>
+  `client:${platform}:usage-limit`;
+
+const telegramSettingsKey = "client:telegram:settings";
+
 const createClientId = (platform: ClientPlatform) =>
   `${platform}_${crypto.randomUUID().replaceAll("-", "")}`;
+
+export const getOrCreateClientId = async (
+  appKv: KVNamespace,
+  platform: ClientPlatform,
+) => {
+  const key = clientConfigKey(platform);
+  const savedClientId = await appKv.get(key);
+  const clientId = savedClientId ?? createClientId(platform);
+
+  if (!savedClientId) {
+    await appKv.put(key, clientId);
+  }
+
+  return clientId;
+};
 
 const getDefaultDialogSettings = async (
   appKv: KVNamespace,
@@ -59,6 +85,75 @@ const getClientDialogSettings = async (
   };
 };
 
+const defaultUsageLimit = {
+  perRequestInputLimit: 0,
+  perRequestOutputLimit: 0,
+  perUserDailyInputLimit: 0,
+  perUserDailyOutputLimit: 0,
+} satisfies ClientUsageLimit;
+
+const getClientUsageLimit = async (appKv: KVNamespace, platform: ClientPlatform) => {
+  const savedUsageLimit = await appKv.get(clientUsageLimitKey(platform), "json");
+  const result = clientUsageLimitSchema.partial().safeParse(savedUsageLimit);
+
+  if (!result.success) {
+    return defaultUsageLimit;
+  }
+
+  return {
+    ...defaultUsageLimit,
+    ...result.data,
+  };
+};
+
+export const maskSecret = (secret: string | undefined) => {
+  const value = secret?.trim() ?? "";
+
+  if (!value) {
+    return "";
+  }
+
+  if (value.length <= 8) {
+    return "*".repeat(value.length);
+  }
+
+  return `${value.slice(0, 4)}${"*".repeat(Math.max(value.length - 8, 4))}${value.slice(-4)}`;
+};
+
+const getTelegramSettings = async (appKv: KVNamespace) => {
+  const savedSettings = await appKv.get(telegramSettingsKey, "json");
+  const result = telegramSettingsSchema.partial().safeParse(savedSettings);
+
+  return {
+    botToken: result.success ? result.data.botToken ?? "" : "",
+  };
+};
+
+export const getTelegramBotToken = async (appKv: KVNamespace, env: Env) => {
+  const settings = await getTelegramSettings(appKv);
+
+  return settings.botToken.trim() || env.TELEGRAM_BOT_TOKEN?.trim() || "";
+};
+
+const saveTelegramSettings = async (
+  appKv: KVNamespace,
+  patch: TelegramSettingsPatch,
+) => {
+  const currentSettings = await getTelegramSettings(appKv);
+  const settings = {
+    ...currentSettings,
+    ...patch,
+  };
+
+  await appKv.put(telegramSettingsKey, JSON.stringify(settings));
+
+  return settings;
+};
+
+const createTelegramSettingsResponse = (settings: { botToken: string }) => ({
+  botTokenMask: maskSecret(settings.botToken),
+});
+
 const requireAdmin: MiddlewareHandler<AppBindings> = async (c, next) => {
   const user = c.get("user");
 
@@ -92,12 +187,21 @@ export const clientsRoute = new Hono<AppBindings>()
     }
 
     const platform = platformResult.data;
-    const key = clientConfigKey(platform);
-    const savedClientId = await c.env.APP_KV.get(key);
-    const clientId = savedClientId ?? createClientId(platform);
+    const clientId = await getOrCreateClientId(c.env.APP_KV, platform);
 
-    if (!savedClientId) {
-      await c.env.APP_KV.put(key, clientId);
+    const usageLimit = await getClientUsageLimit(c.env.APP_KV, platform);
+
+    if (platform === "telegram") {
+      const telegramSettings = await getTelegramSettings(c.env.APP_KV);
+
+      return c.json(
+        parseResponse(clientConfigResponseSchema, {
+          platform,
+          clientId,
+          usageLimit,
+          telegramSettings: createTelegramSettingsResponse(telegramSettings),
+        }),
+      );
     }
 
     const dialogSettings = await getClientDialogSettings(c.env.APP_KV, platform);
@@ -107,6 +211,7 @@ export const clientsRoute = new Hono<AppBindings>()
         platform,
         clientId,
         dialogSettings,
+        usageLimit,
       }),
     );
   })
@@ -123,44 +228,94 @@ export const clientsRoute = new Hono<AppBindings>()
       );
     }
 
-    const bodyResult = clientDialogSettingsPatchSchema.safeParse(
-      await c.req.json().catch(() => null),
-    );
+    const platform = platformResult.data;
+    const body = await c.req.json().catch(() => null);
+    const dialogSettingsResult = clientDialogSettingsPatchSchema.safeParse(body);
+    const usageLimitResult = clientUsageLimitPatchSchema.safeParse(body);
+    const telegramSettingsResult = telegramSettingsPatchSchema.safeParse(body);
+    const isDialogSettingsPatch = dialogSettingsResult.success;
+    const isUsageLimitPatch = usageLimitResult.success;
+    const isTelegramSettingsPatch = platform === "telegram" && telegramSettingsResult.success;
 
-    if (!bodyResult.success) {
+    if (!isDialogSettingsPatch && !isUsageLimitPatch && !isTelegramSettingsPatch) {
       return c.json(
         {
           error: "Invalid body",
-          issues: z.treeifyError(bodyResult.error),
+          issues: {
+            dialogSettings: dialogSettingsResult.success
+              ? undefined
+              : z.treeifyError(dialogSettingsResult.error),
+            usageLimit: usageLimitResult.success ? undefined : z.treeifyError(usageLimitResult.error),
+            telegramSettings: telegramSettingsResult.success
+              ? undefined
+              : z.treeifyError(telegramSettingsResult.error),
+          },
         },
         400,
       );
     }
 
-    const platform = platformResult.data;
-    const dialogSettings = {
-      ...(await getClientDialogSettings(c.env.APP_KV, platform)),
-      ...bodyResult.data,
-    };
+    const currentUsageLimit = await getClientUsageLimit(c.env.APP_KV, platform);
+    const canPatchDialogSettings = platform !== "telegram" && isDialogSettingsPatch;
+    const canPatchTelegramSettings = platform === "telegram" && isTelegramSettingsPatch;
+    const usageLimit = isUsageLimitPatch
+      ? {
+          ...currentUsageLimit,
+          ...usageLimitResult.data,
+        }
+      : currentUsageLimit;
 
-    await c.env.APP_KV.put(
-      clientDialogSettingsKey(platform),
-      JSON.stringify(dialogSettings),
-    );
-
-    const key = clientConfigKey(platform);
-    const savedClientId = await c.env.APP_KV.get(key);
-    const clientId = savedClientId ?? createClientId(platform);
-
-    if (!savedClientId) {
-      await c.env.APP_KV.put(key, clientId);
+    let dialogSettings: ClientDialogSettings | undefined;
+    if (platform !== "telegram") {
+      const currentDialogSettings = await getClientDialogSettings(c.env.APP_KV, platform);
+      dialogSettings = isDialogSettingsPatch
+        ? {
+            ...currentDialogSettings,
+            ...dialogSettingsResult.data,
+          }
+        : currentDialogSettings;
     }
 
-    return c.json(
-      parseResponse(clientConfigResponseSchema, {
-        platform,
-        clientId,
-        dialogSettings,
-      }),
-    );
+    await Promise.all([
+      canPatchDialogSettings
+        ? c.env.APP_KV.put(clientDialogSettingsKey(platform), JSON.stringify(dialogSettings))
+        : Promise.resolve(),
+      isUsageLimitPatch
+        ? c.env.APP_KV.put(clientUsageLimitKey(platform), JSON.stringify(usageLimit))
+        : Promise.resolve(),
+      canPatchTelegramSettings
+        ? saveTelegramSettings(c.env.APP_KV, telegramSettingsResult.data)
+        : Promise.resolve(),
+    ]);
+
+    const clientId = await getOrCreateClientId(c.env.APP_KV, platform);
+
+    if (platform === "telegram") {
+      const telegramSettings = await getTelegramSettings(c.env.APP_KV);
+
+      return c.json(
+        parseResponse(clientConfigResponseSchema, {
+          platform,
+          clientId,
+          usageLimit,
+          telegramSettings: createTelegramSettingsResponse(telegramSettings),
+        }),
+      );
+    }
+
+    if (!dialogSettings) {
+      return c.json(
+        parseResponse(errorResponseSchema, { error: "Dialog settings unavailable" }),
+        500,
+      );
+    }
+
+    const dialogClientConfig = {
+      platform,
+      clientId,
+      dialogSettings,
+      usageLimit,
+    };
+
+    return c.json(parseResponse(clientConfigResponseSchema, dialogClientConfig));
   });
