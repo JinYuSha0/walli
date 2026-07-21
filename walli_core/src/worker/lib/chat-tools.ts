@@ -74,7 +74,7 @@ export const createToolInputSchema = (toolConfig: ToolConfig) =>
     Object.fromEntries(
       toolConfig.schema.fields.map((field) => [field.name, createFieldSchema(field)]),
     ),
-  );
+  ).strict();
 
 const createApiInvocationInput = (toolConfig: ToolConfig, input: unknown) => {
   const schemaDefaults = Object.fromEntries(
@@ -101,15 +101,14 @@ const runConfiguredTool = async (
   input: unknown,
   runtime: ChatToolRuntime,
 ): Promise<unknown> => {
-  if (toolConfig.invocation.type === "model") {
-    const modelInput =
-      typeof input === "object" && input !== null ? (input as Record<string, unknown>) : { input };
+  const parsedInput = createToolInputSchema(toolConfig).parse(input);
 
-    return runtime.AI.run(toolConfig.invocation.model, modelInput);
+  if (toolConfig.invocation.type === "model") {
+    return runtime.AI.run(toolConfig.invocation.model, parsedInput);
   }
 
   const url = new URL(toolConfig.invocation.url);
-  const apiInput = createApiInvocationInput(toolConfig, input);
+  const apiInput = createApiInvocationInput(toolConfig, parsedInput);
   const headers = Object.fromEntries(
     toolConfig.invocation.headers.map((header) => [
       header.name,

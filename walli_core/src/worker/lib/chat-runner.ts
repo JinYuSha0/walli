@@ -1,4 +1,4 @@
-import { generateText, isStepCount } from "ai";
+import { generateText, isStepCount, type ToolSet } from "ai";
 import type { ModelMessage } from "ai";
 import { BUILT_IN_TOOLS, type Settings, type ToolConfig } from "../../shared/const";
 import { toolsRoute } from "../tools";
@@ -13,6 +13,8 @@ type RunChatOptions = {
   origin?: string;
   excludeToolNames?: string[];
   settings?: Settings;
+  extraTools?: ToolSet;
+  extraInstructions?: string;
 };
 
 const createChatInstructions = (globalPrompt: string, userInfo: unknown) => {
@@ -34,6 +36,12 @@ const createChatInstructions = (globalPrompt: string, userInfo: unknown) => {
     .filter((part) => part.length > 0)
     .join("\n\n");
 };
+
+const joinInstructions = (...parts: Array<string | undefined>) =>
+  parts
+    .map((part) => part?.trim() ?? "")
+    .filter((part) => part.length > 0)
+    .join("\n\n") || undefined;
 
 const withInternalApiInvocation = (tool: ToolConfig, env: Env, origin: string): ToolConfig => ({
     ...tool,
@@ -110,6 +118,8 @@ export const runChatCompletion = async ({
   origin = "https://internal.local",
   excludeToolNames = [],
   settings,
+  extraTools,
+  extraInstructions,
 }: RunChatOptions) => {
   const resolvedSettings = settings ?? (await getSettings(env.APP_KV));
   const gateway = createGatewayFromEnv(env);
@@ -120,9 +130,15 @@ export const runChatCompletion = async ({
 
   return generateText({
     model: gateway(unified(resolvedSettings.primaryModel)),
-    instructions: createChatInstructions(resolvedSettings.globalPrompt, userInfo),
+    instructions: joinInstructions(
+      createChatInstructions(resolvedSettings.globalPrompt, userInfo),
+      extraInstructions,
+    ),
     messages,
-    tools,
+    tools: {
+      ...tools,
+      ...extraTools,
+    },
     toolChoice: "auto",
     stopWhen: isStepCount(5),
   });
