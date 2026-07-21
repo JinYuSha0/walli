@@ -27,6 +27,10 @@ Every page-level initial data load must render a skeleton screen. Do not show th
 
 Do not run a full build after every small change. Prefer lint or a targeted lightweight check for minor UI, copy, or styling edits. Run the full build when changing build configuration, routing/code-splitting, Worker/API contracts, dependencies, or when explicitly requested.
 
+## API Responses
+
+API response `message` fields must be written in English, including error and guidance messages. Keep localized copy in frontend locale files, not Worker API responses.
+
 ## Node.js Compatibility
 
 https://developers.cloudflare.com/workers/runtime-apis/nodejs/

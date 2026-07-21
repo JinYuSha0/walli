@@ -417,7 +417,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
               className="grid gap-3 rounded-lg border border-border bg-muted/30 p-4"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="grid min-w-0 gap-1">
+                <div className="grid min-w-0 flex-1 gap-1">
                   <h3 className="truncate text-sm font-medium">{tool.name}</h3>
                   <p className="line-clamp-2 text-sm text-muted-foreground">
                     {tool.description}
@@ -426,7 +426,7 @@ export function ToolSettingsTab({ models, tools }: ToolSettingsTabProps) {
                     {t("toolSettingsBuiltInTool")}
                   </p>
                 </div>
-                <span className="rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground">
+                <span className="shrink-0 whitespace-nowrap rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground">
                   {t("toolSettingsBuiltIn")}
                 </span>
               </div>
