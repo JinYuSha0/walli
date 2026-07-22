@@ -8,6 +8,7 @@
   "themeLight": "Light",
   "themeDark": "Dark",
   "themeSystem": "System",
+  "unsavedChangesConfirm": "You have unsaved settings changes. Leave without saving?",
   "navDashboard": "Dashboard",
   "navSettings": "Settings",
   "navKeys": "Clients",

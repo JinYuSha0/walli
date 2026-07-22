@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
-import { useEffect } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { useEffect, useMemo } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { MarkdownEditor } from "@/components/ui/markdown_editor";
 import { Switch } from "@/components/ui/switch";
 import { TextEditor } from "@/components/ui/text_editor";
+import { useUnsavedChangesPrompt } from "@/hooks/use-unsaved-changes-prompt";
 import type { ClientDialogSettings } from "../../../../shared/client";
 
 type DialogSettingsForm = ClientDialogSettings;
@@ -18,18 +19,25 @@ type DialogSettingsTabProps = {
   onSave: (values: DialogSettingsForm) => Promise<DialogSettingsForm>;
 };
 
+const toFormValues = (settings: DialogSettingsForm): DialogSettingsForm => ({
+  dialogSystemPrompt: settings.dialogSystemPrompt,
+  dialogOpeningMessage: settings.dialogOpeningMessage,
+  dialogInputMaxLength: settings.dialogInputMaxLength,
+  dialogPlaceholder: settings.dialogPlaceholder,
+  dialogSpeechEnabled: settings.dialogSpeechEnabled,
+  dialogImageEnabled: settings.dialogImageEnabled,
+});
+
 export function DialogSettingsTab({ settings, onSave }: DialogSettingsTabProps) {
   const { t } = useTranslation();
+  const savedSettings = useMemo(() => toFormValues(settings), [settings]);
   const form = useForm<DialogSettingsForm>({
-    defaultValues: {
-      dialogSystemPrompt: settings.dialogSystemPrompt,
-      dialogOpeningMessage: settings.dialogOpeningMessage,
-      dialogInputMaxLength: settings.dialogInputMaxLength,
-      dialogPlaceholder: settings.dialogPlaceholder,
-      dialogSpeechEnabled: settings.dialogSpeechEnabled,
-      dialogImageEnabled: settings.dialogImageEnabled,
-    },
+    defaultValues: savedSettings,
   });
+  const watchedSettings = useWatch({
+    control: form.control,
+    defaultValue: savedSettings,
+  }) as DialogSettingsForm;
   const updateSettingsMutation = useMutation({
     mutationFn: onSave,
     onSuccess: (values) => {
@@ -46,22 +54,10 @@ export function DialogSettingsTab({ settings, onSave }: DialogSettingsTabProps) 
   });
 
   useEffect(() => {
-    form.reset({
-      dialogSystemPrompt: settings.dialogSystemPrompt,
-      dialogOpeningMessage: settings.dialogOpeningMessage,
-      dialogInputMaxLength: settings.dialogInputMaxLength,
-      dialogPlaceholder: settings.dialogPlaceholder,
-      dialogSpeechEnabled: settings.dialogSpeechEnabled,
-      dialogImageEnabled: settings.dialogImageEnabled,
-    });
+    form.reset(savedSettings);
   }, [
     form,
-    settings.dialogImageEnabled,
-    settings.dialogInputMaxLength,
-    settings.dialogOpeningMessage,
-    settings.dialogPlaceholder,
-    settings.dialogSpeechEnabled,
-    settings.dialogSystemPrompt,
+    savedSettings,
   ]);
 
   const onSubmit = (values: DialogSettingsForm) => {
@@ -70,6 +66,11 @@ export function DialogSettingsTab({ settings, onSave }: DialogSettingsTabProps) 
       dialogInputMaxLength: Math.max(1, values.dialogInputMaxLength),
     });
   };
+  useUnsavedChangesPrompt({
+    current: watchedSettings,
+    saved: savedSettings,
+    disabled: updateSettingsMutation.isPending,
+  });
 
   return (
     <form className="grid gap-8" onSubmit={form.handleSubmit(onSubmit)}>

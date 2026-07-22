@@ -26,6 +26,7 @@
     "clsx": "^2.1.1",
     "croner": "^10.0.1",
     "drizzle-orm": "^0.45.2",
+    "es-toolkit": "^1.49.0",
     "hono": "4.11.1",
     "i18next": "^26.3.6",
     "lucide-react": "^1.24.0",

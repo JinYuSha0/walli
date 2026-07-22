@@ -1,13 +1,14 @@
 import { useMutation } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { useEffect } from "react";
-import { Controller, useFieldArray, useForm } from "react-hook-form";
+import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import type { ClientCorsSettings } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useUnsavedChangesPrompt } from "@/hooks/use-unsaved-changes-prompt";
 
 type CorsSettingsForm = {
   corsAllowedOrigins: Array<{
@@ -45,9 +46,14 @@ const isValidOriginUrl = (value: string) => {
 
 export function CorsSettingsTab({ settings, onSave }: CorsSettingsTabProps) {
   const { t } = useTranslation();
+  const savedSettings = toFormValues(settings.corsAllowedOrigins);
   const form = useForm<CorsSettingsForm>({
-    defaultValues: toFormValues(settings.corsAllowedOrigins),
+    defaultValues: savedSettings,
   });
+  const watchedSettings = useWatch({
+    control: form.control,
+    defaultValue: savedSettings,
+  }) as CorsSettingsForm;
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "corsAllowedOrigins",
@@ -71,6 +77,11 @@ export function CorsSettingsTab({ settings, onSave }: CorsSettingsTabProps) {
         .filter((url) => url.length > 0),
     });
   };
+  useUnsavedChangesPrompt({
+    current: watchedSettings,
+    saved: savedSettings,
+    disabled: saveMutation.isPending,
+  });
 
   return (
     <form className="grid gap-8" onSubmit={form.handleSubmit(onSubmit)}>

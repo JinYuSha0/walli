@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { resetSettings, updateSettings } from "@/api";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { TextEditor } from "@/components/ui/text_editor";
+import { useUnsavedChangesPrompt } from "@/hooks/use-unsaved-changes-prompt";
 import { UTC_OFFSET_TIME_ZONES, type SettingsResponse } from "../../../../shared/const";
 
 type SystemPromptSettingsForm = Pick<SettingsResponse, "globalPrompt" | "timeZone">;
@@ -20,12 +21,17 @@ export function SystemPromptSettingsTab({ settings }: SystemPromptSettingsTabPro
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [resetConfirming, setResetConfirming] = useState(false);
+  const savedSettings: SystemPromptSettingsForm = {
+    globalPrompt: settings.globalPrompt,
+    timeZone: settings.timeZone,
+  };
   const form = useForm<SystemPromptSettingsForm>({
-    defaultValues: {
-      globalPrompt: settings.globalPrompt,
-      timeZone: settings.timeZone,
-    },
+    defaultValues: savedSettings,
   });
+  const watchedSettings = useWatch({
+    control: form.control,
+    defaultValue: savedSettings,
+  }) as SystemPromptSettingsForm;
   const updateSettingsMutation = useMutation({
     mutationFn: updateSettings,
     onSuccess: (values) => {
@@ -61,6 +67,11 @@ export function SystemPromptSettingsTab({ settings }: SystemPromptSettingsTabPro
     updateSettingsMutation.mutate(values);
   };
   const pending = updateSettingsMutation.isPending || resetSettingsMutation.isPending;
+  useUnsavedChangesPrompt({
+    current: watchedSettings,
+    saved: savedSettings,
+    disabled: pending,
+  });
 
   return (
     <form className="grid gap-8" onSubmit={form.handleSubmit(onSubmit)}>

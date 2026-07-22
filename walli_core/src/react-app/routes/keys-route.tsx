@@ -37,6 +37,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TextEditor } from "@/components/ui/text_editor";
+import { useUnsavedChangesPrompt } from "@/hooks/use-unsaved-changes-prompt";
 import { CLIENT_PLATFORMS } from "../../shared/client";
 import { AuthSettingsTab } from "./settings/components/auth-settings-tab";
 import { CorsSettingsTab } from "./settings/components/cors-settings-tab";
@@ -209,6 +210,7 @@ function ClientBasicSettingsTab({
   clientId,
   disabled,
   showSaveButton = true,
+  skipUnsavedPrompt = false,
   onDraftChange,
   onSaveBasicSettings,
   onResetSettings,
@@ -218,6 +220,7 @@ function ClientBasicSettingsTab({
   clientId: string;
   disabled?: boolean;
   showSaveButton?: boolean;
+  skipUnsavedPrompt?: boolean;
   onDraftChange?: (values: ClientBasicSettingsForm) => void;
   onSaveBasicSettings: (values: ClientBasicSettingsPatch) => Promise<ClientBasicSettings>;
   onResetSettings: () => Promise<ClientConfigResponse>;
@@ -229,6 +232,10 @@ function ClientBasicSettingsTab({
       additionalSystemPrompt: basicSettings.additionalSystemPrompt,
     },
   });
+  const savedBasicSettings: ClientBasicSettingsForm = {
+    enabled: basicSettings.enabled,
+    additionalSystemPrompt: basicSettings.additionalSystemPrompt,
+  };
   const saveMutation = useMutation({
     mutationFn: onSaveBasicSettings,
     onSuccess: (values) => {
@@ -242,7 +249,10 @@ function ClientBasicSettingsTab({
   const pending = disabled || saveMutation.isPending;
   const watchedBasicSettings = useWatch({
     control: form.control,
-  });
+    defaultValue: savedBasicSettings,
+  }) as ClientBasicSettingsForm;
+  const watchedEnabled = watchedBasicSettings.enabled;
+  const watchedAdditionalSystemPrompt = watchedBasicSettings.additionalSystemPrompt;
 
   useEffect(() => {
     form.reset({
@@ -253,23 +263,24 @@ function ClientBasicSettingsTab({
 
   useEffect(() => {
     onDraftChange?.({
-      enabled: watchedBasicSettings.enabled ?? basicSettings.enabled,
-      additionalSystemPrompt:
-        watchedBasicSettings.additionalSystemPrompt ??
-        basicSettings.additionalSystemPrompt,
+      enabled: watchedEnabled,
+      additionalSystemPrompt: watchedAdditionalSystemPrompt,
     });
   }, [
-    basicSettings.additionalSystemPrompt,
-    basicSettings.enabled,
     onDraftChange,
-    watchedBasicSettings.additionalSystemPrompt,
-    watchedBasicSettings.enabled,
+    watchedAdditionalSystemPrompt,
+    watchedEnabled,
   ]);
 
   const onSubmit = (values: ClientBasicSettingsForm) => {
     saveMutation.mutate(values);
   };
   const submitBasicSettings = form.handleSubmit(onSubmit);
+  useUnsavedChangesPrompt({
+    current: watchedBasicSettings,
+    saved: savedBasicSettings,
+    disabled: pending || skipUnsavedPrompt,
+  });
 
   return (
     <section className="grid gap-8">
@@ -373,11 +384,13 @@ function TelegramBasicSettingsTab({
   onResetSettings: () => Promise<ClientConfigResponse>;
 }) {
   const { t } = useTranslation();
-  const basicSettingsDraftRef = useRef<ClientBasicSettingsForm>({
+  const [basicSettingsDraft, setBasicSettingsDraft] = useState<ClientBasicSettingsForm>({
     enabled: config.basicSettings.enabled,
     additionalSystemPrompt: config.basicSettings.additionalSystemPrompt,
   });
+  const basicSettingsDraftRef = useRef<ClientBasicSettingsForm>(basicSettingsDraft);
   const handleBasicSettingsDraftChange = useCallback((values: ClientBasicSettingsForm) => {
+    setBasicSettingsDraft(values);
     basicSettingsDraftRef.current = values;
   }, []);
   const form = useForm<TelegramSettingsForm>({
@@ -428,6 +441,20 @@ function TelegramBasicSettingsTab({
       botToken: config.telegramSettings.botTokenMask,
     });
   }, [config.telegramSettings.botTokenMask, form]);
+  useUnsavedChangesPrompt({
+    current: {
+      basicSettings: basicSettingsDraft,
+      botToken: watchedBotToken,
+    },
+    saved: {
+      basicSettings: {
+        enabled: config.basicSettings.enabled,
+        additionalSystemPrompt: config.basicSettings.additionalSystemPrompt,
+      },
+      botToken: config.telegramSettings.botTokenMask,
+    },
+    disabled: saveMutation.isPending,
+  });
 
   return (
     <form className="grid gap-8" onSubmit={form.handleSubmit((values) => saveMutation.mutate(values))}>
@@ -437,6 +464,7 @@ function TelegramBasicSettingsTab({
         clientId={config.clientId}
         disabled={saveMutation.isPending}
         showSaveButton={false}
+        skipUnsavedPrompt
         onDraftChange={handleBasicSettingsDraftChange}
         onSaveBasicSettings={onSaveBasicSettings}
         onResetSettings={onResetSettings}
@@ -500,9 +528,14 @@ function ClientUsageSettingsTab({
   onSave: (values: ClientUsageLimit) => Promise<ClientUsageLimit>;
 }) {
   const { t } = useTranslation();
+  const savedSettings = toUsageFormValues(usageLimit);
   const form = useForm<ClientUsageSettingsForm>({
-    defaultValues: toUsageFormValues(usageLimit),
+    defaultValues: savedSettings,
   });
+  const watchedSettings = useWatch({
+    control: form.control,
+    defaultValue: savedSettings,
+  }) as ClientUsageSettingsForm;
   const saveMutation = useMutation({
     mutationFn: onSave,
     onSuccess: (values) => {
@@ -523,6 +556,11 @@ function ClientUsageSettingsTab({
       perUserDailyOutputLimit: parseLimit(values.usageLimit.perUserDailyOutputLimit),
     });
   };
+  useUnsavedChangesPrompt({
+    current: watchedSettings,
+    saved: savedSettings,
+    disabled: saveMutation.isPending,
+  });
 
   return (
     <form className="grid gap-8" onSubmit={form.handleSubmit(onSubmit)}>
@@ -670,6 +708,7 @@ export function ClientsRoute() {
         </CardHeader>
         <CardContent>
           <Tabs
+            activationMode="manual"
             value={platform}
             onValueChange={(value) => {
               if (!isClientPlatform(value)) {
@@ -708,6 +747,7 @@ export function ClientsRoute() {
                   <RouteLoading />
                 ) : clientConfigQuery.data ? (
                   <Tabs
+                    activationMode="manual"
                     value={activeTab}
                     onValueChange={(value) => {
                       if (!isClientTab(value) || !availableTabs.includes(value)) {

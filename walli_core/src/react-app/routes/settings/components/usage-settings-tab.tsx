@@ -1,12 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { updateSettings } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useUnsavedChangesPrompt } from "@/hooks/use-unsaved-changes-prompt";
 import type { Settings } from "../../../../shared/const";
 
 type UsageSettingsForm = {
@@ -38,9 +39,14 @@ const parseLimit = (value: string) => {
 export function UsageSettingsTab({ settings }: UsageSettingsTabProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const savedSettings = toFormValues(settings);
   const form = useForm<UsageSettingsForm>({
-    defaultValues: toFormValues(settings),
+    defaultValues: savedSettings,
   });
+  const watchedSettings = useWatch({
+    control: form.control,
+    defaultValue: savedSettings,
+  }) as UsageSettingsForm;
   const updateSettingsMutation = useMutation({
     mutationFn: updateSettings,
     onSuccess: (values) => {
@@ -62,6 +68,11 @@ export function UsageSettingsTab({ settings }: UsageSettingsTabProps) {
       },
     });
   };
+  useUnsavedChangesPrompt({
+    current: watchedSettings,
+    saved: savedSettings,
+    disabled: updateSettingsMutation.isPending,
+  });
 
   return (
     <form className="grid gap-8" onSubmit={form.handleSubmit(onSubmit)}>

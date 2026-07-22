@@ -14,6 +14,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useUnsavedChangesPrompt } from "@/hooks/use-unsaved-changes-prompt";
 import { cn } from "@/lib/utils";
 import {
   MODEL_CAPABILITY_TAGS,
@@ -148,6 +149,21 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
       embeddingModel: values.embeddingModel,
     });
   };
+  useUnsavedChangesPrompt({
+    current: {
+      models: watchedModels,
+      primaryModel: watchedPrimaryModel,
+      toolPlannerModel: watchedToolPlannerModel,
+      embeddingModel: watchedEmbeddingModel,
+    },
+    saved: {
+      models: settings.models,
+      primaryModel: settings.primaryModel,
+      toolPlannerModel: settings.toolPlannerModel,
+      embeddingModel: settings.embeddingModel,
+    },
+    disabled: updateSettingsMutation.isPending,
+  });
 
   return (
     <form className="grid gap-8" onSubmit={form.handleSubmit(onSubmit)}>

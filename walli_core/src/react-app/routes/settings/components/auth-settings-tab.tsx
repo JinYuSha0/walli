@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import type { ClientAuthSettings } from "@/api";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { useUnsavedChangesPrompt } from "@/hooks/use-unsaved-changes-prompt";
 
 type AuthSettingsForm = ClientAuthSettings;
 
@@ -58,14 +59,19 @@ const isValidHttpUrl = (value: string) => {
 
 export function AuthSettingsTab({ settings, onSave }: AuthSettingsTabProps) {
   const { t } = useTranslation();
+  const savedSettings: AuthSettingsForm = {
+    authEnabled: settings.authEnabled,
+    authEndpointUrl: settings.authEndpointUrl,
+  };
   const form = useForm<AuthSettingsForm>({
-    defaultValues: {
-      authEnabled: settings.authEnabled,
-      authEndpointUrl: settings.authEndpointUrl,
-    },
+    defaultValues: savedSettings,
   });
   const authEnabled = form.watch("authEnabled");
   const authEndpointUrl = form.watch("authEndpointUrl");
+  const watchedSettings = useWatch({
+    control: form.control,
+    defaultValue: savedSettings,
+  }) as AuthSettingsForm;
   const saveMutation = useMutation({
     mutationFn: onSave,
     onSuccess: (values) => {
@@ -90,6 +96,11 @@ export function AuthSettingsTab({ settings, onSave }: AuthSettingsTabProps) {
       authEndpointUrl: values.authEndpointUrl.trim(),
     });
   };
+  useUnsavedChangesPrompt({
+    current: watchedSettings,
+    saved: settings,
+    disabled: saveMutation.isPending,
+  });
 
   return (
     <form className="grid gap-8" onSubmit={form.handleSubmit(onSubmit)}>

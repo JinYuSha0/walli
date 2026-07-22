@@ -51,6 +51,7 @@ export function SettingsRoute() {
         </CardHeader>
         <CardContent>
           <Tabs
+            activationMode="manual"
             value={activeTab}
             onValueChange={(value) => {
               if (!isSettingsTab(value)) {

@@ -8,6 +8,7 @@
   "themeLight": "浅色",
   "themeDark": "深色",
   "themeSystem": "跟随系统",
+  "unsavedChangesConfirm": "当前设置有未保存修改，确定不保存并离开吗？",
   "navDashboard": "仪表盘",
   "navSettings": "设置",
   "navKeys": "客户端",

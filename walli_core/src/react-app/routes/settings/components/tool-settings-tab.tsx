@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Controller, useFieldArray, useForm } from "react-hook-form";
+import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { updateSettings } from "@/api";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { useUnsavedChangesPrompt } from "@/hooks/use-unsaved-changes-prompt";
 import {
   BUILT_IN_TOOLS,
   TOOL_API_METHODS,
@@ -138,11 +139,16 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [editingToolId, setEditingToolId] = useState<string | null>(null);
+  const savedSettings = {
+    tools: createToolFormValues(builtInTools, tools),
+  };
   const form = useForm<ToolSettingsForm>({
-    defaultValues: {
-      tools: createToolFormValues(builtInTools, tools),
-    },
+    defaultValues: savedSettings,
   });
+  const watchedSettings = useWatch({
+    control: form.control,
+    defaultValue: savedSettings,
+  }) as ToolSettingsForm;
   const { fields, append, move, remove } = useFieldArray({
     control: form.control,
     name: "tools",
@@ -427,6 +433,11 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
       tools: normalizedTools.filter((tool) => !builtInToolNames.has(tool.name)),
     });
   };
+  useUnsavedChangesPrompt({
+    current: watchedSettings,
+    saved: savedSettings,
+    disabled: updateSettingsMutation.isPending,
+  });
 
   return (
     <form className="grid gap-8" onSubmit={form.handleSubmit(onSubmit)}>
