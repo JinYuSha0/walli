@@ -55,6 +55,17 @@ const normalizeSettings = (settings: Settings): Settings => ({
   tools: settings.tools.filter((tool) => !builtInToolNames.has(tool.name)),
 });
 
+const withMigratedSettingsDefaults = (settings: unknown) => {
+  if (typeof settings !== "object" || settings === null || Array.isArray(settings)) {
+    return settings;
+  }
+
+  return {
+    toolPlannerModel: DEFAULT_SETTINGS.toolPlannerModel,
+    ...settings,
+  };
+};
+
 const getPrimaryModelUsageLimit = (settings: Partial<Settings>) => {
   const usageLimits = (
     settings as Partial<Settings> & {
@@ -147,7 +158,9 @@ const getFullStoredSettings = async (appKv: KVNamespace) => {
           timeZone: getLegacyTimeZone(savedSettings),
         }
       : savedSettings;
-  const result = settingsBaseSchema.safeParse(settingsWithMigratedTimeZone);
+  const result = settingsBaseSchema.safeParse(
+    withMigratedSettingsDefaults(settingsWithMigratedTimeZone),
+  );
 
   return result.success ? normalizeSettings(result.data) : undefined;
 };
@@ -162,6 +175,20 @@ const parseStoredSetting = (value: string | null) => {
   } catch {
     return value;
   }
+};
+
+const getDefaultSettingValue = <Key extends SettingsKey>(settingKey: Key): Settings[Key] =>
+  DEFAULT_SETTINGS[settingKey];
+
+const deleteSettingsKeys = async (appKv: KVNamespace) => {
+  await Promise.all(
+    [
+      SETTINGS_KV_KEY,
+      ...Object.values(SETTINGS_KEY_MAP),
+      legacyGlobalPromptKey,
+      legacyUsageLimitsKey,
+    ].map((key) => appKv.delete(key)),
+  );
 };
 
 export const getSettings = async (appKv: KVNamespace) => {
@@ -198,7 +225,7 @@ export const getSettings = async (appKv: KVNamespace) => {
 
       return [
         settingKey,
-        result.success ? result.data : legacySettings[settingKey],
+        result.success ? result.data : getDefaultSettingValue(settingKey),
       ] as const;
     }),
   );
@@ -275,4 +302,9 @@ export const settingsRoute = new Hono<AppBindings>()
     await c.env.APP_KV.put(SETTINGS_KV_KEY, JSON.stringify(settings));
 
     return c.json(createSettingsResponse(settings, c.env));
+  })
+  .delete("/api/admin/settings", async (c) => {
+    await deleteSettingsKeys(c.env.APP_KV);
+
+    return c.json(createSettingsResponse(normalizeSettings(DEFAULT_SETTINGS), c.env));
   });

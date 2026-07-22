@@ -7,6 +7,7 @@ export const SETTINGS_KV_KEY = "settings";
 export const SETTINGS_KEY_MAP = {
   models: "settings:models",
   primaryModel: "settings:primary-model",
+  toolPlannerModel: "settings:tool-planner-model",
   embeddingModel: "settings:embedding-model",
   builtInTools: "settings:built-in-tools",
   tools: "settings:tools",
@@ -306,6 +307,7 @@ export type BuiltInToolSetting = z.output<typeof builtInToolSettingSchema>;
 export const settingsFieldSchemaMap = {
   models: z.array(modelConfigSchema),
   primaryModel: z.string(),
+  toolPlannerModel: z.string(),
   embeddingModel: z.string(),
   builtInTools: z.array(builtInToolSettingSchema),
   tools: z.array(toolConfigSchema),
@@ -365,6 +367,14 @@ export const DEFAULT_SETTINGS = {
       tags: ["text-generation", "image-recognition", "tool-calling"],
     },
     {
+      name: "openai/gpt-5.4-nano",
+      tags: ["text-generation", "tool-calling"],
+    },
+    {
+      name: "@cf/zai-org/glm-4.7-flash",
+      tags: ["text-generation", "tool-calling"],
+    },
+    {
       name: "openai/gpt-4o-transcribe",
       tags: ["speech-to-text"],
     },
@@ -378,6 +388,7 @@ export const DEFAULT_SETTINGS = {
     },
   ],
   primaryModel: "openai/gpt-5.4-mini",
+  toolPlannerModel: "openai/gpt-5.4-nano",
   embeddingModel: "@cf/qwen/qwen3-embedding-0.6b",
   builtInTools: BUILT_IN_TOOLS,
   primaryModelUsageLimit: {

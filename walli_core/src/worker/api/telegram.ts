@@ -1,10 +1,18 @@
 import { Hono } from "hono";
-import { dynamicTool, type ModelMessage, type ToolSet } from "ai";
+import { type ModelMessage } from "ai";
 import { z } from "zod";
-import { createChatRunnerTools, runChatCompletion } from "../lib/chat-runner";
+import { runChatCompletion } from "../lib/chat-runner";
 import { getOrCreateClientId, getTelegramBotToken } from "./clients";
 import { getSettings } from "./settings";
 import type { AppBindings } from "./types";
+import {
+  describeImage,
+  synthesizeVoice,
+  transcribeVoice,
+  type ImageToTextContext,
+  type VoiceOutput,
+  type VoiceToTextContext,
+} from "../tools/media-tools";
 
 const telegramChatSchema = z
   .object({
@@ -78,11 +86,7 @@ type TelegramFileResult = TelegramApiResult & {
   };
 };
 
-type TelegramVoiceOutput = {
-  type: "blob";
-  voice: Blob;
-  filename: string;
-};
+type TelegramVoiceOutput = VoiceOutput;
 
 type TelegramWebhookDeps = {
   sendMessage: (chatId: string, text: string) => Promise<void>;
@@ -90,7 +94,10 @@ type TelegramWebhookDeps = {
   sendChatAction: (chatId: string, action: "typing" | "record_voice") => Promise<void>;
   getFileUrl: (fileId: string) => Promise<string>;
   markMessageRead: (message: TelegramMessage) => Promise<void>;
-  runLlm: (message: TelegramMessage, messages: ModelMessage[]) => Promise<void>;
+  transcribeVoice?: (context: VoiceToTextContext) => Promise<unknown>;
+  describeImage?: (context: ImageToTextContext) => Promise<unknown>;
+  synthesizeVoice?: (text: string) => Promise<TelegramVoiceOutput>;
+  runLlm: (message: TelegramMessage, messages: ModelMessage[]) => Promise<string>;
 };
 
 const stringifyChatId = (chatId: string | number) => String(chatId);
@@ -123,7 +130,12 @@ const inferTelegramFileContentType = (filePath: string) => {
 const bytesToHex = (bytes: ArrayBuffer) =>
   [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 
-const createTelegramFileSignature = async (secret: string, fileId: string, expires: string) => {
+const createTelegramFileSignature = async (
+  secret: string,
+  fileId: string,
+  expires: string,
+  filePath: string,
+) => {
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
@@ -136,20 +148,23 @@ const createTelegramFileSignature = async (secret: string, fileId: string, expir
     ["sign"],
   );
 
-  return bytesToHex(await crypto.subtle.sign("HMAC", key, encoder.encode(`${fileId}.${expires}`)));
+  return bytesToHex(
+    await crypto.subtle.sign("HMAC", key, encoder.encode(`${fileId}.${expires}.${filePath}`)),
+  );
 };
 
 const hasValidTelegramFileSignature = async (
   secret: string,
   fileId: string,
   expires: string,
+  filePath: string,
   signature: string,
 ) => {
   if (!/^\d+$/.test(expires) || Number(expires) < Date.now()) {
     return false;
   }
 
-  const expectedSignature = await createTelegramFileSignature(secret, fileId, expires);
+  const expectedSignature = await createTelegramFileSignature(secret, fileId, expires, filePath);
 
   return signature === expectedSignature;
 };
@@ -161,7 +176,7 @@ const createTelegramFileProxyUrl = async (
   filePath: string,
 ) => {
   const expires = String(Date.now() + 10 * 60 * 1000);
-  const signature = await createTelegramFileSignature(env.API_TOKEN, fileId, expires);
+  const signature = await createTelegramFileSignature(env.API_TOKEN, fileId, expires, filePath);
   const url = new URL(`/api/telegram/file/${filePath}`, origin);
 
   url.searchParams.set("fileId", fileId);
@@ -210,75 +225,6 @@ const getTelegramFilePath = async (token: string, fileId: string) => {
   return filePath;
 };
 
-const getTelegramFileUrl = async (token: string, fileId: string) =>
-  createTelegramFileUrl(token, await getTelegramFilePath(token, fileId));
-
-export const extractVoiceOutput = async (result: unknown): Promise<TelegramVoiceOutput> => {
-  if (typeof result === "string") {
-    if (result.startsWith("http://") || result.startsWith("https://")) {
-      const response = await fetch(result);
-
-      if (!response.ok) {
-        throw new Error("Text-to-speech audio URL fetch failed");
-      }
-
-      return {
-        type: "blob",
-        voice: await response.blob(),
-        filename: "reply.ogg",
-      };
-    }
-
-    const base64 = result.startsWith("data:") ? result.split(",", 2)[1] : result;
-    return {
-      type: "blob",
-      voice: new Blob([Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))], {
-        type: "audio/ogg",
-      }),
-      filename: "reply.ogg",
-    };
-  }
-
-  if (result instanceof Response) {
-    return {
-      type: "blob",
-      voice: await result.blob(),
-      filename: "reply.ogg",
-    };
-  }
-
-  if (result instanceof Blob) {
-    return {
-      type: "blob",
-      voice: result,
-      filename: "reply.ogg",
-    };
-  }
-
-  if (result instanceof ArrayBuffer || result instanceof Uint8Array) {
-    const audioData = result instanceof Uint8Array ? new Uint8Array(result) : result;
-
-    return {
-      type: "blob",
-      voice: new Blob([audioData], {
-        type: "audio/ogg",
-      }),
-      filename: "reply.ogg",
-    };
-  }
-
-  if (typeof result === "object" && result !== null) {
-    const record = result as Record<string, unknown>;
-    const audio = record.audio ?? record.file ?? record.data ?? record.result ?? record.output;
-
-    if (audio !== undefined) {
-      return extractVoiceOutput(audio);
-    }
-  }
-
-  throw new Error("Text-to-speech result is not a supported voice payload");
-};
-
 const sendTelegramVoice = async (token: string, chatId: string, voice: TelegramVoiceOutput) => {
   const body = new FormData();
   body.set("chat_id", chatId);
@@ -293,81 +239,6 @@ const sendTelegramVoice = async (token: string, chatId: string, voice: TelegramV
   if (!response.ok || result?.ok === false) {
     throw new Error(result?.description ?? "Telegram sendVoice request failed");
   }
-};
-
-const createTelegramDeliveryTools = async (
-  settings: Awaited<ReturnType<typeof getSettings>>,
-  env: Env,
-  origin: string,
-  chatId: string,
-  sendMessage: TelegramWebhookDeps["sendMessage"],
-  sendVoice: TelegramWebhookDeps["sendVoice"],
-  markDelivered: () => void,
-): Promise<ToolSet> => {
-  const tools = createChatRunnerTools(settings, env, origin);
-  const textToVoiceTool = tools.text_to_voice;
-  const textReplySchema = z
-    .object({
-      text: z.string().describe("The text message to send to the Telegram user."),
-    })
-    .strict();
-  const voiceReplySchema = z
-    .object({
-      text: z.string().describe("The text to synthesize and send as a Telegram voice reply."),
-    })
-    .strict();
-  const deliveryTools: ToolSet = {
-    telegram_reply_text: dynamicTool({
-      description: "Send a text reply to the current Telegram chat.",
-      inputSchema: textReplySchema,
-      execute: async (input) => {
-        const parsedInput = textReplySchema.parse(input);
-
-        await sendMessage(chatId, parsedInput.text);
-        markDelivered();
-
-        return {
-          ok: true,
-        };
-      },
-    }),
-  };
-
-  if (textToVoiceTool?.execute) {
-    deliveryTools.telegram_reply_voice = dynamicTool({
-      description:
-        "Generate a voice reply from text using the configured text_to_voice tool and send it to the current Telegram chat.",
-      inputSchema: voiceReplySchema,
-      execute: async (input) => {
-        const parsedInput = voiceReplySchema.parse(input);
-
-        const execute = textToVoiceTool.execute as unknown as (
-          input: Record<string, unknown>,
-          options: unknown,
-        ) => Promise<unknown>;
-        const voiceResult = await execute(
-          {
-            text: parsedInput.text,
-            response_format: "opus",
-          },
-          {
-            toolCallId: "telegram_text_to_voice",
-            messages: [],
-            context: undefined,
-          },
-        );
-
-        await sendVoice(chatId, await extractVoiceOutput(voiceResult));
-        markDelivered();
-
-        return {
-          ok: true,
-        };
-      },
-    });
-  }
-
-  return deliveryTools;
 };
 
 const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWebhookDeps> => {
@@ -409,6 +280,9 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
         message_id: message.message_id,
       });
     },
+    transcribeVoice: (context) => transcribeVoice(env, origin, context),
+    describeImage: (context) => describeImage(env, origin, context),
+    synthesizeVoice: (text) => synthesizeVoice(env, origin, text),
     runLlm: async (message, messages) => {
       const userId =
         message.from?.id === undefined ? stringifyChatId(message.chat.id) : String(message.from.id);
@@ -416,19 +290,7 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
         .filter(Boolean)
         .join(" ");
       const settings = await getSettings(env.APP_KV);
-      let delivered = false;
-      const deliveryTools = await createTelegramDeliveryTools(
-        settings,
-        env,
-        origin,
-        stringifyChatId(message.chat.id),
-        sendMessage,
-        sendVoice,
-        () => {
-          delivered = true;
-        },
-      );
-      await runChatCompletion({
+      const result = await runChatCompletion({
         env,
         origin,
         userInfo: {
@@ -442,24 +304,14 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
         },
         messages,
         settings,
-        excludeToolNames: ["text_to_voice"],
-        extraTools: deliveryTools,
         extraInstructions: [
           "You are replying to a Telegram message.",
-          "Use the media tools yourself when the message includes a voice or image HTTPS URL.",
-          "For voice messages, call voice_to_text with the provided voice file before answering.",
-          "For image messages, call image_to_text with the provided image file before answering.",
-          "Send the final answer by calling exactly one Telegram reply tool.",
-          "For voice messages, the final reply must use telegram_reply_voice when telegram_reply_voice is available.",
-          "For text or image messages, use telegram_reply_voice when the user asks for a voice/audio reply and telegram_reply_voice is available.",
-          "For text or image messages without a voice/audio reply request, use telegram_reply_text.",
-          "Do not answer with plain model text. Plain model text is not delivered to Telegram.",
+          "Use the provided text, voice transcription result, and image recognition result as the complete Telegram message context.",
+          "Return only the final reply text to send to the Telegram user.",
         ].join("\n"),
       });
 
-      if (!delivered) {
-        throw new Error("Telegram reply tool was not called");
-      }
+      return result.text;
     },
   };
 };
@@ -506,34 +358,66 @@ export const handleTelegramWebhookUpdate = async (update: unknown, deps: Telegra
 
     if (message.voice) {
       const voiceFile = await deps.getFileUrl(message.voice.file_id);
+      const transcription = await deps.transcribeVoice?.({
+        file: voiceFile,
+      });
+
+      if (transcription === undefined) {
+        throw new Error("Voice transcription is not available");
+      }
+
       content.push(
         [
           "The user sent a voice message.",
-          "Use the voice_to_text tool with this file before answering.",
-          "Because the original message is voice, the final reply must use telegram_reply_voice when telegram_reply_voice is available.",
-          `Voice file: ${voiceFile}`,
+          `Voice transcription result: ${JSON.stringify(transcription)}`,
         ].join("\n"),
       );
     }
 
     if (photo) {
       const imageFile = await deps.getFileUrl(photo.file_id);
+      const imagePrompt = text
+        ? `Describe this Telegram image and extract any visible text. Caption: ${text}`
+        : "Describe this Telegram image and extract any visible text.";
+      const imageDescription = await deps.describeImage?.({
+        file: imageFile,
+        prompt: imagePrompt,
+      });
+
+      if (imageDescription === undefined) {
+        throw new Error("Image recognition is not available");
+      }
+
       content.push(
         [
           "The user sent an image message.",
-          "Use the image_to_text tool with this file before answering.",
-          `Image file: ${imageFile}`,
+          `Image recognition result: ${JSON.stringify(imageDescription)}`,
         ].join("\n"),
       );
     }
 
-    await deps.runLlm(message, [
+    const replyText = await deps.runLlm(message, [
       {
         role: "user",
         content: content.join("\n\n"),
       },
     ]);
-  } catch {
+
+    if (replyAsVoice) {
+      const voice = await deps.synthesizeVoice?.(replyText);
+
+      if (!voice) {
+        await deps.sendMessage(chatId, "Sorry, audio replies are not supported right now.");
+        return;
+      }
+
+      await deps.sendVoice(chatId, voice);
+      return;
+    }
+
+    await deps.sendMessage(chatId, replyText);
+  } catch (error) {
+    console.error(error);
     await deps.sendMessage(
       chatId,
       replyAsVoice
@@ -558,7 +442,9 @@ export const telegramRoute = new Hono<AppBindings>()
       return c.text("Missing file signature", 400);
     }
 
-    if (!(await hasValidTelegramFileSignature(c.env.API_TOKEN, fileId, expires, signature))) {
+    if (
+      !(await hasValidTelegramFileSignature(c.env.API_TOKEN, fileId, expires, filePath, signature))
+    ) {
       return c.text("Forbidden", 403);
     }
 
@@ -568,7 +454,7 @@ export const telegramRoute = new Hono<AppBindings>()
       return c.text("Telegram bot token is not configured", 500);
     }
 
-    const telegramFileUrl = await getTelegramFileUrl(token, fileId);
+    const telegramFileUrl = createTelegramFileUrl(token, filePath);
     const response = await fetch(telegramFileUrl);
     const forcedContentType = inferTelegramFileContentType(filePath);
 

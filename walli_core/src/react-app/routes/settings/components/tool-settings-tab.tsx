@@ -117,6 +117,23 @@ const isValidHttpUrl = (value: string) => {
   }
 };
 
+const isValidRelativeUrl = (value: string) => {
+  try {
+    const trimmedValue = value.trim();
+
+    return (
+      trimmedValue.startsWith("/") &&
+      !trimmedValue.startsWith("//") &&
+      new URL(trimmedValue, "https://example.com").origin === "https://example.com"
+    );
+  } catch {
+    return false;
+  }
+};
+
+const isValidApiInvocationUrl = (value: string, allowRelativeUrl: boolean) =>
+  isValidHttpUrl(value) || (allowRelativeUrl && isValidRelativeUrl(value));
+
 export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTabProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -253,7 +270,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
       if (
         tool.invocation.type === "api" &&
         tool.invocation.url.trim().length > 0 &&
-        !isValidHttpUrl(tool.invocation.url)
+        !isValidApiInvocationUrl(tool.invocation.url, toolIndex < builtInToolCount)
       ) {
         form.setError(`tools.${toolIndex}.invocation.url`, {
           message: t("toolSettingsInvocationUrlInvalid"),
@@ -738,7 +755,10 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                                   }
 
                                   return (
-                                    isValidHttpUrl(trimmedValue) ||
+                                    isValidApiInvocationUrl(
+                                      trimmedValue,
+                                      index < builtInToolCount,
+                                    ) ||
                                     t("toolSettingsInvocationUrlInvalid")
                                   );
                                 },

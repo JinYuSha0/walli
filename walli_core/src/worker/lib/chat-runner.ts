@@ -4,7 +4,7 @@ import { BUILT_IN_TOOLS, type Settings, type ToolConfig } from "../../shared/con
 import { toolsRoute } from "../tools";
 import { getSettings } from "../api/settings";
 import { buildChatTools } from "./chat-tools";
-import { createGatewayFromEnv, unified } from "./llm";
+import { createGatewayFromEnv, normalizeGatewayModelId, unified } from "./llm";
 
 type RunChatOptions = {
   env: Env;
@@ -15,6 +15,7 @@ type RunChatOptions = {
   settings?: Settings;
   extraTools?: ToolSet;
   extraInstructions?: string;
+  toolsEnabled?: boolean;
 };
 
 const createChatInstructions = (globalPrompt: string, userInfo: unknown) => {
@@ -120,27 +121,34 @@ export const runChatCompletion = async ({
   settings,
   extraTools,
   extraInstructions,
+  toolsEnabled = true,
 }: RunChatOptions) => {
   const resolvedSettings = settings ?? (await getSettings(env.APP_KV));
   const gateway = createGatewayFromEnv(env);
-  const tools = buildChatTools(createToolConfigs(resolvedSettings, env, origin, excludeToolNames), {
-    AI: env.AI,
-    fetch: createInternalToolFetch(env, origin),
-  });
+  const tools = toolsEnabled
+    ? buildChatTools(createToolConfigs(resolvedSettings, env, origin, excludeToolNames), {
+        AI: env.AI,
+        fetch: createInternalToolFetch(env, origin),
+      })
+    : undefined;
 
   return generateText({
-    model: gateway(unified(resolvedSettings.primaryModel)),
+    model: gateway(unified(normalizeGatewayModelId(resolvedSettings.primaryModel))),
     instructions: joinInstructions(
       createChatInstructions(resolvedSettings.globalPrompt, userInfo),
       extraInstructions,
     ),
     messages,
-    tools: {
-      ...tools,
-      ...extraTools,
-    },
-    toolChoice: "auto",
-    stopWhen: isStepCount(5),
+    ...(toolsEnabled
+      ? {
+          tools: {
+            ...tools,
+            ...extraTools,
+          },
+          toolChoice: "auto" as const,
+          stopWhen: isStepCount(5),
+        }
+      : {}),
   });
 };
 

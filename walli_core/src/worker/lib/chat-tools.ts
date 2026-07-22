@@ -76,6 +76,13 @@ export const createToolInputSchema = (toolConfig: ToolConfig) =>
     ),
   ).strict();
 
+export const createLooseToolInputSchema = (toolConfig: ToolConfig) =>
+  z.object(
+    Object.fromEntries(
+      toolConfig.schema.fields.map((field) => [field.name, createFieldSchema(field)]),
+    ),
+  );
+
 const createApiInvocationInput = (toolConfig: ToolConfig, input: unknown) => {
   const schemaDefaults = Object.fromEntries(
     toolConfig.schema.fields

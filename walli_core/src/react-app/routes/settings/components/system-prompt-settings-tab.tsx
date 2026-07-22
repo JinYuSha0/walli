@@ -1,9 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { updateSettings } from "@/api";
+import { resetSettings, updateSettings } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -19,6 +19,7 @@ type SystemPromptSettingsTabProps = {
 export function SystemPromptSettingsTab({ settings }: SystemPromptSettingsTabProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const [resetConfirming, setResetConfirming] = useState(false);
   const form = useForm<SystemPromptSettingsForm>({
     defaultValues: {
       globalPrompt: settings.globalPrompt,
@@ -36,6 +37,18 @@ export function SystemPromptSettingsTab({ settings }: SystemPromptSettingsTabPro
       toast.success(t("promptSaveSuccess"));
     },
   });
+  const resetSettingsMutation = useMutation({
+    mutationFn: resetSettings,
+    onSuccess: (values) => {
+      queryClient.setQueryData(["settings"], values);
+      form.reset({
+        globalPrompt: values.globalPrompt,
+        timeZone: values.timeZone,
+      });
+      setResetConfirming(false);
+      toast.success(t("basicSettingsResetSuccess"));
+    },
+  });
 
   useEffect(() => {
     form.reset({
@@ -47,6 +60,7 @@ export function SystemPromptSettingsTab({ settings }: SystemPromptSettingsTabPro
   const onSubmit = (values: SystemPromptSettingsForm) => {
     updateSettingsMutation.mutate(values);
   };
+  const pending = updateSettingsMutation.isPending || resetSettingsMutation.isPending;
 
   return (
     <form className="grid gap-8" onSubmit={form.handleSubmit(onSubmit)}>
@@ -79,7 +93,7 @@ export function SystemPromptSettingsTab({ settings }: SystemPromptSettingsTabPro
               <Select
                 id="settings-time-zone"
                 aria-invalid={fieldState.invalid}
-                disabled={updateSettingsMutation.isPending}
+                disabled={pending}
                 {...field}
               >
                 {UTC_OFFSET_TIME_ZONES.map((timeZone) => (
@@ -115,7 +129,7 @@ export function SystemPromptSettingsTab({ settings }: SystemPromptSettingsTabPro
               <TextEditor
                 id="system-prompt"
                 aria-invalid={fieldState.invalid}
-                disabled={updateSettingsMutation.isPending}
+                disabled={pending}
                 placeholder={t("promptGlobalPromptPlaceholder")}
                 {...field}
               />
@@ -129,8 +143,53 @@ export function SystemPromptSettingsTab({ settings }: SystemPromptSettingsTabPro
         />
       </section>
 
+      <section className="grid gap-4 border-t border-border pt-8">
+        <div className="grid gap-1">
+          <Label>{t("basicSettingsResetTitle")}</Label>
+          <p className="text-sm text-muted-foreground">
+            {t("basicSettingsResetDescription")}
+          </p>
+        </div>
+        {resetConfirming ? (
+          <div className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-destructive">
+              {t("basicSettingsResetConfirmDescription")}
+            </p>
+            <div className="flex shrink-0 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={pending}
+                onClick={() => setResetConfirming(false)}
+              >
+                {t("basicSettingsResetCancel")}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={pending}
+                onClick={() => resetSettingsMutation.mutate()}
+              >
+                {t("basicSettingsResetConfirm")}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={pending}
+              onClick={() => setResetConfirming(true)}
+            >
+              {t("basicSettingsReset")}
+            </Button>
+          </div>
+        )}
+      </section>
+
       <div className="flex justify-end gap-2 border-t border-border pt-8">
-        <Button type="submit" disabled={updateSettingsMutation.isPending}>
+        <Button type="submit" disabled={pending}>
           {t("promptSave")}
         </Button>
       </div>

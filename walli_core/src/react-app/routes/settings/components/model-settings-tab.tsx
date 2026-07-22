@@ -23,7 +23,7 @@ import {
 
 type ModelSettingsForm = Pick<
   Settings,
-  "models" | "primaryModel" | "embeddingModel"
+  "models" | "primaryModel" | "toolPlannerModel" | "embeddingModel"
 >;
 
 type ModelSettingsTabProps = {
@@ -51,11 +51,13 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
     defaultValues: {
       models: settings.models,
       primaryModel: settings.primaryModel,
+      toolPlannerModel: settings.toolPlannerModel,
       embeddingModel: settings.embeddingModel,
     },
   });
   const watchedModels = form.watch("models");
   const watchedPrimaryModel = form.watch("primaryModel");
+  const watchedToolPlannerModel = form.watch("toolPlannerModel");
   const watchedEmbeddingModel = form.watch("embeddingModel");
   const primaryModelOptions = useMemo(
     () =>
@@ -82,6 +84,10 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
         ),
     [watchedModels],
   );
+  const toolPlannerModelOptions = useMemo(
+    () => primaryModelOptions,
+    [primaryModelOptions],
+  );
   const { fields, append, move, remove } = useFieldArray({
     control: form.control,
     name: "models",
@@ -93,6 +99,7 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
       form.reset({
         models: values.models,
         primaryModel: values.primaryModel,
+        toolPlannerModel: values.toolPlannerModel,
         embeddingModel: values.embeddingModel,
       });
       toast.success(t("modelSettingsSaveSuccess"));
@@ -103,9 +110,16 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
     form.reset({
       models: settings.models,
       primaryModel: settings.primaryModel,
+      toolPlannerModel: settings.toolPlannerModel,
       embeddingModel: settings.embeddingModel,
     });
-  }, [form, settings.models, settings.primaryModel, settings.embeddingModel]);
+  }, [
+    form,
+    settings.models,
+    settings.primaryModel,
+    settings.toolPlannerModel,
+    settings.embeddingModel,
+  ]);
 
   const toggleTag = (
     tags: ModelCapabilityTag[],
@@ -130,6 +144,7 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
     updateSettingsMutation.mutate({
       models,
       primaryModel: values.primaryModel,
+      toolPlannerModel: values.toolPlannerModel,
       embeddingModel: values.embeddingModel,
     });
   };
@@ -168,13 +183,14 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
             const isSelectedModel =
               modelName.length > 0 &&
               (modelName === watchedPrimaryModel ||
+                modelName === watchedToolPlannerModel ||
                 modelName === watchedEmbeddingModel);
             const deleteDisabledReason = isSelectedModel
               ? t("modelSettingsRemoveSelectedModelDisabled")
               : usingToolNames.length > 0
                 ? t("modelSettingsRemoveToolUsingModelDisabled", {
-                    toolNames: usingToolNames.join(", "),
-                  })
+                  toolNames: usingToolNames.join(", "),
+                })
                 : "";
             const canRemoveModel = deleteDisabledReason.length === 0;
 
@@ -357,6 +373,53 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
                   {t("modelSettingsPrimaryModelPlaceholder")}
                 </option>
                 {primaryModelOptions.map((model) => (
+                  <option key={model.name} value={model.name}>
+                    {model.name}
+                  </option>
+                ))}
+              </Select>
+              {fieldState.error?.message && (
+                <p className="text-sm text-destructive">
+                  {fieldState.error.message}
+                </p>
+              )}
+            </div>
+          )}
+        />
+      </section>
+
+      <section className="grid gap-4 border-t border-border pt-8">
+        <div className="grid gap-1">
+          <h2 className="text-sm font-medium">
+            {t("modelSettingsToolPlannerModelTitle")}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {t("modelSettingsToolPlannerModelDescription")}
+          </p>
+        </div>
+
+        <Controller
+          control={form.control}
+          name="toolPlannerModel"
+          rules={{
+            required: t("modelSettingsToolPlannerModelRequired"),
+            validate: (value) =>
+              toolPlannerModelOptions.some((model) => model.name === value) ||
+              t("modelSettingsToolPlannerModelInvalid"),
+          }}
+          render={({ field, fieldState }) => (
+            <div className="grid gap-2">
+              <Select
+                id="tool-planner-model"
+                aria-label={t("modelSettingsToolPlannerModel")}
+                aria-invalid={fieldState.invalid}
+                disabled={updateSettingsMutation.isPending}
+                {...field}
+              >
+                <option value="">
+                  {t("modelSettingsToolPlannerModelPlaceholder")}
+                </option>
+                {toolPlannerModelOptions.map((model) => (
                   <option key={model.name} value={model.name}>
                     {model.name}
                   </option>

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Hono } from "hono";
 import {
   BUILT_IN_TOOLS,
   DEFAULT_SETTINGS,
@@ -8,10 +9,18 @@ import {
   toolConfigSchema,
 } from "../../shared/const";
 import { telegramSettingsPatchSchema } from "../../shared/client";
-import { extractVoiceOutput, handleTelegramWebhookUpdate, telegramRoute } from "../api/telegram";
-import { getSettings } from "../api/settings";
+import { handleTelegramWebhookUpdate, telegramRoute } from "../api/telegram";
+import { getSettings, settingsRoute } from "../api/settings";
+import type { AppBindings } from "../api/types";
 import { createChatRunnerTools } from "../lib/chat-runner";
-import { buildChatTools, createToolInputSchema, isValidChatToolName } from "../lib/chat-tools.ts";
+import {
+  buildChatTools,
+  createLooseToolInputSchema,
+  createToolInputSchema,
+  isValidChatToolName,
+} from "../lib/chat-tools.ts";
+import { normalizeGatewayModelId } from "../lib/llm";
+import { extractVoiceOutput, type ImageToTextContext, type VoiceToTextContext } from "./media-tools";
 import { toolsRoute } from ".";
 import { getNextCronScheduledAt } from "./cron";
 
@@ -31,7 +40,12 @@ const fakeRuntime = {
   },
 } as unknown as Parameters<typeof buildChatTools>[1];
 
-const signTelegramFileUrl = async (secret: string, fileId: string, expires: string) => {
+const signTelegramFileUrl = async (
+  secret: string,
+  fileId: string,
+  expires: string,
+  filePath: string,
+) => {
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
@@ -43,7 +57,11 @@ const signTelegramFileUrl = async (secret: string, fileId: string, expires: stri
     false,
     ["sign"],
   );
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(`${fileId}.${expires}`));
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(`${fileId}.${expires}.${filePath}`),
+  );
 
   return [...new Uint8Array(signature)]
     .map((byte) => byte.toString(16).padStart(2, "0"))
@@ -51,6 +69,16 @@ const signTelegramFileUrl = async (secret: string, fileId: string, expires: stri
 };
 
 describe("chat tools", () => {
+  it("normalizes bare Workers AI model ids for AI Gateway", () => {
+    expect(normalizeGatewayModelId("@cf/zai-org/glm-4.7-flash")).toBe(
+      "workers-ai/@cf/zai-org/glm-4.7-flash",
+    );
+    expect(normalizeGatewayModelId("workers-ai/@cf/zai-org/glm-4.7-flash")).toBe(
+      "workers-ai/@cf/zai-org/glm-4.7-flash",
+    );
+    expect(normalizeGatewayModelId("openai/gpt-5.4-mini")).toBe("openai/gpt-5.4-mini");
+  });
+
   beforeEach(() => {
     aiRun.mockClear();
   });
@@ -309,8 +337,24 @@ describe("chat tools", () => {
       }),
     ).toEqual({
       file: "https://example.com/image.png",
+      prompt: "Describe the image and extract any visible text.",
     });
     expect(() => schema.parse({})).toThrow();
+  });
+
+  it("creates loose tool input schema for direct execution", () => {
+    const schema = createLooseToolInputSchema(imageToTextTool);
+
+    expect(
+      schema.parse({
+        file: "https://example.com/image.png",
+        prompt: "Extract receipt text.",
+        width: 100,
+      }),
+    ).toEqual({
+      file: "https://example.com/image.png",
+      prompt: "Extract receipt text.",
+    });
   });
 
   it("accepts all default tool names as model-friendly names", () => {
@@ -410,10 +454,12 @@ describe("chat tools", () => {
       ok: true,
       input: {
         file: "https://example.com/image.png",
+        prompt: "Describe the image and extract any visible text.",
       },
     });
     expect(aiRun).toHaveBeenLastCalledWith("openai/gpt-5.4-mini", {
       file: "https://example.com/image.png",
+      prompt: "Describe the image and extract any visible text.",
     });
   });
 
@@ -453,6 +499,30 @@ describe("chat tools", () => {
       input: {},
     });
     expect(aiRun).toHaveBeenCalledWith("openai/gpt-4o-transcribe", {});
+  });
+
+  it("returns image model results without extracting text", async () => {
+    const modelResult = {
+      choices: [
+        {
+          message: {
+            content: "The image shows a receipt.",
+          },
+        },
+      ],
+    };
+    aiRun.mockResolvedValueOnce(modelResult);
+    const tools = buildChatTools([imageToTextTool], fakeRuntime);
+    const executionOptions = {} as Parameters<NonNullable<typeof tools.image_to_text.execute>>[1];
+
+    await expect(
+      tools.image_to_text.execute?.(
+        {
+          file: "https://example.com/image.png",
+        },
+        executionOptions,
+      ),
+    ).resolves.toBe(modelResult);
   });
 
   it("executes api tools with request input", async () => {
@@ -846,6 +916,65 @@ describe("settings tool migration", () => {
     });
     expect(settings.timeZone).toBe("UTC+8");
   });
+
+  it("adds the default tool planner model to legacy full settings", async () => {
+    const savedSettings: Record<string, unknown> = {
+      ...DEFAULT_SETTINGS,
+    };
+    delete savedSettings.toolPlannerModel;
+    const appKv = {
+      get: vi.fn(async (key: string) => key === "settings" ? savedSettings : null),
+      put: vi.fn(),
+    } as unknown as KVNamespace;
+    const settings = await getSettings(appKv);
+
+    expect(settings.toolPlannerModel).toBe("openai/gpt-5.4-nano");
+  });
+
+  it("resets all settings KV entries", async () => {
+    const deletedKeys: string[] = [];
+    const appKv = {
+      get: vi.fn(async () => null),
+      put: vi.fn(),
+      delete: vi.fn(async (key: string) => {
+        deletedKeys.push(key);
+      }),
+    } as unknown as KVNamespace;
+    const app = new Hono<AppBindings>()
+      .use("*", async (c, next) => {
+        c.set("user", {
+          email: "admin@example.com",
+          role: "admin",
+        } as AppBindings["Variables"]["user"]);
+        await next();
+      })
+      .route("/", settingsRoute);
+    const response = await app.request(
+      "/api/admin/settings",
+      {
+        method: "DELETE",
+      },
+      {
+        APP_KV: appKv,
+        API_TOKEN: "test-token",
+      } as Env,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.primaryModel).toBe(DEFAULT_SETTINGS.primaryModel);
+    expect(body.toolPlannerModel).toBe(DEFAULT_SETTINGS.toolPlannerModel);
+    expect(deletedKeys).toEqual(
+      expect.arrayContaining([
+        "settings",
+        "settings:models",
+        "settings:primary-model",
+        "settings:tool-planner-model",
+        "settings:system-prompt",
+        "settings:usage-limits",
+      ]),
+    );
+  });
 });
 
 describe("telegram webhook", () => {
@@ -875,30 +1004,13 @@ describe("telegram webhook", () => {
   });
 
   it("proxies Telegram files with a filename suffix and forced content type", async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            ok: true,
-            result: {
-              file_path: "voice/file_16.oga",
-            },
-          }),
-          {
-            headers: {
-              "content-type": "application/json",
-            },
-          },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response("voice-bytes", {
-          headers: {
-            "content-type": "application/octet-stream",
-          },
-        }),
-      );
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response("voice-bytes", {
+        headers: {
+          "content-type": "application/octet-stream",
+        },
+      }),
+    );
     const appKv = {
       get: vi.fn(async (key: string) =>
         key === "client:telegram:settings"
@@ -910,11 +1022,12 @@ describe("telegram webhook", () => {
       put: vi.fn(),
     } as unknown as KVNamespace;
     const fileId = "voice-file";
+    const filePath = "voice/file_16.oga";
     const expires = String(Date.now() + 60_000);
-    const signature = await signTelegramFileUrl("api-token", fileId, expires);
+    const signature = await signTelegramFileUrl("api-token", fileId, expires, filePath);
     const response = await telegramRoute.fetch(
       new Request(
-        `https://chat.test/api/telegram/file/voice/file_16.oga?fileId=${fileId}&expires=${expires}&signature=${signature}`,
+        `https://chat.test/api/telegram/file/${filePath}?fileId=${fileId}&expires=${expires}&signature=${signature}`,
       ),
       {
         API_TOKEN: "api-token",
@@ -925,13 +1038,12 @@ describe("telegram webhook", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("audio/ogg");
     expect(await response.text()).toBe("voice-bytes");
-    expect(fetchMock).toHaveBeenLastCalledWith(
-      "https://api.telegram.org/file/bottest-token/voice/file_16.oga",
-    );
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledWith("https://api.telegram.org/file/bottest-token/voice/file_16.oga");
     fetchMock.mockRestore();
   });
 
-  it("shows typing, then delegates text messages to the LLM", async () => {
+  it("shows typing, then sends the LLM text response", async () => {
     const calls: string[] = [];
     const sendMessage = vi.fn();
     const sendVoice = vi.fn();
@@ -941,6 +1053,7 @@ describe("telegram webhook", () => {
     const runLlm = vi.fn(async (_message, messages) => {
       calls.push("llm");
       expect(JSON.stringify(messages)).toContain("Message text: hello");
+      return "hello back";
     });
     const getFileUrl = vi.fn();
     const markMessageRead = vi.fn();
@@ -973,7 +1086,7 @@ describe("telegram webhook", () => {
     expect(calls).toEqual(["action:typing", "llm"]);
     expect(markMessageRead).toHaveBeenCalledOnce();
     expect(sendChatAction).toHaveBeenCalledWith("123", "typing");
-    expect(sendMessage).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith("123", "hello back");
     expect(sendVoice).not.toHaveBeenCalled();
   });
 
@@ -1023,7 +1136,7 @@ describe("telegram webhook", () => {
     );
   });
 
-  it("passes voice files to the LLM with tool instructions", async () => {
+  it("transcribes voice files before one LLM response and sends voice", async () => {
     const calls: string[] = [];
     const sendMessage = vi.fn();
     const sendVoice = vi.fn();
@@ -1034,16 +1147,34 @@ describe("telegram webhook", () => {
       calls.push("file");
       return "https://chat.test/api/telegram/file/voice/file_12.oga?fileId=voice-file&expires=1&signature=test";
     });
+    const transcribeVoice = vi.fn(async (context: VoiceToTextContext) => {
+      calls.push("transcribe");
+      expect(context.file).toContain(
+        "https://chat.test/api/telegram/file/voice/file_12.oga?fileId=voice-file",
+      );
+      expect(context).not.toHaveProperty("mimeType");
+      expect(context).not.toHaveProperty("duration");
+      return {
+        text: "你好",
+      };
+    });
+    const synthesizeVoice = vi.fn(async (text: string) => {
+      calls.push("synthesize");
+      expect(text).toBe("voice reply");
+      return {
+        type: "blob" as const,
+        voice: new Blob(["voice"]),
+        filename: "reply.ogg",
+      };
+    });
     const markMessageRead = vi.fn();
     const runLlm = vi.fn(async (_message, messages) => {
       calls.push("llm");
       const serializedMessages = JSON.stringify(messages);
-      expect(serializedMessages).toContain("Use the voice_to_text tool");
-      expect(serializedMessages).toContain("telegram_reply_voice");
-      expect(serializedMessages).toContain(
-        "https://chat.test/api/telegram/file/voice/file_12.oga?fileId=voice-file",
-      );
+      expect(serializedMessages).toContain("Voice transcription result");
+      expect(serializedMessages).toContain("你好");
       expect(serializedMessages).not.toContain("api.telegram.org/file/bot");
+      return "voice reply";
     });
 
     await handleTelegramWebhookUpdate(
@@ -1066,16 +1197,18 @@ describe("telegram webhook", () => {
         sendChatAction,
         getFileUrl,
         markMessageRead,
+        transcribeVoice,
+        synthesizeVoice,
         runLlm,
       },
     );
 
-    expect(calls).toEqual(["action:record_voice", "file", "llm"]);
+    expect(calls).toEqual(["action:record_voice", "file", "transcribe", "llm", "synthesize"]);
     expect(sendMessage).not.toHaveBeenCalled();
-    expect(sendVoice).not.toHaveBeenCalled();
+    expect(sendVoice).toHaveBeenCalledOnce();
   });
 
-  it("passes image files to the LLM with tool instructions", async () => {
+  it("describes image files before one LLM response and sends text", async () => {
     const calls: string[] = [];
     const sendMessage = vi.fn();
     const sendVoice = vi.fn();
@@ -1086,16 +1219,29 @@ describe("telegram webhook", () => {
       calls.push("file");
       return "https://chat.test/api/telegram/file/photos/file_1.jpg?fileId=photo-file&expires=1&signature=test";
     });
+    const describeImage = vi.fn(async (context: ImageToTextContext) => {
+      calls.push("describe");
+      expect(context.file).toContain(
+        "https://chat.test/api/telegram/file/photos/file_1.jpg?fileId=photo-file",
+      );
+      expect(context.prompt).toBe(
+        "Describe this Telegram image and extract any visible text. Caption: what is this",
+      );
+      expect(context).not.toHaveProperty("caption");
+      expect(context).not.toHaveProperty("width");
+      return {
+        text: "A receipt image",
+      };
+    });
     const markMessageRead = vi.fn();
     const runLlm = vi.fn(async (_message, messages) => {
       calls.push("llm");
       const serializedMessages = JSON.stringify(messages);
       expect(serializedMessages).toContain("Message text: what is this");
-      expect(serializedMessages).toContain("Use the image_to_text tool");
-      expect(serializedMessages).toContain(
-        "https://chat.test/api/telegram/file/photos/file_1.jpg?fileId=photo-file",
-      );
+      expect(serializedMessages).toContain("Image recognition result");
+      expect(serializedMessages).toContain("A receipt image");
       expect(serializedMessages).not.toContain("api.telegram.org/file/bot");
+      return "image reply";
     });
 
     await handleTelegramWebhookUpdate(
@@ -1122,12 +1268,13 @@ describe("telegram webhook", () => {
         sendChatAction,
         getFileUrl,
         markMessageRead,
+        describeImage,
         runLlm,
       },
     );
 
-    expect(calls).toEqual(["action", "file", "llm"]);
-    expect(sendMessage).not.toHaveBeenCalled();
+    expect(calls).toEqual(["action", "file", "describe", "llm"]);
+    expect(sendMessage).toHaveBeenCalledWith("123", "image reply");
     expect(sendVoice).not.toHaveBeenCalled();
   });
 

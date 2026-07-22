@@ -145,6 +145,12 @@ https://your-domain.com/api/auth/callback/google
 
 Cloudflare is the intended deployment target because Workers, D1, and related storage products keep the runtime lightweight and inexpensive for small-to-medium chatbot workloads.
 
+## Media Tool Performance
+
+Built-in media helpers such as voice transcription, image description, and voice synthesis first try to execute the target tool directly when the input already matches that tool's schema. This avoids an extra planner-model request and keeps Telegram media handling faster.
+
+If the input is fuzzy task context instead of exact tool input, the helper falls back to the tool planner model. In that fallback path, a single media request can involve multiple LLM calls: one planner call to translate the context into a tool invocation, plus the actual media model call such as speech-to-text, image-to-text, or text-to-speech.
+
 ## API Surface
 
 - `GET /api/`: service metadata

@@ -13,9 +13,16 @@ export const imageToTextTool = {
       {
         name: "file",
         type: "string",
-        description: "The image HTTPS URL.",
+        description: "The image HTTPS URL or data URI.",
         required: true,
         defaultValue: "",
+      },
+      {
+        name: "prompt",
+        type: "string",
+        description: "Instructions for what to identify, read, or describe in the image.",
+        required: false,
+        defaultValue: "Describe the image and extract any visible text.",
       },
     ],
   },

@@ -56,6 +56,9 @@ export const getSettings = async (): Promise<SettingsResponse> =>
 export const updateSettings = async (json: SettingsPatch): Promise<SettingsResponse> =>
   parseResponse(apiClient.api.admin.settings.$patch({ json }));
 
+export const resetSettings = async (): Promise<SettingsResponse> =>
+  parseResponse(apiClient.api.admin.settings.$delete());
+
 export const getClientConfig = async (
   platform: ClientPlatform,
 ): Promise<ClientConfigResponse> =>

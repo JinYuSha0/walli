@@ -145,6 +145,12 @@ https://your-domain.com/api/auth/callback/google
 
 本项目优先选择 Cloudflare 作为部署目标，因为 Workers、D1 和相关存储产品适合以较低成本支撑中小规模聊天机器人负载。
 
+## 媒体工具性能说明
+
+语音转文字、图片描述、文字转语音等内置媒体 helper 会优先判断入参是否已经匹配目标工具的 schema。如果已经匹配，就直接执行对应工具，避免额外调用调度模型，从而提升 Telegram 等媒体消息处理速度。
+
+如果入参是模糊任务上下文，而不是精确的工具入参，helper 会回退到工具调度模型。在这个 fallback 路径中，一次媒体请求可能包含多次 LLM 调用：先由调度模型把上下文转换为一次工具调用，再执行真正的媒体模型调用，例如 speech-to-text、image-to-text 或 text-to-speech。
+
 ## API 接口
 
 - `GET /api/`：服务元信息

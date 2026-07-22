@@ -12,7 +12,7 @@ import {
   createChatRunnerInstructions,
   createChatRunnerTools,
 } from "../lib/chat-runner";
-import { createGateway, unified } from "../lib/llm";
+import { createGateway, normalizeGatewayModelId, unified } from "../lib/llm";
 
 const chatMessageSchema = z
   .object({
@@ -175,7 +175,7 @@ const streamChat = async (c: Context<AppBindings>, body: ParsedChatRequest, user
     try {
       let fullContent = "";
       const result = streamText({
-        model: gateway(unified(settings.primaryModel)),
+        model: gateway(unified(normalizeGatewayModelId(settings.primaryModel))),
         instructions: createChatRunnerInstructions(settings.globalPrompt, userInfo),
         messages: body.messages as ModelMessage[],
         tools,
