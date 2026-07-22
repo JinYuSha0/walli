@@ -1,6 +1,6 @@
 import { generateText, isStepCount } from "ai";
 import { createChatRunnerTools } from "../lib/chat-runner";
-import { createLooseToolInputSchema } from "../lib/chat-tools";
+import { safeParseLooseToolInputWithDefaults } from "../lib/chat-tools";
 import { createGatewayFromEnv, normalizeGatewayModelId, unified } from "../lib/llm";
 import { getSettings } from "../api/settings";
 import { adaptBuiltInToolModelOutput } from "../../shared/tools";
@@ -25,9 +25,10 @@ export type ImageToTextContext = {
 
 export type TextToVoiceContext = {
   text: string;
-  voice?: string;
-  response_format?: string;
-  speed?: number;
+  voice_id?: string;
+  output_format?: string;
+  temperature?: number;
+  timestamp_type?: string;
 };
 
 export type BuiltInMediaToolContextMap = {
@@ -116,6 +117,8 @@ export const runBuiltInMediaTool = async <ToolName extends BuiltInMediaToolName>
   toolName: ToolName,
   taskContext: BuiltInMediaToolContextMap[ToolName],
 ) => {
+  let normalizedContext: Record<string, unknown> | undefined;
+
   try {
     const settings = await getSettings(env.APP_KV);
     const toolConfig = [...settings.builtInTools, ...settings.tools].find(
@@ -130,15 +133,16 @@ export const runBuiltInMediaTool = async <ToolName extends BuiltInMediaToolName>
     // Fast path: callers like Telegram usually already provide the exact built-in tool input.
     // Executing directly avoids an extra planner-model request before the actual media tool call.
     if (toolConfig) {
-      const directInput = createLooseToolInputSchema(toolConfig).safeParse(taskContext);
+      const directInput = safeParseLooseToolInputWithDefaults(toolConfig, taskContext);
 
       if (directInput.success) {
+        normalizedContext = directInput.data;
         const execute = tool.execute as unknown as (
           input: Record<string, unknown>,
           options: unknown,
         ) => Promise<unknown>;
 
-        return await execute(directInput.data, {
+        return await execute(normalizedContext, {
           toolCallId: `media_${toolName}`,
           messages: [],
           context: undefined,
@@ -149,9 +153,7 @@ export const runBuiltInMediaTool = async <ToolName extends BuiltInMediaToolName>
     // Fallback for fuzzy task context: this intentionally uses a planner LLM to translate the
     // context into one tool invocation, so a media request may involve planner + media LLM calls.
     const result = await generateText({
-      model: createGatewayFromEnv(env)(
-        unified(normalizeGatewayModelId(settings.toolPlannerModel)),
-      ),
+      model: createGatewayFromEnv(env)(unified(normalizeGatewayModelId(settings.toolPlannerModel))),
       instructions: [
         `Call the ${toolName} tool exactly once.`,
         "Infer the tool input from the task context and the tool schema.",
@@ -183,7 +185,7 @@ export const runBuiltInMediaTool = async <ToolName extends BuiltInMediaToolName>
   } catch (error) {
     console.error("[media-tools] Built-in media tool failed", {
       toolName,
-      contextKeys: Object.keys(taskContext),
+      context: normalizedContext ?? taskContext,
       error,
     });
     throw error;
@@ -214,6 +216,6 @@ export const synthesizeVoice = async (
   extractVoiceOutput(
     await runBuiltInMediaTool(env, origin, "text_to_voice", {
       text,
-      response_format: "opus",
+      output_format: "opus",
     }),
   );

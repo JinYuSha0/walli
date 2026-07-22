@@ -385,7 +385,7 @@ export const DEFAULT_SETTINGS = {
       tags: ["speech-to-text"],
     },
     {
-      name: "openai/tts-1",
+      name: "inworld/tts-2",
       tags: ["text-to-speech"],
     },
     {

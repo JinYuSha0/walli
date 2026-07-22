@@ -6,39 +6,47 @@ export const textToVoiceTool = {
   description: "text-to-speech model, output audio url",
   invocation: {
     type: "model",
-    model: "openai/tts-1",
+    model: "inworld/tts-2",
   },
   schema: {
     fields: [
       {
         name: "text",
         type: "string",
-        description: "The text to generate audio for. Maximum length is 4096 characters.",
+        description: "The text to be synthesized into speech. Maximum input of 2,000 characters.",
         required: true,
         defaultValue: "",
       },
       {
-        name: "voice",
+        name: "voice_id",
         type: "string",
-        description: "The voice to use when generating the audio. Defaults to alloy.",
+        description: "The ID of the voice to use for synthesizing speech. Defaults to Ashley.",
         required: false,
-        defaultValue: "alloy",
+        defaultValue: "Ashley",
       },
       {
-        name: "response_format",
+        name: "output_format",
         type: "string",
         description:
-          "The output format for the audio. Supported formats are mp3, opus, wav, aac and flac.",
+          "The output format for the audio. Supported formats are mp3, opus, wav, and flac. Defaults to mp3.",
         required: false,
         defaultValue: "mp3",
       },
       {
-        name: "speed",
+        name: "temperature",
         type: "number",
         description:
-          "The speed of the generated audio. Select a value from 0.25 to 4.0. 1.0 is the default.",
+          "Determines the degree of randomness when sampling audio tokens. Defaults to 1.0.",
         required: false,
         defaultValue: "1",
+      },
+      {
+        name: "timestamp_type",
+        type: "string",
+        description:
+          'Controls timestamp metadata returned with the audio. Use "none", "word", or "character". Defaults to none.',
+        required: false,
+        defaultValue: "none",
       },
     ],
   },

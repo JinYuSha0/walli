@@ -6,10 +6,7 @@ import {
   type ToolSchemaField,
   type ToolSchemaFieldType,
 } from "../../shared/const";
-import {
-  adaptBuiltInToolModelInput,
-  adaptBuiltInToolModelOutput,
-} from "../../shared/tools";
+import { adaptBuiltInToolModelInput, adaptBuiltInToolModelOutput } from "../../shared/tools";
 
 type ChatToolRuntime = {
   AI: Ai;
@@ -74,11 +71,13 @@ const createFieldSchema = (field: ToolSchemaField) => {
 export const isValidChatToolName = (name: string) => TOOL_NAME_PATTERN.test(name);
 
 export const createToolInputSchema = (toolConfig: ToolConfig) =>
-  z.object(
-    Object.fromEntries(
-      toolConfig.schema.fields.map((field) => [field.name, createFieldSchema(field)]),
-    ),
-  ).strict();
+  z
+    .object(
+      Object.fromEntries(
+        toolConfig.schema.fields.map((field) => [field.name, createFieldSchema(field)]),
+      ),
+    )
+    .strict();
 
 export const createLooseToolInputSchema = (toolConfig: ToolConfig) =>
   z.object(
@@ -86,6 +85,9 @@ export const createLooseToolInputSchema = (toolConfig: ToolConfig) =>
       toolConfig.schema.fields.map((field) => [field.name, createFieldSchema(field)]),
     ),
   );
+
+export const safeParseLooseToolInputWithDefaults = (toolConfig: ToolConfig, input: unknown) =>
+  createLooseToolInputSchema(toolConfig).safeParse(input);
 
 const createApiInvocationInput = (toolConfig: ToolConfig, input: unknown) => {
   const schemaDefaults = Object.fromEntries(
@@ -116,10 +118,7 @@ const runConfiguredTool = async (
 
   if (toolConfig.invocation.type === "model") {
     const modelInput = adaptBuiltInToolModelInput(toolConfig.name, parsedInput);
-    const output = await runtime.AI.run(
-      toolConfig.invocation.model,
-      modelInput,
-    );
+    const output = await runtime.AI.run(toolConfig.invocation.model, modelInput);
 
     return adaptBuiltInToolModelOutput(toolConfig.name, output);
   }
@@ -127,10 +126,7 @@ const runConfiguredTool = async (
   const url = new URL(toolConfig.invocation.url);
   const apiInput = createApiInvocationInput(toolConfig, parsedInput);
   const headers = Object.fromEntries(
-    toolConfig.invocation.headers.map((header) => [
-      header.name,
-      header.defaultValue,
-    ]),
+    toolConfig.invocation.headers.map((header) => [header.name, header.defaultValue]),
   );
   const init: RequestInit = {
     method: toolConfig.invocation.method,

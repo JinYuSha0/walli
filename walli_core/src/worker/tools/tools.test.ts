@@ -21,7 +21,12 @@ import {
 } from "../lib/chat-tools.ts";
 import { normalizeGatewayModelId } from "../lib/llm";
 import { renderTelegramHtmlFromMarkdown } from "../lib/telegram-format";
-import { extractVoiceOutput, type ImageToTextContext, type VoiceToTextContext } from "./media-tools";
+import {
+  extractVoiceOutput,
+  synthesizeVoice,
+  type ImageToTextContext,
+  type VoiceToTextContext,
+} from "./media-tools";
 import { toolsRoute } from ".";
 import { getNextCronScheduledAt } from "./cron";
 
@@ -312,9 +317,10 @@ describe("chat tools", () => {
       }),
     ).toEqual({
       text: "hello",
-      voice: "alloy",
-      response_format: "mp3",
-      speed: 1,
+      voice_id: "Ashley",
+      output_format: "mp3",
+      temperature: 1,
+      timestamp_type: "none",
     });
   });
 
@@ -438,24 +444,26 @@ describe("chat tools", () => {
       tools.text_to_voice.execute?.(
         {
           text: "hello",
-          voice: "alloy",
+          voice_id: "Dennis",
         },
         executionOptions,
       ),
     ).resolves.toEqual({
       ok: true,
       input: {
+        temperature: 1,
+        timestamp_type: "none",
         text: "hello",
-        voice: "alloy",
-        response_format: "mp3",
-        speed: 1,
+        voice_id: "Dennis",
+        output_format: "mp3",
       },
     });
-    expect(aiRun).toHaveBeenLastCalledWith("openai/tts-1", {
+    expect(aiRun).toHaveBeenLastCalledWith("inworld/tts-2", {
+      temperature: 1,
+      timestamp_type: "none",
       text: "hello",
-      voice: "alloy",
-      response_format: "mp3",
-      speed: 1,
+      voice_id: "Dennis",
+      output_format: "mp3",
     });
 
     await expect(
@@ -1186,6 +1194,42 @@ describe("Telegram formatting", () => {
 });
 
 describe("telegram webhook", () => {
+  it("passes complete Inworld text_to_voice input when synthesizing Telegram voice", async () => {
+    const appKv = {
+      get: vi.fn(async () => null),
+      put: vi.fn(),
+    } as unknown as KVNamespace;
+    aiRun.mockImplementationOnce(async (_model: string, input: Record<string, unknown>) => {
+      expect(input).toEqual({
+        text: "[用标准普通话，语气亲切、自然，语速稍慢，发音清晰] voice reply",
+        voice_id: "Ashley",
+        output_format: "opus",
+        temperature: 1,
+        timestamp_type: "none",
+      });
+
+      return "data:audio/ogg;base64,AAAA";
+    });
+
+    await synthesizeVoice(
+      {
+        ...env,
+        APP_KV: appKv,
+        AI: fakeRuntime.AI,
+      } as Env,
+      "https://chat.test",
+      "voice reply",
+    );
+
+    expect(aiRun).toHaveBeenCalledWith("inworld/tts-2", {
+      text: "[用标准普通话，语气亲切、自然，语速稍慢，发音清晰] voice reply",
+      voice_id: "Ashley",
+      output_format: "opus",
+      temperature: 1,
+      timestamp_type: "none",
+    });
+  });
+
   it("extracts Cloudflare TTS result audio URLs for Telegram voice replies", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
       new Response("voice-bytes", {
