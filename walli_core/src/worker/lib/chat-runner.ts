@@ -1,4 +1,4 @@
-import { generateText, isStepCount, type ToolSet } from "ai";
+import { generateText, isStepCount, type output, type ToolSet } from "ai";
 import type { ModelMessage } from "ai";
 import { BUILT_IN_TOOLS, type Settings, type ToolConfig } from "../../shared/const";
 import { toolsRoute } from "../tools";
@@ -16,6 +16,7 @@ type RunChatOptions = {
   extraTools?: ToolSet;
   extraInstructions?: string;
   toolsEnabled?: boolean;
+  output?: output.Output;
 };
 
 const createChatInstructions = (globalPrompt: string, userInfo: unknown) => {
@@ -122,6 +123,7 @@ export const runChatCompletion = async ({
   extraTools,
   extraInstructions,
   toolsEnabled = true,
+  output,
 }: RunChatOptions) => {
   const resolvedSettings = settings ?? (await getSettings(env.APP_KV));
   const gateway = createGatewayFromEnv(env);
@@ -139,6 +141,7 @@ export const runChatCompletion = async ({
       extraInstructions,
     ),
     messages,
+    output,
     ...(toolsEnabled
       ? {
           tools: {

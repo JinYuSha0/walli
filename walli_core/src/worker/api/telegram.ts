@@ -1,11 +1,12 @@
 import { Hono } from "hono";
-import { type ModelMessage } from "ai";
+import { Output, type ModelMessage } from "ai";
 import { z } from "zod";
 import { runChatCompletion } from "../lib/chat-runner";
 import { getOrCreateClientId, getTelegramBotToken } from "./clients";
 import { getSettings } from "./settings";
 import type { AppBindings } from "./types";
 import {
+  BUILT_IN_MEDIA_TOOL_NAMES,
   describeImage,
   synthesizeVoice,
   transcribeVoice,
@@ -88,6 +89,15 @@ type TelegramFileResult = TelegramApiResult & {
 
 type TelegramVoiceOutput = VoiceOutput;
 
+const telegramReplySchema = z
+  .object({
+    type: z.enum(["text", "voice"]),
+    text: z.string().trim().min(1),
+  })
+  .strip();
+
+type TelegramReply = z.output<typeof telegramReplySchema>;
+
 type TelegramWebhookDeps = {
   sendMessage: (chatId: string, text: string) => Promise<void>;
   sendVoice: (chatId: string, voice: TelegramVoiceOutput) => Promise<void>;
@@ -97,7 +107,7 @@ type TelegramWebhookDeps = {
   transcribeVoice?: (context: VoiceToTextContext) => Promise<unknown>;
   describeImage?: (context: ImageToTextContext) => Promise<unknown>;
   synthesizeVoice?: (text: string) => Promise<TelegramVoiceOutput>;
-  runLlm: (message: TelegramMessage, messages: ModelMessage[]) => Promise<string>;
+  runLlm: (message: TelegramMessage, messages: ModelMessage[]) => Promise<TelegramReply>;
 };
 
 const stringifyChatId = (chatId: string | number) => String(chatId);
@@ -304,14 +314,21 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
         },
         messages,
         settings,
+        excludeToolNames: [...BUILT_IN_MEDIA_TOOL_NAMES],
+        output: Output.object({
+          schema: telegramReplySchema,
+          name: "telegram_reply",
+          description: "Telegram reply type and final reply content.",
+        }),
         extraInstructions: [
-          "You are replying to a Telegram message.",
-          "Use the provided text, voice transcription result, and image recognition result as the complete Telegram message context.",
-          "Return only the final reply text to send to the Telegram user.",
+          "Reply to the Telegram user using the provided message text and media analysis.",
+          'Return JSON structured output with {"type":"text"|"voice","text":"..."} after using any needed tools.',
+          "The text field must be the human-readable reply text, never an audio URL or generated media payload.",
+          "Follow the preferred reply type unless the user explicitly asks otherwise; image replies are unsupported, so explain that in text.",
         ].join("\n"),
       });
 
-      return result.text;
+      return result.output;
     },
   };
 };
@@ -337,7 +354,6 @@ export const handleTelegramWebhookUpdate = async (update: unknown, deps: Telegra
 
     return rightSize - leftSize;
   })[0];
-  const replyAsVoice = message.voice !== undefined;
 
   if (!text && !photo && !message.voice) {
     return;
@@ -345,12 +361,10 @@ export const handleTelegramWebhookUpdate = async (update: unknown, deps: Telegra
 
   await Promise.resolve(deps.markMessageRead(message)).catch(() => undefined);
 
-  await deps.sendChatAction(chatId, replyAsVoice ? "record_voice" : "typing");
+  await deps.sendChatAction(chatId, "typing");
 
   try {
-    const content: string[] = [
-      "Handle this Telegram message and send the final answer with a Telegram reply tool.",
-    ];
+    const content: string[] = [];
 
     if (text) {
       content.push(`Message text: ${text}`);
@@ -369,6 +383,7 @@ export const handleTelegramWebhookUpdate = async (update: unknown, deps: Telegra
       content.push(
         [
           "The user sent a voice message.",
+          "Preferred reply type: voice, unless the user explicitly asks for text.",
           `Voice transcription result: ${JSON.stringify(transcription)}`,
         ].join("\n"),
       );
@@ -396,15 +411,16 @@ export const handleTelegramWebhookUpdate = async (update: unknown, deps: Telegra
       );
     }
 
-    const replyText = await deps.runLlm(message, [
+    const reply = await deps.runLlm(message, [
       {
         role: "user",
         content: content.join("\n\n"),
       },
     ]);
 
-    if (replyAsVoice) {
-      const voice = await deps.synthesizeVoice?.(replyText);
+    if (reply.type === "voice") {
+      await deps.sendChatAction(chatId, "record_voice");
+      const voice = await deps.synthesizeVoice?.(reply.text);
 
       if (!voice) {
         await deps.sendMessage(chatId, "Sorry, audio replies are not supported right now.");
@@ -415,15 +431,18 @@ export const handleTelegramWebhookUpdate = async (update: unknown, deps: Telegra
       return;
     }
 
-    await deps.sendMessage(chatId, replyText);
+    await deps.sendMessage(chatId, reply.text);
   } catch (error) {
     console.error(error);
-    await deps.sendMessage(
-      chatId,
-      replyAsVoice
-        ? "Sorry, I couldn't process this audio message."
-        : "Sorry, I couldn't process this image message.",
-    );
+    let fallbackText = "Sorry, I couldn't process this message.";
+
+    if (message.voice) {
+      fallbackText = "Sorry, I couldn't process this audio message.";
+    } else if (photo) {
+      fallbackText = "Sorry, I couldn't process this image message.";
+    }
+
+    await deps.sendMessage(chatId, fallbackText);
   }
 };
 

@@ -453,13 +453,43 @@ describe("chat tools", () => {
     ).resolves.toEqual({
       ok: true,
       input: {
-        file: "https://example.com/image.png",
-        prompt: "Describe the image and extract any visible text.",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "Describe the image and extract any visible text.",
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: "https://example.com/image.png",
+                },
+              },
+            ],
+          },
+        ],
       },
     });
     expect(aiRun).toHaveBeenLastCalledWith("openai/gpt-5.4-mini", {
-      file: "https://example.com/image.png",
-      prompt: "Describe the image and extract any visible text.",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Describe the image and extract any visible text.",
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: "https://example.com/image.png",
+              },
+            },
+          ],
+        },
+      ],
     });
   });
 
@@ -931,6 +961,47 @@ describe("settings tool migration", () => {
     expect(settings.toolPlannerModel).toBe("openai/gpt-5.4-nano");
   });
 
+  it("applies built-in model input adapters to tools loaded from settings", async () => {
+    const savedSettings: Record<string, unknown> = {
+      ...DEFAULT_SETTINGS,
+      builtInTools: JSON.parse(JSON.stringify(DEFAULT_SETTINGS.builtInTools)) as unknown,
+    };
+    const appKv = {
+      get: vi.fn(async (key: string) => key === "settings" ? savedSettings : null),
+      put: vi.fn(),
+    } as unknown as KVNamespace;
+    const settings = await getSettings(appKv);
+    const tools = buildChatTools(settings.builtInTools, fakeRuntime);
+    const executionOptions = {} as Parameters<NonNullable<typeof tools.image_to_text.execute>>[1];
+
+    await tools.image_to_text.execute?.(
+      {
+        file: "https://example.com/image.png",
+      },
+      executionOptions,
+    );
+
+    expect(aiRun).toHaveBeenLastCalledWith("openai/gpt-5.4-mini", {
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Describe the image and extract any visible text.",
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: "https://example.com/image.png",
+              },
+            },
+          ],
+        },
+      ],
+    });
+  });
+
   it("resets all settings KV entries", async () => {
     const deletedKeys: string[] = [];
     const appKv = {
@@ -1053,7 +1124,10 @@ describe("telegram webhook", () => {
     const runLlm = vi.fn(async (_message, messages) => {
       calls.push("llm");
       expect(JSON.stringify(messages)).toContain("Message text: hello");
-      return "hello back";
+      return {
+        type: "text" as const,
+        text: "hello back",
+      };
     });
     const getFileUrl = vi.fn();
     const markMessageRead = vi.fn();
@@ -1103,6 +1177,10 @@ describe("telegram webhook", () => {
     });
     const runLlm = vi.fn(async () => {
       calls.push("llm");
+      return {
+        type: "text" as const,
+        text: "ok",
+      };
     });
 
     await handleTelegramWebhookUpdate(
@@ -1136,7 +1214,61 @@ describe("telegram webhook", () => {
     );
   });
 
-  it("transcribes voice files before one LLM response and sends voice", async () => {
+  it("sends voice when the LLM chooses a voice reply", async () => {
+    const calls: string[] = [];
+    const sendMessage = vi.fn();
+    const sendVoice = vi.fn();
+    const sendChatAction = vi.fn(async (_chatId: string, action: "typing" | "record_voice") => {
+      calls.push(`action:${action}`);
+    });
+    const synthesizeVoice = vi.fn(async (text: string) => {
+      calls.push("synthesize");
+      expect(text).toBe("voice reply");
+      return {
+        type: "blob" as const,
+        voice: new Blob(["voice"]),
+        filename: "reply.ogg",
+      };
+    });
+    const runLlm = vi.fn(async (_message, messages) => {
+      calls.push("llm");
+      expect(JSON.stringify(messages)).toContain("Message text: say it as voice");
+      return {
+        type: "voice" as const,
+        text: "voice reply",
+      };
+    });
+    const getFileUrl = vi.fn();
+    const markMessageRead = vi.fn();
+
+    await handleTelegramWebhookUpdate(
+      {
+        update_id: 1,
+        message: {
+          message_id: 10,
+          text: "say it as voice",
+          chat: {
+            id: 123,
+          },
+        },
+      },
+      {
+        sendMessage,
+        sendVoice,
+        sendChatAction,
+        getFileUrl,
+        markMessageRead,
+        synthesizeVoice,
+        runLlm,
+      },
+    );
+
+    expect(calls).toEqual(["action:typing", "llm", "action:record_voice", "synthesize"]);
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(sendVoice).toHaveBeenCalledOnce();
+  });
+
+  it("transcribes voice files before one LLM response and sends the selected text reply", async () => {
     const calls: string[] = [];
     const sendMessage = vi.fn();
     const sendVoice = vi.fn();
@@ -1174,7 +1306,10 @@ describe("telegram webhook", () => {
       expect(serializedMessages).toContain("Voice transcription result");
       expect(serializedMessages).toContain("你好");
       expect(serializedMessages).not.toContain("api.telegram.org/file/bot");
-      return "voice reply";
+      return {
+        type: "text" as const,
+        text: "text reply",
+      };
     });
 
     await handleTelegramWebhookUpdate(
@@ -1203,9 +1338,10 @@ describe("telegram webhook", () => {
       },
     );
 
-    expect(calls).toEqual(["action:record_voice", "file", "transcribe", "llm", "synthesize"]);
-    expect(sendMessage).not.toHaveBeenCalled();
-    expect(sendVoice).toHaveBeenCalledOnce();
+    expect(calls).toEqual(["action:typing", "file", "transcribe", "llm"]);
+    expect(synthesizeVoice).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith("123", "text reply");
+    expect(sendVoice).not.toHaveBeenCalled();
   });
 
   it("describes image files before one LLM response and sends text", async () => {
@@ -1241,7 +1377,10 @@ describe("telegram webhook", () => {
       expect(serializedMessages).toContain("Image recognition result");
       expect(serializedMessages).toContain("A receipt image");
       expect(serializedMessages).not.toContain("api.telegram.org/file/bot");
-      return "image reply";
+      return {
+        type: "text" as const,
+        text: "image reply",
+      };
     });
 
     await handleTelegramWebhookUpdate(

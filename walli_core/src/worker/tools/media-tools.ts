@@ -37,6 +37,12 @@ export type BuiltInMediaToolContextMap = {
 
 export type BuiltInMediaToolName = keyof BuiltInMediaToolContextMap;
 
+export const BUILT_IN_MEDIA_TOOL_NAMES = [
+  "voice_to_text",
+  "image_to_text",
+  "text_to_voice",
+] satisfies BuiltInMediaToolName[];
+
 export const extractVoiceOutput = async (result: unknown): Promise<VoiceOutput> => {
   if (typeof result === "string") {
     if (result.startsWith("http://") || result.startsWith("https://")) {

@@ -1,4 +1,4 @@
-import { imageToTextTool } from "./image-to-text";
+import { createImageToTextModelInput, imageToTextTool } from "./image-to-text";
 import { scheduledTaskTool } from "./scheduled-task";
 import { textToVoiceTool } from "./text-to-voice";
 import { timestampTool } from "./timestamp";
@@ -12,3 +12,10 @@ export const BUILT_IN_TOOLS = [
   textToVoiceTool,
   imageToTextTool,
 ] satisfies ToolConfig[];
+
+// Built-in tools should keep their public schema as the fastest direct-call input.
+// Add an adapter here only when the model provider expects a different payload shape.
+// This lets callers pass schema-valid input directly and avoids an extra planner LLM call.
+export const BUILT_IN_TOOL_MODEL_INPUT_ADAPTERS = {
+  [imageToTextTool.name]: createImageToTextModelInput,
+} satisfies Record<string, (input: Record<string, unknown>) => Record<string, unknown>>;

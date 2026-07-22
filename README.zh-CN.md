@@ -151,6 +151,8 @@ https://your-domain.com/api/auth/callback/google
 
 如果入参是模糊任务上下文，而不是精确的工具入参，helper 会回退到工具调度模型。在这个 fallback 路径中，一次媒体请求可能包含多次 LLM 调用：先由调度模型把上下文转换为一次工具调用，再执行真正的媒体模型调用，例如 speech-to-text、image-to-text 或 text-to-speech。
 
+内置工具的 schema 应优先面向直接调用者设计。如果底层模型需要不同的 payload 结构，可以修改 `walli_core/src/shared/tools/index.ts` 里的 `BUILT_IN_TOOL_MODEL_INPUT_ADAPTERS`。例如 `image_to_text` 对外接受符合 schema 的 `{ file, prompt }`，Telegram 可以跳过调度模型直接执行，然后由 adapter 转成模型需要的 `messages` 结构。
+
 ## API 接口
 
 - `GET /api/`：服务元信息

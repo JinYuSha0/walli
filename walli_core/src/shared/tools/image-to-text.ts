@@ -27,3 +27,34 @@ export const imageToTextTool = {
     ],
   },
 } satisfies ToolConfig;
+
+// Keep the tool schema optimized for callers, then adapt it to the model payload.
+// Schema-valid input can run immediately; fuzzy context still falls back to the planner LLM.
+export const createImageToTextModelInput = (input: Record<string, unknown>) => {
+  const file = input.file;
+  const prompt = input.prompt;
+
+  if (typeof file !== "string") {
+    return input;
+  }
+
+  return {
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: typeof prompt === "string" ? prompt : "",
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: file,
+            },
+          },
+        ],
+      },
+    ],
+  };
+};

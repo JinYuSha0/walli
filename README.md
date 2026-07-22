@@ -151,6 +151,8 @@ Built-in media helpers such as voice transcription, image description, and voice
 
 If the input is fuzzy task context instead of exact tool input, the helper falls back to the tool planner model. In that fallback path, a single media request can involve multiple LLM calls: one planner call to translate the context into a tool invocation, plus the actual media model call such as speech-to-text, image-to-text, or text-to-speech.
 
+For built-in tools, keep the tool schema optimized for direct callers. If the provider model needs a different payload shape, add or update `BUILT_IN_TOOL_MODEL_INPUT_ADAPTERS` in `walli_core/src/shared/tools/index.ts`. For example, `image_to_text` accepts the schema input `{ file, prompt }` so Telegram can skip the planner call, then the adapter converts it to the model's `messages` payload.
+
 ## API Surface
 
 - `GET /api/`: service metadata
