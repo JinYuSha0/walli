@@ -20,6 +20,7 @@ import {
   isValidChatToolName,
 } from "../lib/chat-tools.ts";
 import { normalizeGatewayModelId } from "../lib/llm";
+import { renderTelegramHtmlFromMarkdown } from "../lib/telegram-format";
 import { extractVoiceOutput, type ImageToTextContext, type VoiceToTextContext } from "./media-tools";
 import { toolsRoute } from ".";
 import { getNextCronScheduledAt } from "./cron";
@@ -1044,6 +1045,41 @@ describe("settings tool migration", () => {
         "settings:system-prompt",
         "settings:usage-limits",
       ]),
+    );
+  });
+});
+
+describe("Telegram formatting", () => {
+  it("renders common Markdown as Telegram HTML", () => {
+    expect(
+      renderTelegramHtmlFromMarkdown(
+        [
+          "## Title",
+          "",
+          "**bold** and _italic_ with `code`.",
+          "",
+          "- first",
+          "- [x] done",
+          "",
+          "[OpenAI](https://openai.com)",
+          "",
+          "```ts",
+          "const value = 1 < 2;",
+          "```",
+        ].join("\n"),
+      ),
+    ).toBe(
+      [
+        "<b>Title</b>",
+        "",
+        "<b>bold</b> and <i>italic</i> with <code>code</code>.",
+        "",
+        "- first\n- [x] done",
+        "",
+        '<a href="https://openai.com">OpenAI</a>',
+        "",
+        "<pre><code>const value = 1 &lt; 2;</code></pre>",
+      ].join("\n"),
     );
   });
 });

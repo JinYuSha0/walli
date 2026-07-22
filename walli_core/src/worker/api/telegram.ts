@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { Output, type ModelMessage } from "ai";
 import { z } from "zod";
 import { runChatCompletion } from "../lib/chat-runner";
+import { renderTelegramHtmlFromMarkdown } from "../lib/telegram-format";
 import { getOrCreateClientId, getTelegramBotToken } from "./clients";
 import { getSettings } from "./settings";
 import type { AppBindings } from "./types";
@@ -259,10 +260,23 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
   }
 
   const sendMessage: TelegramWebhookDeps["sendMessage"] = async (chatId, text) => {
-    await postTelegramApi(token, "sendMessage", {
+    const fallbackPayload = {
       chat_id: chatId,
       text: text.slice(0, 4096),
-    });
+    };
+
+    try {
+      await postTelegramApi(token, "sendMessage", {
+        ...fallbackPayload,
+        text: renderTelegramHtmlFromMarkdown(text).slice(0, 4096),
+        parse_mode: "HTML",
+        link_preview_options: {
+          is_disabled: true,
+        },
+      });
+    } catch {
+      await postTelegramApi(token, "sendMessage", fallbackPayload);
+    }
   };
   const sendVoice: TelegramWebhookDeps["sendVoice"] = async (chatId, voice) => {
     await sendTelegramVoice(token, chatId, voice);
