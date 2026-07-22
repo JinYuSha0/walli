@@ -1,7 +1,10 @@
 import { hc, parseResponse } from "hono/client";
 import type { AppType } from "../worker";
 import type {
+  ClientAuthSettingsPatch,
+  ClientBasicSettingsPatch,
   ClientConfigResponse,
+  ClientCorsSettingsPatch,
   ClientDialogSettingsPatch,
   ClientPlatform,
   ClientUsageLimitPatch,
@@ -11,6 +14,12 @@ import type { SettingsPatch, SettingsResponse } from "../shared/const";
 
 export type {
   ClientConfigResponse,
+  ClientAuthSettings,
+  ClientAuthSettingsPatch,
+  ClientBasicSettings,
+  ClientBasicSettingsPatch,
+  ClientCorsSettings,
+  ClientCorsSettingsPatch,
   ClientDialogSettings,
   ClientDialogSettingsPatch,
   ClientPlatform,
@@ -64,34 +73,70 @@ export const getClientConfig = async (
 ): Promise<ClientConfigResponse> =>
   parseResponse(apiClient.api.admin.clients[":platform"].$get({ param: { platform } }));
 
-export const updateClientDialogSettings = async (
+export const resetClientSettings = async (
   platform: ClientPlatform,
-  json: ClientDialogSettingsPatch,
 ): Promise<ClientConfigResponse> =>
   parseResponse(
-    apiClient.api.admin.clients[":platform"].$patch({
+    apiClient.api.admin.clients[":platform"]["reset-settings"].$post({
+      param: { platform },
+    }),
+  );
+
+const patchClientConfig = async (
+  platform: ClientPlatform,
+  json:
+    | ClientAuthSettingsPatch
+    | ClientBasicSettingsPatch
+    | ClientCorsSettingsPatch
+    | ClientDialogSettingsPatch
+    | ClientUsageLimitPatch
+    | TelegramSettingsPatch,
+): Promise<ClientConfigResponse> => {
+  const patchClient = apiClient.api.admin.clients[":platform"].$patch as (
+    args: {
+      param: { platform: ClientPlatform };
+      json: typeof json;
+    },
+  ) => ReturnType<typeof apiClient.api.admin.clients[":platform"]["$patch"]>;
+
+  return parseResponse(
+    patchClient({
       param: { platform },
       json,
     }),
   );
+};
+
+export const updateClientBasicSettings = async (
+  platform: ClientPlatform,
+  json: ClientBasicSettingsPatch,
+): Promise<ClientConfigResponse> =>
+  patchClientConfig(platform, json);
+
+export const updateClientDialogSettings = async (
+  platform: ClientPlatform,
+  json: ClientDialogSettingsPatch,
+): Promise<ClientConfigResponse> =>
+  patchClientConfig(platform, json);
+
+export const updateClientAuthSettings = async (
+  platform: ClientPlatform,
+  json: ClientAuthSettingsPatch,
+): Promise<ClientConfigResponse> =>
+  patchClientConfig(platform, json);
+
+export const updateClientCorsSettings = async (
+  json: ClientCorsSettingsPatch,
+): Promise<ClientConfigResponse> =>
+  patchClientConfig("web", json);
 
 export const updateClientUsageLimit = async (
   platform: ClientPlatform,
   json: ClientUsageLimitPatch,
 ): Promise<ClientConfigResponse> =>
-  parseResponse(
-    apiClient.api.admin.clients[":platform"].$patch({
-      param: { platform },
-      json,
-    }),
-  );
+  patchClientConfig(platform, json);
 
 export const updateTelegramSettings = async (
   json: TelegramSettingsPatch,
 ): Promise<ClientConfigResponse> =>
-  parseResponse(
-    apiClient.api.admin.clients[":platform"].$patch({
-      param: { platform: "telegram" },
-      json,
-    }),
-  );
+  patchClientConfig("telegram", json);

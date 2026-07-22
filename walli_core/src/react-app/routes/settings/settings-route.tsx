@@ -5,8 +5,6 @@ import { getSettings } from "@/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RouteLoading } from "../route-loading";
-import { AuthSettingsTab } from "./components/auth-settings-tab";
-import { CorsSettingsTab } from "./components/cors-settings-tab";
 import { ModelSettingsTab } from "./components/model-settings-tab";
 import { SystemPromptSettingsTab } from "./components/system-prompt-settings-tab";
 import { ToolSettingsTab } from "./components/tool-settings-tab";
@@ -17,8 +15,6 @@ const settingsTabs = [
   "model",
   "tool",
   "usage",
-  "auth",
-  "cors",
   "system-prompt",
 ] as const;
 
@@ -82,12 +78,6 @@ export function SettingsRoute() {
               <TabsTrigger value="usage">
                 {t("usageSettingsTab")}
               </TabsTrigger>
-              <TabsTrigger value="auth">
-                {t("authSettingsTab")}
-              </TabsTrigger>
-              <TabsTrigger value="cors">
-                {t("corsSettingsTab")}
-              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="basic">
@@ -104,14 +94,6 @@ export function SettingsRoute() {
 
             <TabsContent value="usage">
               <UsageSettingsTab settings={data} />
-            </TabsContent>
-
-            <TabsContent value="auth">
-              <AuthSettingsTab settings={data} />
-            </TabsContent>
-
-            <TabsContent value="cors">
-              <CorsSettingsTab settings={data} />
             </TabsContent>
 
           </Tabs>

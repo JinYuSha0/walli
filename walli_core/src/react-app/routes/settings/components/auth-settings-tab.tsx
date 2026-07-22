@@ -1,19 +1,19 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { updateSettings } from "@/api";
+import type { ClientAuthSettings } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import type { Settings } from "../../../../shared/const";
 
-type AuthSettingsForm = Pick<Settings, "authEnabled" | "authEndpointUrl">;
+type AuthSettingsForm = ClientAuthSettings;
 
 type AuthSettingsTabProps = {
-  settings: Settings;
+  settings: ClientAuthSettings;
+  onSave: (values: ClientAuthSettings) => Promise<ClientAuthSettings>;
 };
 
 const createNodeExample = (url: string) => {
@@ -56,9 +56,8 @@ const isValidHttpUrl = (value: string) => {
   }
 };
 
-export function AuthSettingsTab({ settings }: AuthSettingsTabProps) {
+export function AuthSettingsTab({ settings, onSave }: AuthSettingsTabProps) {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
   const form = useForm<AuthSettingsForm>({
     defaultValues: {
       authEnabled: settings.authEnabled,
@@ -67,10 +66,9 @@ export function AuthSettingsTab({ settings }: AuthSettingsTabProps) {
   });
   const authEnabled = form.watch("authEnabled");
   const authEndpointUrl = form.watch("authEndpointUrl");
-  const updateSettingsMutation = useMutation({
-    mutationFn: updateSettings,
+  const saveMutation = useMutation({
+    mutationFn: onSave,
     onSuccess: (values) => {
-      queryClient.setQueryData(["settings"], values);
       form.reset({
         authEnabled: values.authEnabled,
         authEndpointUrl: values.authEndpointUrl,
@@ -87,7 +85,7 @@ export function AuthSettingsTab({ settings }: AuthSettingsTabProps) {
   }, [form, settings.authEnabled, settings.authEndpointUrl]);
 
   const onSubmit = (values: AuthSettingsForm) => {
-    updateSettingsMutation.mutate({
+    saveMutation.mutate({
       authEnabled: values.authEnabled,
       authEndpointUrl: values.authEndpointUrl.trim(),
     });
@@ -112,7 +110,7 @@ export function AuthSettingsTab({ settings }: AuthSettingsTabProps) {
               <Switch
                 id="auth-enabled"
                 checked={field.value}
-                disabled={updateSettingsMutation.isPending}
+                disabled={saveMutation.isPending}
                 onCheckedChange={field.onChange}
               />
             </div>
@@ -148,7 +146,7 @@ export function AuthSettingsTab({ settings }: AuthSettingsTabProps) {
               <Input
                 id="auth-endpoint-url"
                 aria-invalid={fieldState.invalid}
-                disabled={updateSettingsMutation.isPending}
+                disabled={saveMutation.isPending}
                 placeholder={t("authSettingsEndpointUrlPlaceholder")}
                 {...field}
               />
@@ -177,7 +175,7 @@ export function AuthSettingsTab({ settings }: AuthSettingsTabProps) {
       </section>
 
       <div className="flex justify-end gap-2 border-t border-border pt-8">
-        <Button type="submit" disabled={updateSettingsMutation.isPending}>
+        <Button type="submit" disabled={saveMutation.isPending}>
           {t("authSettingsSave")}
         </Button>
       </div>

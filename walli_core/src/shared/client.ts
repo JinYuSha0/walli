@@ -6,6 +6,20 @@ export type ClientPlatform = (typeof CLIENT_PLATFORMS)[number];
 
 export const clientPlatformSchema = z.enum(CLIENT_PLATFORMS);
 
+export const clientBasicSettingsSchema = z
+  .object({
+    enabled: z.boolean(),
+    additionalSystemPrompt: z.string(),
+  })
+  .strict();
+
+export const clientBasicSettingsPatchSchema = clientBasicSettingsSchema
+  .partial()
+  .refine(
+    (settings) => Object.keys(settings).length > 0,
+    "At least one client basic setting is required",
+  );
+
 export const clientDialogSettingsSchema = z
   .object({
     dialogSystemPrompt: z.string(),
@@ -38,6 +52,33 @@ export const clientUsageLimitPatchSchema = clientUsageLimitSchema
   .refine(
     (settings) => Object.keys(settings).length > 0,
     "At least one client usage limit setting is required",
+  );
+
+export const clientAuthSettingsSchema = z
+  .object({
+    authEnabled: z.boolean(),
+    authEndpointUrl: z.string(),
+  })
+  .strict();
+
+export const clientAuthSettingsPatchSchema = clientAuthSettingsSchema
+  .partial()
+  .refine(
+    (settings) => Object.keys(settings).length > 0,
+    "At least one client auth setting is required",
+  );
+
+export const clientCorsSettingsSchema = z
+  .object({
+    corsAllowedOrigins: z.array(z.string()),
+  })
+  .strict();
+
+export const clientCorsSettingsPatchSchema = clientCorsSettingsSchema
+  .partial()
+  .refine(
+    (settings) => Object.keys(settings).length > 0,
+    "At least one client CORS setting is required",
   );
 
 export const telegramSettingsSchema = z
@@ -87,6 +128,8 @@ const baseClientConfigResponseSchema = z
   .object({
     platform: clientPlatformSchema,
     clientId: z.string(),
+    basicSettings: clientBasicSettingsSchema,
+    authSettings: clientAuthSettingsSchema,
     usageLimit: clientUsageLimitSchema,
   })
   .strict();
@@ -97,14 +140,27 @@ export const telegramClientConfigResponseSchema = baseClientConfigResponseSchema
 });
 
 export const dialogClientConfigResponseSchema = baseClientConfigResponseSchema.extend({
-  platform: z.enum(["web", "react-native", "flutter"]),
+  platform: z.enum(["react-native", "flutter"]),
   dialogSettings: clientDialogSettingsSchema,
+});
+
+export const webClientConfigResponseSchema = baseClientConfigResponseSchema.extend({
+  platform: z.literal("web"),
+  dialogSettings: clientDialogSettingsSchema,
+  corsSettings: clientCorsSettingsSchema,
 });
 
 export const clientConfigResponseSchema = z.union([
   telegramClientConfigResponseSchema,
+  webClientConfigResponseSchema,
   dialogClientConfigResponseSchema,
 ]);
+
+export type ClientBasicSettings = z.output<typeof clientBasicSettingsSchema>;
+
+export type ClientBasicSettingsPatch = z.output<
+  typeof clientBasicSettingsPatchSchema
+>;
 
 export type ClientDialogSettings = z.output<typeof clientDialogSettingsSchema>;
 
@@ -115,6 +171,18 @@ export type ClientDialogSettingsPatch = z.output<
 export type ClientUsageLimit = z.output<typeof clientUsageLimitSchema>;
 
 export type ClientUsageLimitPatch = z.output<typeof clientUsageLimitPatchSchema>;
+
+export type ClientAuthSettings = z.output<typeof clientAuthSettingsSchema>;
+
+export type ClientAuthSettingsPatch = z.output<
+  typeof clientAuthSettingsPatchSchema
+>;
+
+export type ClientCorsSettings = z.output<typeof clientCorsSettingsSchema>;
+
+export type ClientCorsSettingsPatch = z.output<
+  typeof clientCorsSettingsPatchSchema
+>;
 
 export type TelegramSettingsPatch = z.output<typeof telegramSettingsPatchSchema>;
 

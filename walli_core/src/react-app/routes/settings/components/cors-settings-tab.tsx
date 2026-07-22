@@ -1,14 +1,13 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { useEffect } from "react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { updateSettings } from "@/api";
+import type { ClientCorsSettings } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { Settings } from "../../../../shared/const";
 
 type CorsSettingsForm = {
   corsAllowedOrigins: Array<{
@@ -17,7 +16,8 @@ type CorsSettingsForm = {
 };
 
 type CorsSettingsTabProps = {
-  settings: Settings;
+  settings: ClientCorsSettings;
+  onSave: (values: ClientCorsSettings) => Promise<ClientCorsSettings>;
 };
 
 const toFormValues = (origins: string[]): CorsSettingsForm => ({
@@ -43,9 +43,8 @@ const isValidOriginUrl = (value: string) => {
   }
 };
 
-export function CorsSettingsTab({ settings }: CorsSettingsTabProps) {
+export function CorsSettingsTab({ settings, onSave }: CorsSettingsTabProps) {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
   const form = useForm<CorsSettingsForm>({
     defaultValues: toFormValues(settings.corsAllowedOrigins),
   });
@@ -53,10 +52,9 @@ export function CorsSettingsTab({ settings }: CorsSettingsTabProps) {
     control: form.control,
     name: "corsAllowedOrigins",
   });
-  const updateSettingsMutation = useMutation({
-    mutationFn: updateSettings,
+  const saveMutation = useMutation({
+    mutationFn: onSave,
     onSuccess: (values) => {
-      queryClient.setQueryData(["settings"], values);
       form.reset(toFormValues(values.corsAllowedOrigins));
       toast.success(t("corsSettingsSaveSuccess"));
     },
@@ -67,7 +65,7 @@ export function CorsSettingsTab({ settings }: CorsSettingsTabProps) {
   }, [form, settings.corsAllowedOrigins]);
 
   const onSubmit = (values: CorsSettingsForm) => {
-    updateSettingsMutation.mutate({
+    saveMutation.mutate({
       corsAllowedOrigins: values.corsAllowedOrigins
         .map((origin) => origin.url.trim())
         .filter((url) => url.length > 0),
@@ -88,7 +86,7 @@ export function CorsSettingsTab({ settings }: CorsSettingsTabProps) {
             type="button"
             variant="outline"
             onClick={() => append({ url: "" })}
-            disabled={updateSettingsMutation.isPending}
+            disabled={saveMutation.isPending}
           >
             <Plus />
             {t("corsSettingsAddOrigin")}
@@ -117,7 +115,7 @@ export function CorsSettingsTab({ settings }: CorsSettingsTabProps) {
                       <Input
                         id={`cors-origin-${field.id}`}
                         aria-invalid={fieldState.invalid}
-                        disabled={updateSettingsMutation.isPending}
+                        disabled={saveMutation.isPending}
                         placeholder={t("corsSettingsOriginUrlPlaceholder")}
                         {...urlField}
                       />
@@ -135,7 +133,7 @@ export function CorsSettingsTab({ settings }: CorsSettingsTabProps) {
                   size="icon"
                   aria-label={t("corsSettingsRemoveOrigin")}
                   onClick={() => remove(index)}
-                  disabled={updateSettingsMutation.isPending}
+                  disabled={saveMutation.isPending}
                 >
                   <Trash2 />
                 </Button>
@@ -157,7 +155,7 @@ export function CorsSettingsTab({ settings }: CorsSettingsTabProps) {
       </section>
 
       <div className="flex justify-end gap-2 border-t border-border pt-8">
-        <Button type="submit" disabled={updateSettingsMutation.isPending}>
+        <Button type="submit" disabled={saveMutation.isPending}>
           {t("corsSettingsSave")}
         </Button>
       </div>

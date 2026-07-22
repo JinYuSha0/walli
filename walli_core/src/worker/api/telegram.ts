@@ -3,7 +3,7 @@ import { Output, type ModelMessage } from "ai";
 import { z } from "zod";
 import { runChatCompletion } from "../lib/chat-runner";
 import { renderTelegramHtmlFromMarkdown } from "../lib/telegram-format";
-import { getOrCreateClientId, getTelegramBotToken } from "./clients";
+import { getClientBasicSettings, getOrCreateClientId, getTelegramBotToken } from "./clients";
 import { getSettings } from "./settings";
 import type { AppBindings } from "./types";
 import {
@@ -337,6 +337,7 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
         .filter(Boolean)
         .join(" ");
       const settings = await getSettings(env.APP_KV);
+      const basicSettings = await getClientBasicSettings(env.APP_KV, "telegram");
       const result = await runChatCompletion({
         env,
         origin,
@@ -358,11 +359,15 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
           description: "Telegram reply type and final reply content.",
         }),
         extraInstructions: [
+          basicSettings.additionalSystemPrompt,
           "Reply to the Telegram user using the provided message text and media analysis.",
           'Return JSON structured output with {"type":"text"|"voice","text":"..."} after using any needed tools.',
           "The text field must be the human-readable reply text, never an audio URL or generated media payload.",
           "Follow the preferred reply type unless the user explicitly asks otherwise; image replies are unsupported, so explain that in text.",
-        ].join("\n"),
+        ]
+          .map((instruction) => instruction.trim())
+          .filter((instruction) => instruction.length > 0)
+          .join("\n\n"),
       });
 
       return result.output;
@@ -486,6 +491,25 @@ const hasValidTelegramWebhookSecret = (request: Request, secret: string) => {
   return request.headers.get("x-telegram-bot-api-secret-token") === secret;
 };
 
+const replyTelegramText = async (token: string, update: unknown, text: string) => {
+  const result = telegramUpdateSchema.safeParse(update);
+
+  if (!result.success) {
+    return;
+  }
+
+  const chatId = result.data.message?.chat.id;
+
+  if (chatId === undefined) {
+    return;
+  }
+
+  await postTelegramApi(token, "sendMessage", {
+    chat_id: stringifyChatId(chatId),
+    text,
+  });
+};
+
 export const telegramRoute = new Hono<AppBindings>()
   .get("/api/telegram/file/*", async (c) => {
     const fileId = c.req.query("fileId");
@@ -539,7 +563,9 @@ export const telegramRoute = new Hono<AppBindings>()
       return c.json({ error: "Forbidden" }, 403);
     }
 
-    if (!(await getTelegramBotToken(c.env.APP_KV, c.env))) {
+    const token = await getTelegramBotToken(c.env.APP_KV, c.env);
+
+    if (!token) {
       return c.json(
         {
           error: "Telegram bot token is not configured",
@@ -549,6 +575,14 @@ export const telegramRoute = new Hono<AppBindings>()
     }
 
     const update = await c.req.json().catch(() => null);
+    const basicSettings = await getClientBasicSettings(c.env.APP_KV, "telegram");
+
+    if (!basicSettings.enabled) {
+      await replyTelegramText(token, update, "Not enabled");
+
+      return c.json({ ok: true });
+    }
+
     const origin = new URL(c.req.url).origin;
 
     c.executionCtx.waitUntil(

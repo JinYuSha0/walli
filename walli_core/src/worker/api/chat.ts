@@ -5,6 +5,12 @@ import { isStepCount, streamText } from "ai";
 import { z } from "zod";
 import type { ModelMessage } from "ai";
 import { hasAdminRole } from "./auth";
+import {
+  getClientAuthSettings,
+  getClientBasicSettings,
+  getClientPlatformFromClientId,
+  getWebCorsSettings,
+} from "./clients";
 import type { AppBindings } from "./types";
 import { getSettings } from "./settings";
 import { errorResponseSchema, parseResponse } from "./validation";
@@ -62,6 +68,12 @@ const serializeError = (error: unknown) => {
 
 const stringifySseData = (data: unknown) => JSON.stringify(data);
 
+const joinInstructions = (...parts: string[]) =>
+  parts
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .join("\n\n");
+
 const getUserInfoFromAuthBody = (body: unknown) => {
   if (typeof body !== "object" || body === null) {
     return undefined;
@@ -103,14 +115,14 @@ const createAuthenticatedUserInfo = (userInfo: unknown, fallbackUserId: string) 
 };
 
 const verifyChatAuth = async (
-  settings: Awaited<ReturnType<typeof getSettings>>,
+  authSettings: Awaited<ReturnType<typeof getClientAuthSettings>>,
   credentials: {
     appId?: string;
     userId?: string;
     token?: string;
   },
 ) => {
-  if (!settings.authEnabled) {
+  if (!authSettings.authEnabled) {
     return {
       authorized: true,
       userInfo: undefined,
@@ -118,7 +130,7 @@ const verifyChatAuth = async (
   }
 
   if (
-    !settings.authEndpointUrl.trim() ||
+    !authSettings.authEndpointUrl.trim() ||
     !credentials.appId?.trim() ||
     !credentials.userId?.trim() ||
     !credentials.token?.trim()
@@ -130,7 +142,7 @@ const verifyChatAuth = async (
   }
 
   try {
-    const response = await fetch(settings.authEndpointUrl, {
+    const response = await fetch(authSettings.authEndpointUrl, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -164,7 +176,12 @@ const verifyChatAuth = async (
   }
 };
 
-const streamChat = async (c: Context<AppBindings>, body: ParsedChatRequest, userInfo: unknown) => {
+const streamChat = async (
+  c: Context<AppBindings>,
+  body: ParsedChatRequest,
+  userInfo: unknown,
+  additionalSystemPrompt = "",
+) => {
   const settings = await getSettings(c.env.APP_KV);
   const gateway = createGateway(c);
   const origin = new URL(c.req.url).origin;
@@ -176,7 +193,10 @@ const streamChat = async (c: Context<AppBindings>, body: ParsedChatRequest, user
       let fullContent = "";
       const result = streamText({
         model: gateway(unified(normalizeGatewayModelId(settings.primaryModel))),
-        instructions: createChatRunnerInstructions(settings.globalPrompt, userInfo),
+        instructions: createChatRunnerInstructions(
+          joinInstructions(settings.globalPrompt, additionalSystemPrompt),
+          userInfo,
+        ),
         messages: body.messages as ModelMessage[],
         tools,
         toolChoice: "auto",
@@ -289,7 +309,34 @@ const requireAdmin: MiddlewareHandler<AppBindings> = async (c, next) => {
   await next();
 };
 
+const handleChatCors: MiddlewareHandler<AppBindings> = async (c, next) => {
+  const origin = c.req.header("origin");
+
+  if (!origin) {
+    await next();
+    return;
+  }
+
+  const { corsAllowedOrigins } = await getWebCorsSettings(c.env.APP_KV);
+  const isAllowedOrigin = corsAllowedOrigins.includes(origin);
+
+  if (isAllowedOrigin) {
+    c.header("Access-Control-Allow-Origin", origin);
+    c.header("Access-Control-Allow-Headers", "content-type, authorization");
+    c.header("Access-Control-Allow-Methods", "POST, OPTIONS");
+    c.header("Access-Control-Allow-Credentials", "true");
+    c.header("Vary", "Origin");
+  }
+
+  if (c.req.method === "OPTIONS") {
+    return c.body(null, isAllowedOrigin ? 204 : 403);
+  }
+
+  await next();
+};
+
 export const chatRoute = new Hono<AppBindings>()
+  .use("/api/chat", handleChatCors)
   .post("/api/chat", async (c) => {
     const bodyResult = chatRequestSchema.safeParse(await c.req.json().catch(() => null));
 
@@ -303,9 +350,21 @@ export const chatRoute = new Hono<AppBindings>()
       );
     }
 
-    const settings = await getSettings(c.env.APP_KV);
+    const platform = getClientPlatformFromClientId(bodyResult.data.appId);
 
-    if (!settings.authEnabled) {
+    if (!platform) {
+      return c.json({ error: "Invalid appId" }, 403);
+    }
+
+    const basicSettings = await getClientBasicSettings(c.env.APP_KV, platform);
+
+    if (!basicSettings.enabled) {
+      return c.json({ error: "Client disabled" }, 403);
+    }
+
+    const authSettings = await getClientAuthSettings(c.env.APP_KV, platform);
+
+    if (!authSettings.authEnabled) {
       return c.json(
         {
           error: "Auth disabled",
@@ -315,7 +374,7 @@ export const chatRoute = new Hono<AppBindings>()
       );
     }
 
-    const authResult = await verifyChatAuth(settings, {
+    const authResult = await verifyChatAuth(authSettings, {
       appId: bodyResult.data.appId,
       userId: bodyResult.data.userId,
       token: bodyResult.data.token,
@@ -329,6 +388,7 @@ export const chatRoute = new Hono<AppBindings>()
       c,
       bodyResult.data,
       createAuthenticatedUserInfo(authResult.userInfo, bodyResult.data.userId),
+      basicSettings.additionalSystemPrompt,
     );
   })
   .use("/api/internal/chat", requireAdmin)
