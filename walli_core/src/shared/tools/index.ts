@@ -1,4 +1,8 @@
-import { createImageToTextModelInput, imageToTextTool } from "./image-to-text";
+import {
+  createImageToTextModelInput,
+  createImageToTextModelOutput,
+  imageToTextTool,
+} from "./image-to-text";
 import { scheduledTaskTool } from "./scheduled-task";
 import { textToVoiceTool } from "./text-to-voice";
 import { timestampTool } from "./timestamp";
@@ -19,3 +23,15 @@ export const BUILT_IN_TOOLS = [
 export const BUILT_IN_TOOL_MODEL_INPUT_ADAPTERS = {
   [imageToTextTool.name]: createImageToTextModelInput,
 } satisfies Record<string, (input: Record<string, unknown>) => Record<string, unknown>>;
+
+export const BUILT_IN_TOOL_MODEL_OUTPUT_ADAPTERS = {
+  [imageToTextTool.name]: createImageToTextModelOutput,
+} satisfies Record<string, (output: unknown) => unknown>;
+
+export const adaptBuiltInToolModelInput = (
+  toolName: string,
+  input: Record<string, unknown>,
+) => BUILT_IN_TOOL_MODEL_INPUT_ADAPTERS[toolName]?.(input) ?? input;
+
+export const adaptBuiltInToolModelOutput = (toolName: string, output: unknown) =>
+  BUILT_IN_TOOL_MODEL_OUTPUT_ADAPTERS[toolName]?.(output) ?? output;

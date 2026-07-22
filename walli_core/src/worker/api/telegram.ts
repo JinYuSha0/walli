@@ -33,24 +33,22 @@ const telegramUserSchema = z
   })
   .loose();
 
+const telegramPhotoSchema = z
+  .object({
+    file_id: z.string(),
+    width: z.number(),
+    height: z.number(),
+    file_size: z.number().optional(),
+  })
+  .loose();
+
 const telegramMessageSchema = z
   .object({
     message_id: z.number(),
     business_connection_id: z.string().optional(),
     text: z.string().optional(),
     caption: z.string().optional(),
-    photo: z
-      .array(
-        z
-          .object({
-            file_id: z.string(),
-            width: z.number(),
-            height: z.number(),
-            file_size: z.number().optional(),
-          })
-          .loose(),
-      )
-      .optional(),
+    photo: z.array(telegramPhotoSchema).optional(),
     voice: z
       .object({
         file_id: z.string(),
@@ -106,12 +104,37 @@ type TelegramWebhookDeps = {
   getFileUrl: (fileId: string) => Promise<string>;
   markMessageRead: (message: TelegramMessage) => Promise<void>;
   transcribeVoice?: (context: VoiceToTextContext) => Promise<unknown>;
-  describeImage?: (context: ImageToTextContext) => Promise<unknown>;
+  describeImage?: (context: ImageToTextContext) => Promise<string>;
   synthesizeVoice?: (text: string) => Promise<TelegramVoiceOutput>;
   runLlm: (message: TelegramMessage, messages: ModelMessage[]) => Promise<TelegramReply>;
 };
 
 const stringifyChatId = (chatId: string | number) => String(chatId);
+
+const isEmptyTelegramMessage = (message: TelegramMessage) => {
+  const record = message as Record<string, unknown>;
+
+  return Object.keys(record).every((key) => ["message_id", "chat", "from"].includes(key));
+};
+
+const selectBestTelegramPhoto = (photos: TelegramMessage["photo"]) => {
+  if (!photos || photos.length === 0) {
+    return undefined;
+  }
+
+  return photos.reduce((bestPhoto, photo) => {
+    const bestScore = bestPhoto.file_size ?? bestPhoto.width * bestPhoto.height;
+    const score = photo.file_size ?? photo.width * photo.height;
+
+    return score > bestScore ? photo : bestPhoto;
+  });
+};
+
+const getImagePrompt = (text: string) => {
+  const basePrompt = "Describe this Telegram image and extract any visible text.";
+
+  return text ? `${basePrompt} Additional message text/caption: ${text}` : basePrompt;
+};
 
 const createTelegramApiUrl = (token: string, method: TelegramApiMethod) =>
   `https://api.telegram.org/bot${token}/${method}`;
@@ -362,26 +385,29 @@ export const handleTelegramWebhookUpdate = async (update: unknown, deps: Telegra
 
   const chatId = stringifyChatId(message.chat.id);
   const text = message.text?.trim() ?? message.caption?.trim() ?? "";
-  const photo = message.photo?.slice().sort((left, right) => {
-    const leftSize = left.file_size ?? left.width * left.height;
-    const rightSize = right.file_size ?? right.width * right.height;
+  const photo = selectBestTelegramPhoto(message.photo);
+  const canHandleMessage = Boolean(message.text?.trim() || photo || message.voice);
 
-    return rightSize - leftSize;
-  })[0];
-
-  if (!text && !photo && !message.voice) {
+  if (!canHandleMessage && isEmptyTelegramMessage(message)) {
     return;
   }
 
   await Promise.resolve(deps.markMessageRead(message)).catch(() => undefined);
+
+  if (!canHandleMessage) {
+    await deps.sendMessage(chatId, "Sorry, this Telegram media type is not supported yet.");
+    return;
+  }
 
   await deps.sendChatAction(chatId, "typing");
 
   try {
     const content: string[] = [];
 
-    if (text) {
+    if (message.text?.trim()) {
       content.push(`Message text: ${text}`);
+    } else if (message.caption?.trim()) {
+      content.push(`Message caption/additional info: ${text}`);
     }
 
     if (message.voice) {
@@ -405,12 +431,9 @@ export const handleTelegramWebhookUpdate = async (update: unknown, deps: Telegra
 
     if (photo) {
       const imageFile = await deps.getFileUrl(photo.file_id);
-      const imagePrompt = text
-        ? `Describe this Telegram image and extract any visible text. Caption: ${text}`
-        : "Describe this Telegram image and extract any visible text.";
       const imageDescription = await deps.describeImage?.({
-        file: imageFile,
-        prompt: imagePrompt,
+        file: [imageFile],
+        prompt: getImagePrompt(text),
       });
 
       if (imageDescription === undefined) {
@@ -418,10 +441,9 @@ export const handleTelegramWebhookUpdate = async (update: unknown, deps: Telegra
       }
 
       content.push(
-        [
-          "The user sent an image message.",
-          `Image recognition result: ${JSON.stringify(imageDescription)}`,
-        ].join("\n"),
+        ["The user sent an image message.", `Image recognition result: ${imageDescription}`].join(
+          "\n",
+        ),
       );
     }
 

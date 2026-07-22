@@ -6,7 +6,10 @@ import {
   type ToolSchemaField,
   type ToolSchemaFieldType,
 } from "../../shared/const";
-import { BUILT_IN_TOOL_MODEL_INPUT_ADAPTERS } from "../../shared/tools";
+import {
+  adaptBuiltInToolModelInput,
+  adaptBuiltInToolModelOutput,
+} from "../../shared/tools";
 
 type ChatToolRuntime = {
   AI: Ai;
@@ -112,13 +115,13 @@ const runConfiguredTool = async (
   const parsedInput = createToolInputSchema(toolConfig).parse(input);
 
   if (toolConfig.invocation.type === "model") {
-    const modelInput =
-      BUILT_IN_TOOL_MODEL_INPUT_ADAPTERS[toolConfig.name]?.(parsedInput) ?? parsedInput;
-
-    return runtime.AI.run(
+    const modelInput = adaptBuiltInToolModelInput(toolConfig.name, parsedInput);
+    const output = await runtime.AI.run(
       toolConfig.invocation.model,
       modelInput,
     );
+
+    return adaptBuiltInToolModelOutput(toolConfig.name, output);
   }
 
   const url = new URL(toolConfig.invocation.url);

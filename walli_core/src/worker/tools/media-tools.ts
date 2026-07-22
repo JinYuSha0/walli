@@ -3,6 +3,7 @@ import { createChatRunnerTools } from "../lib/chat-runner";
 import { createLooseToolInputSchema } from "../lib/chat-tools";
 import { createGatewayFromEnv, normalizeGatewayModelId, unified } from "../lib/llm";
 import { getSettings } from "../api/settings";
+import { adaptBuiltInToolModelOutput } from "../../shared/tools";
 
 export type VoiceOutput = {
   type: "blob";
@@ -18,7 +19,7 @@ export type VoiceToTextContext = {
 };
 
 export type ImageToTextContext = {
-  file: string;
+  file: string[];
   prompt?: string;
 };
 
@@ -192,8 +193,18 @@ export const runBuiltInMediaTool = async <ToolName extends BuiltInMediaToolName>
 export const transcribeVoice = (env: Env, origin: string, context: VoiceToTextContext) =>
   runBuiltInMediaTool(env, origin, "voice_to_text", context);
 
-export const describeImage = (env: Env, origin: string, context: ImageToTextContext) =>
-  runBuiltInMediaTool(env, origin, "image_to_text", context);
+export const describeImage = async (
+  env: Env,
+  origin: string,
+  context: ImageToTextContext,
+): Promise<string> => {
+  const output = adaptBuiltInToolModelOutput(
+    "image_to_text",
+    await runBuiltInMediaTool(env, origin, "image_to_text", context),
+  );
+
+  return typeof output === "string" ? output : JSON.stringify(output);
+};
 
 export const synthesizeVoice = async (
   env: Env,

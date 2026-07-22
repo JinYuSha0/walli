@@ -19,6 +19,12 @@ const escapeTelegramHtml = (text: string) =>
 const escapeTelegramHtmlAttribute = (text: string) =>
   escapeTelegramHtml(text).replaceAll('"', "&quot;");
 
+const unwrapMarkdownFence = (markdown: string) => {
+  const match = /^```(?:markdown|md)\s*\n(?<content>[\s\S]*?)\n?```\s*$/i.exec(markdown.trim());
+
+  return match?.groups?.content ?? markdown;
+};
+
 const renderChildren = (node: MarkdownNode) => (node.children ?? []).map(renderNode).join("");
 
 const renderListItem = (node: MarkdownNode, index: number, ordered: boolean) => {
@@ -83,7 +89,7 @@ const renderNode = (node: MarkdownNode): string => {
 };
 
 export const renderTelegramHtmlFromMarkdown = (markdown: string) => {
-  const tree = fromMarkdown(markdown, {
+  const tree = fromMarkdown(unwrapMarkdownFence(markdown), {
     extensions: [gfm()],
     mdastExtensions: [gfmFromMarkdown()],
   }) as MarkdownNode;

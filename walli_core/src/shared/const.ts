@@ -133,7 +133,13 @@ export type PrimaryModelUsageLimitConfig = z.output<
   typeof primaryModelUsageLimitConfigSchema
 >;
 
-export const TOOL_SCHEMA_FIELD_TYPES = ["string", "number", "boolean", "array", "object"] as const;
+export const TOOL_SCHEMA_FIELD_TYPES = [
+  "string",
+  "number",
+  "boolean",
+  "array",
+  "object",
+] as const;
 
 export type ToolSchemaFieldType = (typeof TOOL_SCHEMA_FIELD_TYPES)[number];
 

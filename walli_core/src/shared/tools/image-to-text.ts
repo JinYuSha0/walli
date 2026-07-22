@@ -12,15 +12,17 @@ export const imageToTextTool = {
     fields: [
       {
         name: "file",
-        type: "string",
-        description: "The image HTTPS URL or data URI.",
+        type: "array",
+        description:
+          "The image HTTPS URLs or data URIs. Pass one or more image URLs/data URIs.",
         required: true,
         defaultValue: "",
       },
       {
         name: "prompt",
         type: "string",
-        description: "Instructions for what to identify, read, or describe in the image.",
+        description:
+          "Instructions and any additional message text/caption for what to identify, read, or describe in the image input.",
         required: false,
         defaultValue: "Describe the image and extract any visible text.",
       },
@@ -33,8 +35,11 @@ export const imageToTextTool = {
 export const createImageToTextModelInput = (input: Record<string, unknown>) => {
   const file = input.file;
   const prompt = input.prompt;
+  const imageFiles = Array.isArray(file)
+    ? file.filter((value): value is string => typeof value === "string")
+    : [];
 
-  if (typeof file !== "string") {
+  if (imageFiles.length === 0) {
     return input;
   }
 
@@ -47,14 +52,57 @@ export const createImageToTextModelInput = (input: Record<string, unknown>) => {
             type: "text",
             text: typeof prompt === "string" ? prompt : "",
           },
-          {
+          ...imageFiles.map((imageFile) => ({
             type: "image_url",
             image_url: {
-              url: file,
+              url: imageFile,
             },
-          },
+          })),
         ],
       },
     ],
   };
+};
+
+export const createImageToTextModelOutput = (result: unknown) => {
+  if (typeof result === "string") {
+    return result;
+  }
+
+  if (typeof result !== "object" || result === null) {
+    return result;
+  }
+
+  const record = result as Record<string, unknown>;
+
+  if (typeof record.text === "string") {
+    return record.text;
+  }
+
+  const choices = record.choices;
+
+  if (!Array.isArray(choices)) {
+    return result;
+  }
+
+  const content = choices
+    .map((choice) => {
+      if (typeof choice !== "object" || choice === null) {
+        return undefined;
+      }
+
+      const message = (choice as Record<string, unknown>).message;
+
+      if (typeof message !== "object" || message === null) {
+        return undefined;
+      }
+
+      const messageContent = (message as Record<string, unknown>).content;
+
+      return typeof messageContent === "string" ? messageContent : undefined;
+    })
+    .filter((value) => value !== undefined)
+    .join("\n\n");
+
+  return content || result;
 };

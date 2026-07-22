@@ -334,10 +334,10 @@ describe("chat tools", () => {
 
     expect(
       schema.parse({
-        file: "https://example.com/image.png",
+        file: ["https://example.com/image.png"],
       }),
     ).toEqual({
-      file: "https://example.com/image.png",
+      file: ["https://example.com/image.png"],
       prompt: "Describe the image and extract any visible text.",
     });
     expect(() => schema.parse({})).toThrow();
@@ -348,13 +348,27 @@ describe("chat tools", () => {
 
     expect(
       schema.parse({
-        file: "https://example.com/image.png",
+        file: ["https://example.com/image.png"],
         prompt: "Extract receipt text.",
         width: 100,
       }),
     ).toEqual({
-      file: "https://example.com/image.png",
+      file: ["https://example.com/image.png"],
       prompt: "Extract receipt text.",
+    });
+  });
+
+  it("accepts multiple image_to_text files through the file field", () => {
+    const schema = createToolInputSchema(imageToTextTool);
+
+    expect(
+      schema.parse({
+        file: ["https://example.com/image-1.png", "https://example.com/image-2.png"],
+        prompt: "Compare these images.",
+      }),
+    ).toEqual({
+      file: ["https://example.com/image-1.png", "https://example.com/image-2.png"],
+      prompt: "Compare these images.",
     });
   });
 
@@ -447,7 +461,7 @@ describe("chat tools", () => {
     await expect(
       tools.image_to_text.execute?.(
         {
-          file: "https://example.com/image.png",
+          file: ["https://example.com/image.png"],
         },
         executionOptions,
       ),
@@ -494,6 +508,48 @@ describe("chat tools", () => {
     });
   });
 
+  it("adapts multiple image_to_text files to model messages", async () => {
+    const tools = buildChatTools([imageToTextTool], fakeRuntime);
+    const executionOptions = {} as Parameters<NonNullable<typeof tools.image_to_text.execute>>[1];
+
+    await expect(
+      tools.image_to_text.execute?.(
+        {
+          file: ["https://example.com/image-1.png", "https://example.com/image-2.png"],
+          prompt: "Compare these images.",
+        },
+        executionOptions,
+      ),
+    ).resolves.toEqual({
+      ok: true,
+      input: {
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "Compare these images.",
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: "https://example.com/image-1.png",
+                },
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: "https://example.com/image-2.png",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    });
+  });
+
   it("validates tool input before execution", async () => {
     const tools = buildChatTools([voiceToTextTool], fakeRuntime);
     const executionOptions = {} as Parameters<NonNullable<typeof tools.voice_to_text.execute>>[1];
@@ -532,8 +588,9 @@ describe("chat tools", () => {
     expect(aiRun).toHaveBeenCalledWith("openai/gpt-4o-transcribe", {});
   });
 
-  it("returns image model results without extracting text", async () => {
+  it("adapts image model results to text output", async () => {
     const modelResult = {
+      id: "chatcmpl-test",
       choices: [
         {
           message: {
@@ -541,6 +598,9 @@ describe("chat tools", () => {
           },
         },
       ],
+      usage: {
+        total_tokens: 100,
+      },
     };
     aiRun.mockResolvedValueOnce(modelResult);
     const tools = buildChatTools([imageToTextTool], fakeRuntime);
@@ -549,11 +609,11 @@ describe("chat tools", () => {
     await expect(
       tools.image_to_text.execute?.(
         {
-          file: "https://example.com/image.png",
+          file: ["https://example.com/image.png"],
         },
         executionOptions,
       ),
-    ).resolves.toBe(modelResult);
+    ).resolves.toBe("The image shows a receipt.");
   });
 
   it("executes api tools with request input", async () => {
@@ -977,7 +1037,7 @@ describe("settings tool migration", () => {
 
     await tools.image_to_text.execute?.(
       {
-        file: "https://example.com/image.png",
+        file: ["https://example.com/image.png"],
       },
       executionOptions,
     );
@@ -1081,6 +1141,19 @@ describe("Telegram formatting", () => {
         "<pre><code>const value = 1 &lt; 2;</code></pre>",
       ].join("\n"),
     );
+  });
+
+  it("unwraps full-message markdown fences before rendering Telegram HTML", () => {
+    expect(
+      renderTelegramHtmlFromMarkdown(
+        [
+          "```markdown",
+          "### 图片内容说明",
+          "- `未读消息` 的意思是 **“未读消息”**。",
+          "```",
+        ].join("\n"),
+      ),
+    ).toBe("<b>图片内容说明</b>\n\n- <code>未读消息</code> 的意思是 <b>“未读消息”</b>。");
   });
 });
 
@@ -1353,6 +1426,7 @@ describe("telegram webhook", () => {
         update_id: 1,
         message: {
           message_id: 10,
+          caption: "watch this",
           chat: {
             id: 123,
           },
@@ -1393,23 +1467,21 @@ describe("telegram webhook", () => {
     });
     const describeImage = vi.fn(async (context: ImageToTextContext) => {
       calls.push("describe");
-      expect(context.file).toContain(
-        "https://chat.test/api/telegram/file/photos/file_1.jpg?fileId=photo-file",
-      );
+      expect(context.file).toEqual([
+        "https://chat.test/api/telegram/file/photos/file_1.jpg?fileId=photo-file&expires=1&signature=test",
+      ]);
       expect(context.prompt).toBe(
-        "Describe this Telegram image and extract any visible text. Caption: what is this",
+        "Describe this Telegram image and extract any visible text. Additional message text/caption: what is this",
       );
       expect(context).not.toHaveProperty("caption");
       expect(context).not.toHaveProperty("width");
-      return {
-        text: "A receipt image",
-      };
+      return "A receipt image";
     });
     const markMessageRead = vi.fn();
     const runLlm = vi.fn(async (_message, messages) => {
       calls.push("llm");
       const serializedMessages = JSON.stringify(messages);
-      expect(serializedMessages).toContain("Message text: what is this");
+      expect(serializedMessages).toContain("Message caption/additional info: what is this");
       expect(serializedMessages).toContain("Image recognition result");
       expect(serializedMessages).toContain("A receipt image");
       expect(serializedMessages).not.toContain("api.telegram.org/file/bot");
@@ -1450,6 +1522,169 @@ describe("telegram webhook", () => {
 
     expect(calls).toEqual(["action", "file", "describe", "llm"]);
     expect(sendMessage).toHaveBeenCalledWith("123", "image reply");
+    expect(sendVoice).not.toHaveBeenCalled();
+  });
+
+  it("passes normalized image text content into the Telegram LLM context", async () => {
+    const sendMessage = vi.fn();
+    const sendVoice = vi.fn();
+    const sendChatAction = vi.fn();
+    const getFileUrl = vi.fn(async () => "https://chat.test/file/photo.jpg");
+    const describeImage = vi.fn(async () => "### 图片内容说明\n- 可见文字");
+    const markMessageRead = vi.fn();
+    const runLlm = vi.fn(async (_message, messages) => {
+      const serializedMessages = JSON.stringify(messages);
+      expect(serializedMessages).toContain("### 图片内容说明");
+      expect(serializedMessages).toContain("- 可见文字");
+
+      return {
+        type: "text" as const,
+        text: "image reply",
+      };
+    });
+
+    await handleTelegramWebhookUpdate(
+      {
+        update_id: 1,
+        message: {
+          message_id: 10,
+          chat: {
+            id: 123,
+          },
+          photo: [
+            {
+              file_id: "photo-file",
+              width: 100,
+              height: 100,
+            },
+          ],
+        },
+      },
+      {
+        sendMessage,
+        sendVoice,
+        sendChatAction,
+        getFileUrl,
+        markMessageRead,
+        describeImage,
+        runLlm,
+      },
+    );
+
+    expect(sendMessage).toHaveBeenCalledWith("123", "image reply");
+    expect(sendVoice).not.toHaveBeenCalled();
+  });
+
+  it("describes only the best Telegram photo size with shared additional text", async () => {
+    const sendMessage = vi.fn();
+    const sendVoice = vi.fn();
+    const sendChatAction = vi.fn();
+    const getFileUrl = vi.fn(async (fileId: string) => `https://chat.test/file/${fileId}.jpg`);
+    const describeImage = vi.fn(
+      async (context: ImageToTextContext) => `description for ${context.file}`,
+    );
+    const markMessageRead = vi.fn();
+    const runLlm = vi.fn(async (_message, messages) => {
+      const serializedMessages = JSON.stringify(messages);
+      expect(serializedMessages).toContain("Message caption/additional info: compare these");
+      expect(serializedMessages).toContain("The user sent an image message.");
+      expect(serializedMessages).toContain("Image recognition result");
+      expect(serializedMessages).toContain("description for https://chat.test/file/photo-large.jpg");
+
+      return {
+        type: "text" as const,
+        text: "image reply",
+      };
+    });
+
+    await handleTelegramWebhookUpdate(
+      {
+        update_id: 1,
+        message: {
+          message_id: 10,
+          caption: "compare these",
+          chat: {
+            id: 123,
+          },
+          photo: [
+            {
+              file_id: "photo-small",
+              width: 100,
+              height: 100,
+              file_size: 1000,
+            },
+            {
+              file_id: "photo-large",
+              width: 800,
+              height: 800,
+              file_size: 2000,
+            },
+          ],
+        },
+      },
+      {
+        sendMessage,
+        sendVoice,
+        sendChatAction,
+        getFileUrl,
+        markMessageRead,
+        describeImage,
+        runLlm,
+      },
+    );
+
+    expect(getFileUrl).toHaveBeenCalledOnce();
+    expect(getFileUrl).toHaveBeenCalledWith("photo-large");
+    expect(describeImage).toHaveBeenCalledOnce();
+    expect(describeImage).toHaveBeenCalledWith({
+      file: [
+        "https://chat.test/file/photo-large.jpg",
+      ],
+      prompt:
+        "Describe this Telegram image and extract any visible text. Additional message text/caption: compare these",
+    });
+    expect(sendMessage).toHaveBeenCalledWith("123", "image reply");
+    expect(sendVoice).not.toHaveBeenCalled();
+  });
+
+  it("replies with unsupported text for unsupported Telegram media", async () => {
+    const sendMessage = vi.fn();
+    const sendVoice = vi.fn();
+    const sendChatAction = vi.fn();
+    const getFileUrl = vi.fn();
+    const markMessageRead = vi.fn();
+    const runLlm = vi.fn();
+
+    await handleTelegramWebhookUpdate(
+      {
+        update_id: 1,
+        message: {
+          message_id: 10,
+          chat: {
+            id: 123,
+          },
+          video: {
+            file_id: "video-file",
+          },
+        },
+      },
+      {
+        sendMessage,
+        sendVoice,
+        sendChatAction,
+        getFileUrl,
+        markMessageRead,
+        runLlm,
+      },
+    );
+
+    expect(markMessageRead).toHaveBeenCalledOnce();
+    expect(sendMessage).toHaveBeenCalledWith(
+      "123",
+      "Sorry, this Telegram media type is not supported yet.",
+    );
+    expect(sendChatAction).not.toHaveBeenCalled();
+    expect(runLlm).not.toHaveBeenCalled();
     expect(sendVoice).not.toHaveBeenCalled();
   });
 
