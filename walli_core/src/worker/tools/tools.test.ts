@@ -1155,6 +1155,34 @@ describe("Telegram formatting", () => {
       ),
     ).toBe("<b>图片内容说明</b>\n\n- <code>未读消息</code> 的意思是 <b>“未读消息”</b>。");
   });
+
+  it("preserves ordered list start numbers split by nested bullet lists", () => {
+    expect(
+      renderTelegramHtmlFromMarkdown(
+        [
+          "1. 时间工具",
+          "- 查询当前 Unix 时间戳",
+          "- 获取某个时区的当前日期时间",
+          "",
+          "2. 任务工具",
+          "- 创建定时任务",
+          "- 查看定时任务",
+        ].join("\n"),
+      ),
+    ).toBe(
+      [
+        "1. 时间工具",
+        "",
+        "- 查询当前 Unix 时间戳",
+        "- 获取某个时区的当前日期时间",
+        "",
+        "2. 任务工具",
+        "",
+        "- 创建定时任务",
+        "- 查看定时任务",
+      ].join("\n"),
+    );
+  });
 });
 
 describe("telegram webhook", () => {

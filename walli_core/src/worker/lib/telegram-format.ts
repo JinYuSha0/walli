@@ -6,6 +6,7 @@ type MarkdownNode = {
   type?: string;
   value?: string;
   url?: string;
+  start?: number | null;
   checked?: boolean | null;
   children?: MarkdownNode[];
 };
@@ -27,8 +28,8 @@ const unwrapMarkdownFence = (markdown: string) => {
 
 const renderChildren = (node: MarkdownNode) => (node.children ?? []).map(renderNode).join("");
 
-const renderListItem = (node: MarkdownNode, index: number, ordered: boolean) => {
-  const marker = ordered ? `${index + 1}. ` : node.checked === null ? "- " : node.checked ? "- [x] " : "- [ ] ";
+const renderListItem = (node: MarkdownNode, index: number, ordered: boolean, start: number) => {
+  const marker = ordered ? `${start + index}. ` : node.checked === null ? "- " : node.checked ? "- [x] " : "- [ ] ";
 
   return `${marker}${renderChildren(node).trim()}`;
 };
@@ -66,9 +67,10 @@ const renderNode = (node: MarkdownNode): string => {
       return `<a href="${escapeTelegramHtmlAttribute(node.url)}">${renderChildren(node)}</a>`;
     case "list": {
       const ordered = Boolean((node as MarkdownNode & { ordered?: boolean }).ordered);
+      const start = typeof node.start === "number" ? node.start : 1;
 
       return (node.children ?? [])
-        .map((child, index) => renderListItem(child, index, ordered))
+        .map((child, index) => renderListItem(child, index, ordered, start))
         .join("\n");
     }
     case "listItem":
