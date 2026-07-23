@@ -26,6 +26,7 @@ const scheduledTaskActionSchema = z
     description: z.string().trim().min(1).optional(),
     payload: z.unknown().default({}),
     scheduledAt: z.number().int().min(0).optional(),
+    delayMs: z.number().int().min(0).optional(),
     cron: z.string().trim().min(1).optional(),
     timeZone: z.string().trim().min(1).default("UTC"),
     recurrenceEndAt: z.number().int().min(0).optional(),
@@ -34,11 +35,16 @@ const scheduledTaskActionSchema = z
   })
   .strict()
   .superRefine((task, ctx) => {
-    if (task.action === "create" && task.scheduledAt === undefined && !task.cron) {
+    if (
+      task.action === "create" &&
+      task.scheduledAt === undefined &&
+      task.delayMs === undefined &&
+      !task.cron
+    ) {
       ctx.addIssue({
         code: "custom",
         path: ["scheduledAt"],
-        message: "scheduledAt or cron is required when action is create",
+        message: "scheduledAt, delayMs, or cron is required when action is create",
       });
     }
 
@@ -52,15 +58,17 @@ const scheduledTaskActionSchema = z
 
     if (
       task.action === "create" &&
-      task.recurrenceEndAt !== undefined &&
-      task.scheduledAt !== undefined &&
-      task.recurrenceEndAt <= task.scheduledAt
+      task.recurrenceEndAt !== undefined
     ) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["recurrenceEndAt"],
-        message: "recurrenceEndAt must be greater than scheduledAt",
-      });
+      const scheduledAt = task.scheduledAt ?? Date.now() + (task.delayMs ?? 0);
+
+      if (task.recurrenceEndAt <= scheduledAt) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["recurrenceEndAt"],
+          message: "recurrenceEndAt must be greater than scheduledAt",
+        });
+      }
     }
 
     if (task.action === "create" && task.cron) {
@@ -125,9 +133,13 @@ export const scheduledTaskToolRoute = new Hono<AppBindings>().post(
 
     try {
       if (result.data.action === "create") {
+        const { delayMs, ...taskInput } = result.data;
+        const scheduledAt =
+          taskInput.scheduledAt ?? (delayMs === undefined ? undefined : Date.now() + delayMs);
         const task = await scheduler.createTask({
-          ...result.data,
-          description: result.data.description!,
+          ...taskInput,
+          scheduledAt,
+          description: taskInput.description!,
         });
 
         return c.json({ task }, 201);

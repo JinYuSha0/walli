@@ -77,7 +77,15 @@ export const scheduledTaskTool = {
         name: "scheduledAt",
         type: "number",
         description:
-          "Unix timestamp in milliseconds for action=create. Required for one-time tasks. Optional for cron tasks; if omitted, the next cron time is calculated.",
+          "Unix timestamp in milliseconds for action=create. Use for absolute one-time tasks. For relative tasks like 'in 5 minutes', prefer delayMs because scheduled_task resolves it against the tool server's current time.",
+        required: false,
+        defaultValue: "",
+      },
+      {
+        name: "delayMs",
+        type: "number",
+        description:
+          "Relative delay in milliseconds for action=create. Use this instead of calling the timestamp tool when the user asks for a one-time task relative to now, such as in 30 seconds, in 5 minutes, or after 2 hours. The scheduled_task tool adds this value to its own current server time.",
         required: false,
         defaultValue: "",
       },

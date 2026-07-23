@@ -1109,6 +1109,65 @@ describe("tools route", () => {
     );
   });
 
+  it("creates one-time scheduled tasks from delayMs without querying timestamp", async () => {
+    const dateNow = vi.spyOn(Date, "now").mockReturnValue(10_000);
+    const createTask = vi.fn(async (input) => ({
+      ...input,
+      id: "task-1",
+      recurrenceEndAt: input.recurrenceEndAt ?? null,
+      maxRuns: input.maxRuns ?? null,
+      runNumber: input.runNumber ?? 1,
+      maxRetry: input.maxRetry ?? 1,
+      retryCount: input.retryCount ?? 0,
+      status: "pending",
+      createdAt: 0,
+      updatedAt: 0,
+      executedAt: null,
+      canceledAt: null,
+      lastError: null,
+    }));
+    const getByName = vi.fn(() => ({
+      createTask,
+    }));
+    const scheduledTaskEnv = {
+      ...env,
+      USER_DO: {
+        getByName,
+      },
+    } as unknown as Env;
+
+    try {
+      const response = await toolsRoute.request(
+        "/api/tools/scheduled-tasks",
+        {
+          method: "POST",
+          headers: {
+            authorization: "Bearer test-token",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            action: "create",
+            userId: "user-1",
+            clientPlatform: "telegram",
+            description: "Send a reminder in 30 seconds.",
+            delayMs: 30_000,
+          }),
+        },
+        scheduledTaskEnv,
+      );
+
+      expect(response.status).toBe(201);
+      expect(createTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scheduledAt: 40_000,
+        }),
+      );
+      expect(createTask.mock.calls[0]?.[0]).not.toHaveProperty("delayMs");
+    } finally {
+      dateNow.mockRestore();
+    }
+  });
+
   it("lists pending scheduled tasks by default", async () => {
     const listTasks = vi.fn(async () => []);
     const getByName = vi.fn(() => ({
