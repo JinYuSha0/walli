@@ -106,6 +106,9 @@ const normalizeUserDoName = (platform: UserDoClientPlatform, userId: string) =>
 const getScheduler = (env: Env, platform: UserDoClientPlatform, userId: string) =>
   env.USER_DO.getByName(normalizeUserDoName(platform, userId));
 
+const getListTasksLimit = (status: z.output<typeof scheduledTaskActionSchema>["status"]) =>
+  status === "pending" ? undefined : 20;
+
 const serializeError = (error: unknown) => {
   if (error instanceof Error) {
     return error.message;
@@ -146,7 +149,10 @@ export const scheduledTaskToolRoute = new Hono<AppBindings>().post(
       }
 
       if (result.data.action === "list") {
-        const tasks = await scheduler.listTasks(result.data.status);
+        const tasks = await scheduler.listTasks(
+          result.data.status,
+          getListTasksLimit(result.data.status),
+        );
 
         return c.json({ tasks });
       }

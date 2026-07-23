@@ -1199,7 +1199,7 @@ describe("tools route", () => {
 
     expect(response.status).toBe(200);
     expect(getByName).toHaveBeenCalledWith("telegram:user-1");
-    expect(listTasks).toHaveBeenCalledWith("pending");
+    expect(listTasks).toHaveBeenCalledWith("pending", undefined);
   });
 
   it("supports listing scheduled tasks across all statuses", async () => {
@@ -1234,7 +1234,42 @@ describe("tools route", () => {
 
     expect(response.status).toBe(200);
     expect(getByName).toHaveBeenCalledWith("telegram:user-1");
-    expect(listTasks).toHaveBeenCalledWith("all");
+    expect(listTasks).toHaveBeenCalledWith("all", 20);
+  });
+
+  it("limits completed scheduled task list queries to 20 tasks", async () => {
+    const listTasks = vi.fn(async () => []);
+    const getByName = vi.fn(() => ({
+      listTasks,
+    }));
+    const scheduledTaskEnv = {
+      ...env,
+      USER_DO: {
+        getByName,
+      },
+    } as unknown as Env;
+
+    const response = await toolsRoute.request(
+      "/api/tools/scheduled-tasks",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "list",
+          userId: "user-1",
+          clientPlatform: "telegram",
+          status: "completed",
+        }),
+      },
+      scheduledTaskEnv,
+    );
+
+    expect(response.status).toBe(200);
+    expect(getByName).toHaveBeenCalledWith("telegram:user-1");
+    expect(listTasks).toHaveBeenCalledWith("completed", 20);
   });
 
   it("rejects recurring scheduled tasks with an invalid end time", async () => {

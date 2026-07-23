@@ -47,7 +47,7 @@ export const scheduledTaskTool = {
         name: "status",
         type: "string",
         description:
-          "Task status to query when action=list: pending, completed, failed, canceled, or all. Defaults to pending.",
+          "Task status to query when action=list: pending, completed, failed, canceled, or all. Defaults to pending. Ended task queries (completed, failed, canceled, or all) return at most 20 tasks.",
         required: false,
         defaultValue: "pending",
       },

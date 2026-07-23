@@ -193,17 +193,23 @@ export class UserDO extends DurableObject<Env> {
     return toScheduledTask(row);
   }
 
-  async listTasks(status: ScheduledTaskStatusFilter = "pending"): Promise<ScheduledTask[]> {
+  async listTasks(
+    status: ScheduledTaskStatusFilter = "pending",
+    limit?: number,
+  ): Promise<ScheduledTask[]> {
     const query = this.db.select().from(scheduledTasks).$dynamic();
 
     if (status !== "all") {
       query.where(eq(scheduledTasks.status, status));
     }
 
-    return query
-      .orderBy(asc(scheduledTasks.scheduledAt), asc(scheduledTasks.createdAt))
-      .all()
-      .map(toScheduledTask);
+    const orderedQuery = query.orderBy(
+      asc(scheduledTasks.scheduledAt),
+      asc(scheduledTasks.createdAt),
+    );
+    const limitedQuery = limit === undefined ? orderedQuery : orderedQuery.limit(limit);
+
+    return limitedQuery.all().map(toScheduledTask);
   }
 
   async cancelTask(taskId: string): Promise<ScheduledTask | null> {
