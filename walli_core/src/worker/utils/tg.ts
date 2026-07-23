@@ -10,8 +10,20 @@ export type TelegramApiMethod =
   | "sendMessage"
   | "sendChatAction"
   | "getFile"
+  | "sendPhoto"
   | "sendVoice"
   | "readBusinessMessage";
+
+export type TelegramVoiceUpload = {
+  voice: Blob;
+  filename: string;
+};
+
+export type TelegramPhotoUpload = {
+  photo: string | Blob;
+  filename?: string;
+  caption?: string;
+};
 
 export type TelegramMessageIdentityInput = {
   chat: {
@@ -147,6 +159,37 @@ export const postTelegramApi = async (
   return result;
 };
 
+const createDataUriBlob = (value: string) => {
+  const match = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(value);
+
+  if (!match) {
+    return undefined;
+  }
+
+  const mimeType = match[1] || "application/octet-stream";
+  const body = match[3] ?? "";
+  const bytes =
+    match[2] === ";base64"
+      ? Uint8Array.from(atob(body), (char) => char.charCodeAt(0))
+      : new TextEncoder().encode(decodeURIComponent(body));
+
+  return new Blob([bytes], {
+    type: mimeType,
+  });
+};
+
+const getFilenameForMimeType = (mimeType: string, fallback: string) => {
+  const extension =
+    {
+      "image/jpeg": "jpg",
+      "image/png": "png",
+      "image/webp": "webp",
+      "image/gif": "gif",
+    }[mimeType] ?? "bin";
+
+  return `${fallback}.${extension}`;
+};
+
 export const sendTelegramText = async (token: string, chatId: string | number, text: string) => {
   const fallbackPayload = {
     chat_id: stringifyTelegramId(chatId),
@@ -176,4 +219,65 @@ export const replyTelegramText = async (token: string, update: unknown, text: st
   }
 
   await sendTelegramText(token, chatId, text);
+};
+
+export const sendTelegramVoice = async (
+  token: string,
+  chatId: string | number,
+  voice: TelegramVoiceUpload,
+) => {
+  const body = new FormData();
+  body.set("chat_id", stringifyTelegramId(chatId));
+  body.set("voice", voice.voice, voice.filename);
+
+  await postTelegramApi(token, "sendVoice", body);
+};
+
+export const sendTelegramPhoto = async (
+  token: string,
+  chatId: string | number,
+  image: TelegramPhotoUpload,
+) => {
+  const sendPhoto = async (caption?: string, parseMode?: "HTML") => {
+    const photo = typeof image.photo === "string" ? createDataUriBlob(image.photo) : image.photo;
+
+    if (photo instanceof Blob) {
+      const body = new FormData();
+      body.set("chat_id", stringifyTelegramId(chatId));
+      body.set(
+        "photo",
+        photo,
+        image.filename ?? getFilenameForMimeType(photo.type, "notification"),
+      );
+
+      if (caption) {
+        body.set("caption", caption.slice(0, 1024));
+      }
+
+      if (parseMode) {
+        body.set("parse_mode", parseMode);
+      }
+
+      await postTelegramApi(token, "sendPhoto", body);
+      return;
+    }
+
+    await postTelegramApi(token, "sendPhoto", {
+      chat_id: stringifyTelegramId(chatId),
+      photo: image.photo,
+      ...(caption ? { caption: caption.slice(0, 1024) } : {}),
+      ...(parseMode ? { parse_mode: parseMode } : {}),
+    });
+  };
+
+  if (!image.caption) {
+    await sendPhoto();
+    return;
+  }
+
+  try {
+    await sendPhoto(renderTelegramHtmlFromMarkdown(image.caption), "HTML");
+  } catch {
+    await sendPhoto(image.caption);
+  }
 };

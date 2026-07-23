@@ -193,6 +193,117 @@ describe("chat tools", () => {
     );
   });
 
+  it("sends Telegram voice notifications through text-to-speech", async () => {
+    const appKv = {
+      get: vi.fn(async () => null),
+      put: vi.fn(),
+    } as unknown as KVNamespace;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        headers: {
+          "content-type": "application/json",
+        },
+      }),
+    );
+    aiRun.mockResolvedValueOnce("data:audio/ogg;base64,AAAA");
+    const tools = createNotificationTools(
+      {
+        ...env,
+        APP_KV: appKv,
+        AI: fakeRuntime.AI,
+        TELEGRAM_BOT_TOKEN: "test-token",
+      } as Env,
+      {
+        type: "telegram",
+        userId: "123",
+      },
+      "https://chat.test",
+    );
+
+    try {
+      await expect(
+        tools.send_notification.execute?.({ type: "voice", text: "voice reminder" }, {}),
+      ).resolves.toEqual({
+        ok: true,
+        channel: "telegram",
+        type: "voice",
+      });
+
+      expect(aiRun).toHaveBeenCalledWith(
+        "inworld/tts-2",
+        expect.objectContaining({
+          text: "[Automatically detect the language of the following text and read it with a natural native accent for that language. For Chinese, use standard Mandarin with a warm, natural tone, slightly slower pacing, and clear pronunciation.] voice reminder",
+          output_format: "opus",
+        }),
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        "https://api.telegram.org/bottest-token/sendVoice",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.any(FormData),
+        }),
+      );
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
+  it("sends Telegram image notifications with captions", async () => {
+    const appKv = {
+      get: vi.fn(async () => null),
+      put: vi.fn(),
+    } as unknown as KVNamespace;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        headers: {
+          "content-type": "application/json",
+        },
+      }),
+    );
+    const tools = createNotificationTools(
+      {
+        ...env,
+        APP_KV: appKv,
+        TELEGRAM_BOT_TOKEN: "test-token",
+      } as Env,
+      {
+        type: "telegram",
+        userId: "123",
+      },
+    );
+
+    try {
+      await expect(
+        tools.send_notification.execute?.({
+          type: "image",
+          image: "https://example.com/image.png",
+          text: "**image** reminder",
+        }, {}),
+      ).resolves.toEqual({
+        ok: true,
+        channel: "telegram",
+        type: "image",
+      });
+
+      const [, init] = fetchMock.mock.calls[0] ?? [];
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        "https://api.telegram.org/bottest-token/sendPhoto",
+        expect.objectContaining({
+          method: "POST",
+        }),
+      );
+      expect(JSON.parse(init?.body as string)).toEqual({
+        chat_id: "123",
+        photo: "https://example.com/image.png",
+        caption: "<b>image</b> reminder",
+        parse_mode: "HTML",
+      });
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
   it("keeps the expected built-in tool order", () => {
     expect(BUILT_IN_TOOLS.map((toolConfig) => toolConfig.name)).toEqual([
       "timestamp",
@@ -1486,7 +1597,7 @@ describe("telegram webhook", () => {
     } as unknown as KVNamespace;
     aiRun.mockImplementationOnce(async (_model: string, input: Record<string, unknown>) => {
       expect(input).toEqual({
-        text: "[用标准普通话，语气亲切、自然，语速稍慢，发音清晰] voice reply",
+        text: "[Automatically detect the language of the following text and read it with a natural native accent for that language. For Chinese, use standard Mandarin with a warm, natural tone, slightly slower pacing, and clear pronunciation.] voice reply",
         voice_id: "Ashley",
         output_format: "opus",
         temperature: 1,
@@ -1507,7 +1618,7 @@ describe("telegram webhook", () => {
     );
 
     expect(aiRun).toHaveBeenCalledWith("inworld/tts-2", {
-      text: "[用标准普通话，语气亲切、自然，语速稍慢，发音清晰] voice reply",
+      text: "[Automatically detect the language of the following text and read it with a natural native accent for that language. For Chinese, use standard Mandarin with a warm, natural tone, slightly slower pacing, and clear pronunciation.] voice reply",
       voice_id: "Ashley",
       output_format: "opus",
       temperature: 1,

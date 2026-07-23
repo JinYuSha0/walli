@@ -4,6 +4,7 @@ import { drizzle } from "drizzle-orm/durable-sqlite";
 import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import type { ModelMessage } from "ai";
 import { createChatUserInfo, runChatCompletion } from "../../lib/chat-runner";
+import { createNotificationTools } from "../../tools/tool-notification";
 import { getNextCronScheduledAt } from "../../utils/cron";
 import userDoMigrations from "./migrations/migrations";
 import { scheduledTasks, userDoSchema } from "./schema";
@@ -113,28 +114,29 @@ const isScheduledTaskMessage = (value: unknown): value is ModelMessage => {
 
 const createTaskMessages = (task: ScheduledTaskRow): ModelMessage[] => {
   const payload = parseTaskPayload(task.payload);
+  const executionInstructions: ModelMessage = {
+    role: "user",
+    content: [
+      "Execute this scheduled task now.",
+      "If this task asks to notify, remind, send, or push a message, use the available send_notification tool.",
+      'Choose send_notification.type from the task intent: use "voice" for voice/audio/spoken/语音/音频 replies, "image" when an image URL or data URI should be sent, otherwise use "text".',
+      'For voice notifications, pass only the human-readable spoken content in send_notification.text; the text-to-speech layer will automatically detect the language and apply the right voice style.',
+      "Use the user's requested language and wording when composing the notification.",
+      `Task description: ${task.description}`,
+      `Task type: ${task.type}`,
+      `Task payload: ${task.payload}`,
+    ].join("\n"),
+  };
 
   if (typeof payload === "object" && payload !== null && "messages" in payload) {
     const messages = (payload as { messages?: unknown }).messages;
 
     if (Array.isArray(messages) && messages.length > 0 && messages.every(isScheduledTaskMessage)) {
-      return messages;
+      return [...messages, executionInstructions];
     }
   }
 
-  return [
-    {
-      role: "user",
-      content: [
-        "Execute this scheduled task now.",
-        "Generate the exact notification message that should be sent to the user.",
-        "Do not say that you sent the notification; only return the notification text.",
-        `Task description: ${task.description}`,
-        `Task type: ${task.type}`,
-        `Task payload: ${task.payload}`,
-      ].join("\n"),
-    },
-  ];
+  return [executionInstructions];
 };
 
 export class UserDO extends DurableObject<Env> {
@@ -298,7 +300,7 @@ export class UserDO extends DurableObject<Env> {
   private async runTask(task: ScheduledTaskRow): Promise<void> {
     const notificationChannel = parseUserDoNotificationChannel(this.ctx.id.name);
 
-    const result = await runChatCompletion({
+    await runChatCompletion({
       env: this.env,
       messages: createTaskMessages(task),
       userInfo: notificationChannel
@@ -309,20 +311,8 @@ export class UserDO extends DurableObject<Env> {
           })
         : undefined,
       excludeToolNames: ["scheduled_task"],
+      extraTools: createNotificationTools(this.env, notificationChannel),
     });
-
-    if (!notificationChannel) {
-      return;
-    }
-
-    const notificationText = result.text.trim();
-
-    if (!notificationText) {
-      this.notifyTaskFailure(task, "Scheduled task produced empty notification text");
-      return;
-    }
-
-    await sendNotificationText(this.env, notificationChannel, notificationText);
   }
 
   private async notifyTaskFailure(task: ScheduledTaskRow, lastError: string): Promise<void> {

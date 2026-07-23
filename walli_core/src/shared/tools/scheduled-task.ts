@@ -68,7 +68,8 @@ export const scheduledTaskTool = {
       {
         name: "payload",
         type: "object",
-        description: "JSON payload for action=create. Use an empty object if no payload is needed.",
+        description:
+          'JSON payload for action=create. Use an empty object if no payload is needed. When the task should notify with a specific media type, preserve it here, for example {"notificationType":"voice"} for voice/audio replies or {"notificationType":"image","image":"https://..."} for image replies.',
         required: false,
         defaultValue: "{}",
       },

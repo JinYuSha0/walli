@@ -13,6 +13,7 @@ import {
   postTelegramApi,
   replyTelegramText,
   sendTelegramText,
+  sendTelegramVoice,
   stringifyTelegramId,
 } from "@worker/utils/tg";
 import {
@@ -249,14 +250,6 @@ const getTelegramFilePath = async (token: string, fileId: string) => {
   }
 
   return filePath;
-};
-
-const sendTelegramVoice = async (token: string, chatId: string, voice: TelegramVoiceOutput) => {
-  const body = new FormData();
-  body.set("chat_id", chatId);
-  body.set("voice", voice.voice, voice.filename);
-
-  await postTelegramApi(token, "sendVoice", body);
 };
 
 const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWebhookDeps> => {
