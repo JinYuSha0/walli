@@ -8,10 +8,15 @@ import {
   timeZoneConfigSchema,
   toolConfigSchema,
 } from "../../shared/const";
-import { telegramSettingsPatchSchema } from "../../shared/client";
+import {
+  TELEGRAM_WHITELIST_REMARK_MAX_LENGTH,
+  telegramSettingsPatchSchema,
+  telegramWhitelistCreateSchema,
+} from "../../shared/client";
 import { handleTelegramWebhookUpdate, telegramRoute } from "../api/telegram";
 import { getSettings, settingsRoute } from "../api/settings";
 import type { AppBindings } from "../api/types";
+import { createDb } from "../db/client";
 import { createChatRunnerTools } from "../lib/chat-runner";
 import {
   buildChatTools,
@@ -26,9 +31,9 @@ import {
   synthesizeVoice,
   type ImageToTextContext,
   type VoiceToTextContext,
-} from "./media-tools";
+} from "./tool-media";
 import { toolsRoute } from ".";
-import { getNextCronScheduledAt } from "./cron";
+import { getNextCronScheduledAt } from "../utils/cron";
 
 const env = {
   API_TOKEN: "test-token",
@@ -36,7 +41,7 @@ const env = {
 const voiceToTextTool = BUILT_IN_TOOLS.find((tool) => tool.name === "voice_to_text")!;
 const textToVoiceTool = BUILT_IN_TOOLS.find((tool) => tool.name === "text_to_voice")!;
 const imageToTextTool = BUILT_IN_TOOLS.find((tool) => tool.name === "image_to_text")!;
-const aiRun = vi.fn(async (_model: string, input: Record<string, unknown>) => ({
+const aiRun = vi.fn(async (_model: string, input: Record<string, unknown>): Promise<unknown> => ({
   ok: true,
   input,
 }));
@@ -69,9 +74,7 @@ const signTelegramFileUrl = async (
     encoder.encode(`${fileId}.${expires}.${filePath}`),
   );
 
-  return [...new Uint8Array(signature)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+  return [...new Uint8Array(signature)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 };
 
 describe("chat tools", () => {
@@ -192,9 +195,7 @@ describe("chat tools", () => {
   });
 
   it("rejects invalid UTC offset time zones", () => {
-    expect(() =>
-      timeZoneConfigSchema.parse("Nope/Nowhere"),
-    ).toThrow();
+    expect(() => timeZoneConfigSchema.parse("Nope/Nowhere")).toThrow();
   });
 
   it("accepts bot_token as a Telegram settings patch alias", () => {
@@ -205,6 +206,33 @@ describe("chat tools", () => {
     ).toEqual({
       botToken: "123:abc",
     });
+  });
+
+  it("validates Telegram whitelist create input rules", () => {
+    expect(
+      telegramWhitelistCreateSchema.parse({
+        type: "group",
+        id: "-100123",
+        remark: "Ops group",
+      }),
+    ).toEqual({
+      type: "group",
+      id: "-100123",
+      remark: "Ops group",
+    });
+    expect(() =>
+      telegramWhitelistCreateSchema.parse({
+        type: "private",
+        id: "user-123",
+      }),
+    ).toThrow();
+    expect(() =>
+      telegramWhitelistCreateSchema.parse({
+        type: "private",
+        id: "123",
+        remark: "x".repeat(TELEGRAM_WHITELIST_REMARK_MAX_LENGTH + 1),
+      }),
+    ).toThrow();
   });
 
   it("keeps built-in tools before configured tools", () => {
@@ -379,9 +407,7 @@ describe("chat tools", () => {
   });
 
   it("accepts all default tool names as model-friendly names", () => {
-    expect(BUILT_IN_TOOLS.every((toolConfig) => isValidChatToolName(toolConfig.name))).toBe(
-      true,
-    );
+    expect(BUILT_IN_TOOLS.every((toolConfig) => isValidChatToolName(toolConfig.name))).toBe(true);
   });
 
   it("builds chat tools from default built-in tools", () => {
@@ -681,31 +707,29 @@ describe("chat tools", () => {
       ),
     ).resolves.toEqual({ ok: true });
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      new URL("https://example.com/tool"),
-      {
-        method: "POST",
-        headers: {
-          "x-api-key": "secret",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          format: "json",
-          include_timestamps: true,
-          file: "https://example.com/audio.mp3",
-        }),
+    expect(fetchMock).toHaveBeenCalledWith(new URL("https://example.com/tool"), {
+      method: "POST",
+      headers: {
+        "x-api-key": "secret",
+        "content-type": "application/json",
       },
-    );
+      body: JSON.stringify({
+        format: "json",
+        include_timestamps: true,
+        file: "https://example.com/audio.mp3",
+      }),
+    });
     fetchMock.mockRestore();
   });
 
   it("executes api tools through the runtime fetch when provided", async () => {
-    const runtimeFetch = vi.fn(async () =>
-      new Response(JSON.stringify({ timestamp: 123 }), {
-        headers: {
-          "content-type": "application/json",
-        },
-      }),
+    const runtimeFetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ timestamp: 123 }), {
+          headers: {
+            "content-type": "application/json",
+          },
+        }),
     );
     const tools = buildChatTools(
       [
@@ -737,15 +761,12 @@ describe("chat tools", () => {
     await expect(tools.voice_to_text.execute?.({}, executionOptions)).resolves.toEqual({
       timestamp: 123,
     });
-    expect(runtimeFetch).toHaveBeenCalledWith(
-      new URL("https://example.com/api/tools/timestamp"),
-      {
-        method: "GET",
-        headers: {
-          authorization: "Bearer test-token",
-        },
+    expect(runtimeFetch).toHaveBeenCalledWith(new URL("https://example.com/api/tools/timestamp"), {
+      method: "GET",
+      headers: {
+        authorization: "Bearer test-token",
       },
-    );
+    });
   });
 });
 
@@ -776,7 +797,7 @@ describe("tools route", () => {
       },
       env,
     );
-    const body = await response.json() as {
+    const body = (await response.json()) as {
       timestamp: number;
       unixSeconds: number;
       iso: string;
@@ -956,7 +977,7 @@ describe("tools route", () => {
       },
       env,
     );
-    const body = await response.json();
+    const body = settingsResponseSchema.parse(await response.json());
 
     expect(response.status).toBe(400);
     expect(JSON.stringify(body)).toContain("recurrenceEndAt must be greater than scheduledAt");
@@ -975,7 +996,7 @@ describe("settings tool migration", () => {
     };
     const put = vi.fn();
     const appKv = {
-      get: vi.fn(async (key: string) => key === "settings" ? savedSettings : null),
+      get: vi.fn(async (key: string) => (key === "settings" ? savedSettings : null)),
       put,
     } as unknown as KVNamespace;
     const settings = await getSettings(appKv);
@@ -987,9 +1008,7 @@ describe("settings tool migration", () => {
       "text_to_voice",
       "image_to_text",
     ]);
-    expect(settings.builtInTools.find((tool) => tool.name === "voice_to_text")?.enabled).toBe(
-      true,
-    );
+    expect(settings.builtInTools.find((tool) => tool.name === "voice_to_text")?.enabled).toBe(true);
     expect(settings.tools).toEqual([]);
   });
 
@@ -1004,7 +1023,7 @@ describe("settings tool migration", () => {
     };
     delete savedSettings.timeZone;
     const appKv = {
-      get: vi.fn(async (key: string) => key === "settings" ? savedSettings : null),
+      get: vi.fn(async (key: string) => (key === "settings" ? savedSettings : null)),
       put: vi.fn(),
     } as unknown as KVNamespace;
     const settings = await getSettings(appKv);
@@ -1022,7 +1041,7 @@ describe("settings tool migration", () => {
     };
     delete savedSettings.toolPlannerModel;
     const appKv = {
-      get: vi.fn(async (key: string) => key === "settings" ? savedSettings : null),
+      get: vi.fn(async (key: string) => (key === "settings" ? savedSettings : null)),
       put: vi.fn(),
     } as unknown as KVNamespace;
     const settings = await getSettings(appKv);
@@ -1036,7 +1055,7 @@ describe("settings tool migration", () => {
       builtInTools: JSON.parse(JSON.stringify(DEFAULT_SETTINGS.builtInTools)) as unknown,
     };
     const appKv = {
-      get: vi.fn(async (key: string) => key === "settings" ? savedSettings : null),
+      get: vi.fn(async (key: string) => (key === "settings" ? savedSettings : null)),
       put: vi.fn(),
     } as unknown as KVNamespace;
     const settings = await getSettings(appKv);
@@ -1099,7 +1118,7 @@ describe("settings tool migration", () => {
         API_TOKEN: "test-token",
       } as Env,
     );
-    const body = await response.json();
+    const body = settingsResponseSchema.parse(await response.json());
 
     expect(response.status).toBe(200);
     expect(body.primaryModel).toBe(DEFAULT_SETTINGS.primaryModel);
@@ -1154,12 +1173,9 @@ describe("Telegram formatting", () => {
   it("unwraps full-message markdown fences before rendering Telegram HTML", () => {
     expect(
       renderTelegramHtmlFromMarkdown(
-        [
-          "```markdown",
-          "### 图片内容说明",
-          "- `未读消息` 的意思是 **“未读消息”**。",
-          "```",
-        ].join("\n"),
+        ["```markdown", "### 图片内容说明", "- `未读消息` 的意思是 **“未读消息”**。", "```"].join(
+          "\n",
+        ),
       ),
     ).toBe("<b>图片内容说明</b>\n\n- <code>未读消息</code> 的意思是 <b>“未读消息”</b>。");
   });
@@ -1194,6 +1210,142 @@ describe("Telegram formatting", () => {
 });
 
 describe("telegram webhook", () => {
+  const createTelegramRouteAppKv = () =>
+    ({
+      get: vi.fn(async (key: string) => {
+        if (key === "client:telegram:client-id") {
+          return "telegram-secret";
+        }
+
+        if (key === "client:telegram:settings") {
+          return {
+            botToken: "test-token",
+            accessPolicy: "whitelist",
+          };
+        }
+
+        if (key === "client:telegram:basic-settings") {
+          return {
+            enabled: true,
+            additionalSystemPrompt: "",
+          };
+        }
+
+        return null;
+      }),
+      put: vi.fn(),
+    }) as unknown as KVNamespace;
+
+  const createTelegramWhitelistDb = (
+    entries: Array<{
+      type: "private" | "group";
+      id: string;
+      remark?: string;
+      createdAt?: number;
+    }>,
+  ) =>
+    ({
+      prepare: vi.fn((sql: string) => {
+        let boundValues: unknown[] = [];
+        const normalizedSql = sql.toLowerCase();
+        const getFilteredEntries = () => {
+          const hasTypeFilter = normalizedSql.includes("where");
+          const type = hasTypeFilter ? boundValues[0] : undefined;
+
+          return typeof type === "string"
+            ? entries.filter((entry) => entry.type === type)
+            : entries;
+        };
+        const getPageValues = () => {
+          const hasTypeFilter = normalizedSql.includes("where");
+          const pageSize = Number(hasTypeFilter ? boundValues[1] : boundValues[0]);
+          const offset = Number(hasTypeFilter ? boundValues[2] : boundValues[1]);
+
+          return { pageSize, offset };
+        };
+        const statement = {
+          bind: vi.fn((...values: unknown[]) => {
+            boundValues = values;
+            return statement;
+          }),
+          first: vi.fn(async () => {
+            if (sql.includes("COUNT(*)")) {
+              const type = boundValues[0];
+              const total =
+                typeof type === "string"
+                  ? entries.filter((entry) => entry.type === type).length
+                  : entries.length;
+
+              return { total };
+            }
+
+            const [type, id] = boundValues;
+            const matched = entries.some((entry) => entry.type === type && entry.id === id);
+
+            return matched ? { matched: 1 } : null;
+          }),
+          all: vi.fn(async () => {
+            return {
+              results: getFilteredEntries()
+                .sort((left, right) => (right.createdAt ?? 1) - (left.createdAt ?? 1))
+                .slice(getPageValues().offset, getPageValues().offset + getPageValues().pageSize)
+                .map((entry) => ({
+                  type: entry.type,
+                  id: entry.id,
+                  remark: entry.remark ?? "",
+                  createdAt: entry.createdAt ?? 1,
+                })),
+            };
+          }),
+          raw: vi.fn(async () => {
+            if (normalizedSql.includes("count(*)")) {
+              return [[getFilteredEntries().length]];
+            }
+
+            if (normalizedSql.startsWith('select "id"')) {
+              const [type, id] = boundValues;
+              const matched = entries.find((entry) => entry.type === type && entry.id === id);
+
+              return matched ? [[matched.id]] : [];
+            }
+
+            return getFilteredEntries()
+              .sort((left, right) => (right.createdAt ?? 1) - (left.createdAt ?? 1))
+              .slice(getPageValues().offset, getPageValues().offset + getPageValues().pageSize)
+              .map((entry) => [entry.type, entry.id, entry.remark ?? "", entry.createdAt ?? 1]);
+          }),
+          run: vi.fn(async () => ({ success: true })),
+        };
+
+        return statement;
+      }),
+      batch: vi.fn(),
+    }) as unknown as D1Database;
+
+  const fetchTelegramRoute = (request: Request, env: Env, options?: { admin?: boolean }) => {
+    const app = new Hono<AppBindings>();
+
+    app.use("*", async (c, next) => {
+      c.set("db", createDb(c.env.DB));
+      c.set(
+        "user",
+        options?.admin
+          ? {
+              id: "admin",
+              name: "Admin",
+              email: "admin@example.com",
+              role: "admin",
+            }
+          : null,
+      );
+      c.set("session", null);
+      await next();
+    });
+    app.route("/", telegramRoute);
+
+    return app.fetch(request, env);
+  };
+
   it("passes complete Inworld text_to_voice input when synthesizing Telegram voice", async () => {
     const appKv = {
       get: vi.fn(async () => null),
@@ -1239,14 +1391,14 @@ describe("telegram webhook", () => {
       }),
     );
     const output = await extractVoiceOutput({
-        gatewayMetadata: {
-          keySource: "Unified",
-        },
-        result: {
-          audio: "https://example.com/reply.mp3",
-        },
-        state: "Completed",
-      });
+      gatewayMetadata: {
+        keySource: "Unified",
+      },
+      result: {
+        audio: "https://example.com/reply.mp3",
+      },
+      state: "Completed",
+    });
 
     expect(output.type).toBe("blob");
     expect(output.filename).toBe("reply.ogg");
@@ -1291,15 +1443,146 @@ describe("telegram webhook", () => {
     expect(response.headers.get("content-type")).toBe("audio/ogg");
     expect(await response.text()).toBe("voice-bytes");
     expect(fetchMock).toHaveBeenCalledOnce();
-    expect(fetchMock).toHaveBeenCalledWith("https://api.telegram.org/file/bottest-token/voice/file_16.oga");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.telegram.org/file/bottest-token/voice/file_16.oga",
+    );
     fetchMock.mockRestore();
+  });
+
+  it("asks private Telegram users outside the whitelist to contact an admin", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        headers: {
+          "content-type": "application/json",
+        },
+      }),
+    );
+    const response = await fetchTelegramRoute(
+      new Request("https://chat.test/api/telegram/webhook", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-telegram-bot-api-secret-token": "telegram-secret",
+        },
+        body: JSON.stringify({
+          update_id: 1,
+          message: {
+            message_id: 10,
+            text: "hello",
+            chat: {
+              id: 123,
+              type: "private",
+            },
+            from: {
+              id: 456,
+            },
+          },
+        }),
+      }),
+      {
+        API_TOKEN: "api-token",
+        APP_KV: createTelegramRouteAppKv(),
+        DB: createTelegramWhitelistDb([{ type: "private", id: "111" }]),
+      } as Env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.telegram.org/bottest-token/sendMessage",
+      expect.objectContaining({
+        body: JSON.stringify({
+          chat_id: "123",
+          text: "Please contact the administrator to add private ID 456 to the whitelist.",
+        }),
+      }),
+    );
+    fetchMock.mockRestore();
+  });
+
+  it("asks groups outside the whitelist to contact an admin with the chat ID", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        headers: {
+          "content-type": "application/json",
+        },
+      }),
+    );
+    const response = await fetchTelegramRoute(
+      new Request("https://chat.test/api/telegram/webhook", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-telegram-bot-api-secret-token": "telegram-secret",
+        },
+        body: JSON.stringify({
+          update_id: 1,
+          message: {
+            message_id: 10,
+            text: "hello",
+            chat: {
+              id: -100,
+              type: "group",
+            },
+            from: {
+              id: 456,
+            },
+          },
+        }),
+      }),
+      {
+        API_TOKEN: "api-token",
+        APP_KV: createTelegramRouteAppKv(),
+        DB: createTelegramWhitelistDb([{ type: "private", id: "456" }]),
+      } as Env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.telegram.org/bottest-token/sendMessage",
+      expect.objectContaining({
+        body: JSON.stringify({
+          chat_id: "-100",
+          text: "Please contact the administrator to add group ID -100 to the whitelist.",
+        }),
+      }),
+    );
+    fetchMock.mockRestore();
+  });
+
+  it("paginates Telegram whitelist entries from the admin Telegram route", async () => {
+    const response = await fetchTelegramRoute(
+      new Request("https://chat.test/api/admin/telegram/whitelist?page=2&pageSize=1&type=group"),
+      {
+        DB: createTelegramWhitelistDb([
+          { type: "group", id: "-100", remark: "Ops group", createdAt: 1 },
+          { type: "group", id: "-200", createdAt: 2 },
+          { type: "private", id: "456", createdAt: 3 },
+        ]),
+      } as Env,
+      { admin: true },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      items: [
+        {
+          type: "group",
+          id: "-100",
+          remark: "Ops group",
+          createdAt: 1,
+        },
+      ],
+      total: 2,
+      page: 2,
+      pageSize: 1,
+    });
   });
 
   it("shows typing, then sends the LLM text response", async () => {
     const calls: string[] = [];
     const sendMessage = vi.fn();
     const sendVoice = vi.fn();
-    const sendChatAction = vi.fn(async (_chatId: string, action: "typing") => {
+    const sendChatAction = vi.fn(async (_chatId: string, action: "typing" | "record_voice") => {
       calls.push(`action:${action}`);
     });
     const runLlm = vi.fn(async (_message, messages) => {
@@ -1661,7 +1944,9 @@ describe("telegram webhook", () => {
       expect(serializedMessages).toContain("Message caption/additional info: compare these");
       expect(serializedMessages).toContain("The user sent an image message.");
       expect(serializedMessages).toContain("Image recognition result");
-      expect(serializedMessages).toContain("description for https://chat.test/file/photo-large.jpg");
+      expect(serializedMessages).toContain(
+        "description for https://chat.test/file/photo-large.jpg",
+      );
 
       return {
         type: "text" as const,
@@ -1709,9 +1994,7 @@ describe("telegram webhook", () => {
     expect(getFileUrl).toHaveBeenCalledWith("photo-large");
     expect(describeImage).toHaveBeenCalledOnce();
     expect(describeImage).toHaveBeenCalledWith({
-      file: [
-        "https://chat.test/file/photo-large.jpg",
-      ],
+      file: ["https://chat.test/file/photo-large.jpg"],
       prompt:
         "Describe this Telegram image and extract any visible text. Additional message text/caption: compare these",
     });

@@ -12,6 +12,7 @@ interface Env {
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
   AI: Ai;
+  DB: D1Database;
   APP_KV: KVNamespace;
   USER: DurableObjectNamespace<import("./durable-objects/user").User>;
 }

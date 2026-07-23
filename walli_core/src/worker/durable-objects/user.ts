@@ -4,7 +4,7 @@ import { drizzle } from "drizzle-orm/durable-sqlite";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import type { ModelMessage } from "ai";
 import { runChatCompletion } from "../lib/chat-runner";
-import { getNextCronScheduledAt } from "../tools/cron";
+import { getNextCronScheduledAt } from "../utils/cron";
 
 const scheduledTasks = sqliteTable("scheduled_tasks", {
   id: text("id").primaryKey(),
@@ -227,16 +227,16 @@ export class User extends DurableObject<Env> {
   }
 
   async listTasks(status: ScheduledTaskStatusFilter = "pending"): Promise<ScheduledTask[]> {
-    const query = this.db
-      .select()
-      .from(scheduledTasks)
-      .$dynamic();
+    const query = this.db.select().from(scheduledTasks).$dynamic();
 
     if (status !== "all") {
       query.where(eq(scheduledTasks.status, status));
     }
 
-    return query.orderBy(asc(scheduledTasks.scheduledAt), asc(scheduledTasks.createdAt)).all().map(toScheduledTask);
+    return query
+      .orderBy(asc(scheduledTasks.scheduledAt), asc(scheduledTasks.createdAt))
+      .all()
+      .map(toScheduledTask);
   }
 
   async cancelTask(taskId: string): Promise<ScheduledTask | null> {
@@ -344,7 +344,11 @@ export class User extends DurableObject<Env> {
       return;
     }
 
-    const nextScheduledAt = getNextCronScheduledAt(task.cron, task.timeZone ?? "UTC", task.scheduledAt);
+    const nextScheduledAt = getNextCronScheduledAt(
+      task.cron,
+      task.timeZone ?? "UTC",
+      task.scheduledAt,
+    );
 
     if (task.recurrenceEndAt !== null && nextScheduledAt > task.recurrenceEndAt) {
       return;

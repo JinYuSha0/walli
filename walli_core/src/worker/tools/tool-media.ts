@@ -3,7 +3,7 @@ import { createChatRunnerTools } from "../lib/chat-runner";
 import { safeParseLooseToolInputWithDefaults } from "../lib/chat-tools";
 import { createGatewayFromEnv, normalizeGatewayModelId, unified } from "../lib/llm";
 import { getSettings } from "../api/settings";
-import { adaptBuiltInToolModelOutput } from "../../shared/tools";
+import { adaptBuiltInToolModelOutput } from "@shared/tools";
 
 export type VoiceOutput = {
   type: "blob";
@@ -183,7 +183,7 @@ export const runBuiltInMediaTool = async <ToolName extends BuiltInMediaToolName>
 
     return output;
   } catch (error) {
-    console.error("[media-tools] Built-in media tool failed", {
+    console.error("[tool-media] Built-in media tool failed", {
       toolName,
       context: normalizedContext ?? taskContext,
       error,

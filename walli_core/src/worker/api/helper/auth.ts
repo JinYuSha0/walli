@@ -1,8 +1,8 @@
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { betterAuth } from "better-auth";
 import { admin } from "better-auth/plugins/admin";
-import { createDb } from "../../db/client";
-import * as schema from "../../db/schema";
+import { createDb } from "@worker/db/client";
+import * as schema from "@worker/db/schema";
 
 export type AppUser = {
   id: string;

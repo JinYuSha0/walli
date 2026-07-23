@@ -4,7 +4,6 @@ import { streamSSE } from "hono/streaming";
 import { isStepCount, streamText } from "ai";
 import { z } from "zod";
 import type { ModelMessage } from "ai";
-import { hasAdminRole } from "./auth";
 import {
   getClientAuthSettings,
   getClientBasicSettings,
@@ -13,11 +12,9 @@ import {
 } from "./clients";
 import type { AppBindings } from "./types";
 import { getSettings } from "./settings";
-import { errorResponseSchema, parseResponse } from "./validation";
-import {
-  createChatRunnerInstructions,
-  createChatRunnerTools,
-} from "../lib/chat-runner";
+import { errorResponseSchema, parseResponse } from "./helper/validation";
+import { requireAdmin } from "./helper/middleware";
+import { createChatRunnerInstructions, createChatRunnerTools } from "../lib/chat-runner";
 import { createGateway, normalizeGatewayModelId, unified } from "../lib/llm";
 
 const chatMessageSchema = z
@@ -290,23 +287,6 @@ const streamChat = async (
       });
     }
   });
-};
-
-const requireAdmin: MiddlewareHandler<AppBindings> = async (c, next) => {
-  const user = c.get("user");
-
-  if (!user) {
-    return c.json(parseResponse(errorResponseSchema, { error: "Unauthorized" }), 401);
-  }
-
-  if (!hasAdminRole(user, c.env)) {
-    return c.json(
-      parseResponse(errorResponseSchema, { error: "Forbidden", requiredRole: "admin" }),
-      403,
-    );
-  }
-
-  await next();
 };
 
 const handleChatCors: MiddlewareHandler<AppBindings> = async (c, next) => {

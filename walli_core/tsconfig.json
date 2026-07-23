@@ -1,9 +1,10 @@
 {
   "files": [],
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/react-app/*"]
+      "@/*": ["./src/react-app/*"],
+      "@shared/*": ["./src/shared/*"],
+      "@worker/*": ["./src/worker/*"]
     }
   },
   "references": [

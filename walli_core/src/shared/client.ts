@@ -84,8 +84,58 @@ export const clientCorsSettingsPatchSchema = clientCorsSettingsSchema
 export const telegramSettingsSchema = z
   .object({
     botToken: z.string(),
+    accessPolicy: z.enum(["public", "whitelist"]),
   })
   .strict();
+
+export const telegramWhitelistTypeSchema = z.enum(["private", "group"]);
+
+export const TELEGRAM_WHITELIST_ID_MAX_LENGTH = 64;
+export const TELEGRAM_WHITELIST_REMARK_MAX_LENGTH = 100;
+export const TELEGRAM_WHITELIST_ID_PATTERN = /^-?\d+$/;
+
+export const telegramWhitelistIdSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(TELEGRAM_WHITELIST_ID_MAX_LENGTH)
+  .regex(TELEGRAM_WHITELIST_ID_PATTERN);
+
+export const telegramWhitelistRemarkSchema = z
+  .string()
+  .trim()
+  .max(TELEGRAM_WHITELIST_REMARK_MAX_LENGTH);
+
+export const telegramWhitelistEntrySchema = z
+  .object({
+    type: telegramWhitelistTypeSchema,
+    id: telegramWhitelistIdSchema,
+    remark: telegramWhitelistRemarkSchema,
+    createdAt: z.number(),
+  })
+  .strict();
+
+export const telegramWhitelistListResponseSchema = z
+  .object({
+    items: z.array(telegramWhitelistEntrySchema),
+    total: z.number().int().min(0),
+    page: z.number().int().min(1),
+    pageSize: z.number().int().min(1),
+  })
+  .strict();
+
+export const telegramWhitelistCreateSchema = z
+  .object({
+    type: telegramWhitelistTypeSchema,
+    id: telegramWhitelistIdSchema,
+    remark: telegramWhitelistRemarkSchema.optional(),
+  })
+  .strict();
+
+const telegramSettingsPatchAliases = {
+  botToken: ["botToken", "bot_token"],
+  accessPolicy: ["accessPolicy", "access_policy"],
+} as const;
 
 const normalizeTelegramSettingsPatch = (value: unknown) => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -93,20 +143,17 @@ const normalizeTelegramSettingsPatch = (value: unknown) => {
   }
 
   const record = value as Record<string, unknown>;
+  const settings: Record<string, unknown> = {};
 
-  if ("botToken" in record) {
-    return {
-      botToken: record.botToken,
-    };
+  for (const [settingKey, aliases] of Object.entries(telegramSettingsPatchAliases)) {
+    const alias = aliases.find((key) => key in record);
+
+    if (alias) {
+      settings[settingKey] = record[alias];
+    }
   }
 
-  if ("bot_token" in record) {
-    return {
-      botToken: record.bot_token,
-    };
-  }
-
-  return {};
+  return settings;
 };
 
 export const telegramSettingsPatchSchema = z.preprocess(
@@ -121,6 +168,7 @@ export const telegramSettingsPatchSchema = z.preprocess(
 export const telegramSettingsResponseSchema = z
   .object({
     botTokenMask: z.string(),
+    accessPolicy: telegramSettingsSchema.shape.accessPolicy,
   })
   .strict();
 
@@ -185,5 +233,17 @@ export type ClientCorsSettingsPatch = z.output<
 >;
 
 export type TelegramSettingsPatch = z.output<typeof telegramSettingsPatchSchema>;
+
+export type TelegramSettings = z.output<typeof telegramSettingsSchema>;
+
+export type TelegramWhitelistType = z.output<typeof telegramWhitelistTypeSchema>;
+
+export type TelegramWhitelistEntry = z.output<typeof telegramWhitelistEntrySchema>;
+
+export type TelegramWhitelistListResponse = z.output<
+  typeof telegramWhitelistListResponseSchema
+>;
+
+export type TelegramWhitelistCreate = z.output<typeof telegramWhitelistCreateSchema>;
 
 export type ClientConfigResponse = z.output<typeof clientConfigResponseSchema>;

@@ -20,6 +20,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolve("src/react-app"),
+      "@shared": resolve("src/shared"),
+      "@worker": resolve("src/worker"),
     },
   },
 });

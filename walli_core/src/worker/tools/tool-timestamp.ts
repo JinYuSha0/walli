@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppBindings } from "../api/types";
-import { parseResponse } from "../api/validation";
+import { parseResponse } from "../api/helper/validation";
 
 const timestampResponseSchema = z
   .object({

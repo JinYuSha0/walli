@@ -14,7 +14,14 @@ export const createGatewayFromEnv = (env: Env) =>
 
 export const createGateway = (c: Context<AppBindings>) => createGatewayFromEnv(c.env);
 
-export const normalizeGatewayModelId = (model: string) =>
-  model.startsWith("@cf/") ? `workers-ai/${model}` : model;
+export const normalizeGatewayModelId = (model: string) => {
+  const value = model.trim();
+
+  if (value.startsWith("@cf/")) {
+    return `workers-ai/${value}`;
+  }
+
+  return value;
+};
 
 export { unified };

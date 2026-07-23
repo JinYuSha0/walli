@@ -12,6 +12,11 @@
     "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,
+    "paths": {
+      "@/*": ["./src/react-app/*"],
+      "@shared/*": ["./src/shared/*"],
+      "@worker/*": ["./src/worker/*"]
+    },
 
     /* Linting */
     "strict": true,

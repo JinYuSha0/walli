@@ -1,5 +1,5 @@
 import { hc, parseResponse } from "hono/client";
-import type { AppType } from "../worker";
+import type { AppType } from "@worker/index";
 import type {
   ClientAuthSettingsPatch,
   ClientBasicSettingsPatch,
@@ -9,8 +9,12 @@ import type {
   ClientPlatform,
   ClientUsageLimitPatch,
   TelegramSettingsPatch,
-} from "../shared/client";
-import type { SettingsPatch, SettingsResponse } from "../shared/const";
+  TelegramWhitelistCreate,
+  TelegramWhitelistEntry,
+  TelegramWhitelistListResponse,
+  TelegramWhitelistType,
+} from "@shared/client";
+import type { SettingsPatch, SettingsResponse } from "@shared/const";
 
 export type {
   ClientConfigResponse,
@@ -26,7 +30,11 @@ export type {
   ClientUsageLimit,
   ClientUsageLimitPatch,
   TelegramSettingsPatch,
-} from "../shared/client";
+  TelegramWhitelistCreate,
+  TelegramWhitelistEntry,
+  TelegramWhitelistListResponse,
+  TelegramWhitelistType,
+} from "@shared/client";
 
 export type {
   ModelCapabilityTag,
@@ -40,7 +48,7 @@ export type {
   ToolModelInvocation,
   ToolSchemaField,
   ToolSchemaFieldType,
-} from "../shared/const";
+} from "@shared/const";
 
 const apiClient = hc<AppType>("/", {
   init: {
@@ -56,8 +64,6 @@ const query =
 export const getApiInfo = query(() => apiClient.api.index.$get());
 
 export const getMe = query(() => apiClient.api.me.$get());
-
-export const getAdminStatus = query(() => apiClient.api.admin.status.$get());
 
 export const getSettings = async (): Promise<SettingsResponse> =>
   parseResponse(apiClient.api.settings.$get());
@@ -140,3 +146,43 @@ export const updateTelegramSettings = async (
   json: TelegramSettingsPatch,
 ): Promise<ClientConfigResponse> =>
   patchClientConfig("telegram", json);
+
+export const getTelegramWhitelistEntries = async ({
+  page,
+  pageSize,
+  type,
+}: {
+  page: number;
+  pageSize: number;
+  type?: TelegramWhitelistType;
+}): Promise<TelegramWhitelistListResponse> => {
+  const query = {
+    page: String(page),
+    pageSize: String(pageSize),
+    ...(type ? { type } : {}),
+  };
+
+  return parseResponse(apiClient.api.admin.telegram.whitelist.$get({ query }));
+};
+
+export const createTelegramWhitelistEntry = async (
+  json: TelegramWhitelistCreate,
+): Promise<TelegramWhitelistEntry> =>
+  parseResponse(apiClient.api.admin.telegram.whitelist.$post({ json }));
+
+export const deleteTelegramWhitelistEntry = async ({
+  type,
+  id,
+}: {
+  type: TelegramWhitelistType;
+  id: string;
+}) => {
+  await parseResponse(
+    apiClient.api.admin.telegram.whitelist[":type"][":id"].$delete({
+      param: {
+        type,
+        id,
+      },
+    }),
+  );
+};

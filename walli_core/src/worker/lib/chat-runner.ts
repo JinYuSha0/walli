@@ -1,6 +1,6 @@
-import { generateText, isStepCount, type output, type ToolSet } from "ai";
+import { generateText, isStepCount, type ToolSet, Output } from "ai";
 import type { ModelMessage } from "ai";
-import { BUILT_IN_TOOLS, type Settings, type ToolConfig } from "../../shared/const";
+import { BUILT_IN_TOOLS, type Settings, type ToolConfig } from "@shared/const";
 import { toolsRoute } from "../tools";
 import { getSettings } from "../api/settings";
 import { buildChatTools } from "./chat-tools";
@@ -16,7 +16,7 @@ type RunChatOptions = {
   extraTools?: ToolSet;
   extraInstructions?: string;
   toolsEnabled?: boolean;
-  output?: output.Output;
+  output?: Output.Output;
 };
 
 const createChatInstructions = (globalPrompt: string, userInfo: unknown) => {
@@ -46,20 +46,20 @@ const joinInstructions = (...parts: Array<string | undefined>) =>
     .join("\n\n") || undefined;
 
 const withInternalApiInvocation = (tool: ToolConfig, env: Env, origin: string): ToolConfig => ({
-    ...tool,
-    invocation:
-      tool.invocation.type === "api"
-        ? {
-            ...tool.invocation,
-            url: new URL(tool.invocation.url, origin).toString(),
-            headers: [
-              {
-                name: "authorization",
-                defaultValue: `Bearer ${env.API_TOKEN}`,
-              },
-            ],
-          }
-        : tool.invocation,
+  ...tool,
+  invocation:
+    tool.invocation.type === "api"
+      ? {
+          ...tool.invocation,
+          url: new URL(tool.invocation.url, origin).toString(),
+          headers: [
+            {
+              name: "authorization",
+              defaultValue: `Bearer ${env.API_TOKEN}`,
+            },
+          ],
+        }
+      : tool.invocation,
 });
 
 const createBuiltInTools = (env: Env, origin: string, settings: Settings): ToolConfig[] => {

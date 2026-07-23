@@ -1,11 +1,27 @@
 import { Hono } from "hono";
 import { Output, type ModelMessage } from "ai";
 import { z } from "zod";
-import { runChatCompletion } from "../lib/chat-runner";
-import { renderTelegramHtmlFromMarkdown } from "../lib/telegram-format";
-import { getClientBasicSettings, getOrCreateClientId, getTelegramBotToken } from "./clients";
+import { and, asc, count, desc, eq } from "drizzle-orm";
+import { runChatCompletion } from "@worker/lib/chat-runner";
+import { renderTelegramHtmlFromMarkdown } from "@worker/lib/telegram-format";
+import type { Database } from "@worker/db/client";
+import { telegramWhitelistUser } from "@worker/db/schema";
+import {
+  getClientBasicSettings,
+  getOrCreateClientId,
+  getTelegramBotToken,
+  getTelegramSettings,
+} from "./clients";
 import { getSettings } from "./settings";
 import type { AppBindings } from "./types";
+import { requireAdmin } from "./helper/middleware";
+import {
+  telegramWhitelistCreateSchema,
+  telegramWhitelistListResponseSchema,
+  telegramWhitelistTypeSchema,
+  type TelegramWhitelistType,
+} from "@shared/client";
+import { parseResponse } from "./helper/validation";
 import {
   BUILT_IN_MEDIA_TOOL_NAMES,
   describeImage,
@@ -14,7 +30,7 @@ import {
   type ImageToTextContext,
   type VoiceOutput,
   type VoiceToTextContext,
-} from "../tools/media-tools";
+} from "@worker/tools/tool-media";
 
 const telegramChatSchema = z
   .object({
@@ -510,7 +526,152 @@ const replyTelegramText = async (token: string, update: unknown, text: string) =
   });
 };
 
+const getTelegramMessageAccessContext = (update: unknown) => {
+  const result = telegramUpdateSchema.safeParse(update);
+
+  if (!result.success || !result.data.message) {
+    return undefined;
+  }
+
+  const { message } = result.data;
+  const userId =
+    message.from?.id === undefined ? stringifyChatId(message.chat.id) : String(message.from.id);
+  const chatId = stringifyChatId(message.chat.id);
+  const chatType = message.chat.type;
+  const whitelistType: TelegramWhitelistType =
+    chatType === "group" || chatType === "supergroup" ? "group" : "private";
+  const whitelistId = whitelistType === "group" ? chatId : userId;
+
+  return {
+    chatId,
+    chatType,
+    userId,
+    whitelistType,
+    whitelistId,
+  };
+};
+
+const telegramWhitelistQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).catch(1),
+  pageSize: z.coerce.number().int().min(1).max(100).catch(20),
+  type: telegramWhitelistTypeSchema.optional(),
+});
+
+const listTelegramWhitelistEntries = async (
+  db: Database,
+  query: z.output<typeof telegramWhitelistQuerySchema>,
+) => {
+  const offset = (query.page - 1) * query.pageSize;
+  const where = query.type ? eq(telegramWhitelistUser.type, query.type) : undefined;
+  const totalQuery = db.select({ total: count() }).from(telegramWhitelistUser);
+  const itemsQuery = db
+    .select({
+      type: telegramWhitelistUser.type,
+      id: telegramWhitelistUser.id,
+      remark: telegramWhitelistUser.remark,
+      createdAt: telegramWhitelistUser.createdAt,
+    })
+    .from(telegramWhitelistUser);
+  const [countResult, items] = await Promise.all([
+    (where ? totalQuery.where(where) : totalQuery).get(),
+    (where ? itemsQuery.where(where) : itemsQuery)
+      .orderBy(
+        desc(telegramWhitelistUser.createdAt),
+        asc(telegramWhitelistUser.type),
+        asc(telegramWhitelistUser.id),
+      )
+      .limit(query.pageSize)
+      .offset(offset)
+      .all(),
+  ]);
+
+  return parseResponse(telegramWhitelistListResponseSchema, {
+    items: items.map((item) => ({
+      ...item,
+      remark: item.remark ?? "",
+    })),
+    total: countResult?.total ?? 0,
+    page: query.page,
+    pageSize: query.pageSize,
+  });
+};
+
+const hasTelegramWhitelistEntry = async (db: Database, type: TelegramWhitelistType, id: string) => {
+  const result = await db
+    .select({ id: telegramWhitelistUser.id })
+    .from(telegramWhitelistUser)
+    .where(and(eq(telegramWhitelistUser.type, type), eq(telegramWhitelistUser.id, id)))
+    .get();
+
+  return Boolean(result);
+};
+
 export const telegramRoute = new Hono<AppBindings>()
+  .use("/api/admin/telegram/whitelist", requireAdmin)
+  .use("/api/admin/telegram/whitelist/*", requireAdmin)
+  .get("/api/admin/telegram/whitelist", async (c) => {
+    const query = telegramWhitelistQuerySchema.parse({
+      page: c.req.query("page"),
+      pageSize: c.req.query("pageSize"),
+      type: c.req.query("type") || undefined,
+    });
+
+    return c.json(await listTelegramWhitelistEntries(c.get("db"), query));
+  })
+  .post("/api/admin/telegram/whitelist", async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const result = telegramWhitelistCreateSchema.safeParse(body);
+
+    if (!result.success) {
+      return c.json(
+        {
+          error: "Invalid body",
+          issues: z.treeifyError(result.error),
+        },
+        400,
+      );
+    }
+
+    const entry = {
+      ...result.data,
+      remark: result.data.remark?.trim() ?? "",
+      createdAt: Date.now(),
+    };
+
+    await c.get("db").insert(telegramWhitelistUser).values(entry).onConflictDoNothing().run();
+
+    return c.json(entry, 201);
+  })
+  .delete("/api/admin/telegram/whitelist/:type/:id", async (c) => {
+    const typeResult = telegramWhitelistTypeSchema.safeParse(c.req.param("type"));
+    const idResult = telegramWhitelistCreateSchema.shape.id.safeParse(c.req.param("id"));
+
+    if (!typeResult.success || !idResult.success) {
+      return c.json(
+        {
+          error: "Invalid whitelist entry",
+          issues: {
+            type: typeResult.success ? undefined : z.treeifyError(typeResult.error),
+            id: idResult.success ? undefined : z.treeifyError(idResult.error),
+          },
+        },
+        400,
+      );
+    }
+
+    await c
+      .get("db")
+      .delete(telegramWhitelistUser)
+      .where(
+        and(
+          eq(telegramWhitelistUser.type, typeResult.data),
+          eq(telegramWhitelistUser.id, idResult.data),
+        ),
+      )
+      .run();
+
+    return c.json({ ok: true });
+  })
   .get("/api/telegram/file/*", async (c) => {
     const fileId = c.req.query("fileId");
     const expires = c.req.query("expires");
@@ -581,6 +742,29 @@ export const telegramRoute = new Hono<AppBindings>()
       await replyTelegramText(token, update, "Not enabled");
 
       return c.json({ ok: true });
+    }
+
+    const accessContext = getTelegramMessageAccessContext(update);
+
+    const telegramSettings = await getTelegramSettings(c.env.APP_KV);
+
+    if (telegramSettings.accessPolicy === "whitelist") {
+      const whitelistType = accessContext?.whitelistType;
+      const whitelistId = accessContext?.whitelistId;
+
+      if (
+        !whitelistType ||
+        !whitelistId ||
+        !(await hasTelegramWhitelistEntry(c.get("db"), whitelistType, whitelistId))
+      ) {
+        await replyTelegramText(
+          token,
+          update,
+          `Please contact the administrator to add ${whitelistType ?? "private"} ID ${whitelistId ?? "unknown"} to the whitelist.`,
+        );
+
+        return c.json({ ok: true });
+      }
     }
 
     const origin = new URL(c.req.url).origin;

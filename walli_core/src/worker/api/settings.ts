@@ -1,14 +1,8 @@
 import { Hono } from "hono";
-import type { MiddlewareHandler } from "hono";
 import { z } from "zod";
-import { hasAdminRole } from "./auth";
 import type { AppBindings } from "./types";
-import {
-  emptyQuerySchema,
-  errorResponseSchema,
-  parseResponse,
-  validateQuery,
-} from "./validation";
+import { requireAdmin } from "./helper/middleware";
+import { emptyQuerySchema, parseResponse, validateQuery } from "./helper/validation";
 import {
   BUILT_IN_TOOLS,
   DEFAULT_SETTINGS,
@@ -31,8 +25,10 @@ const builtInToolNames = new Set(BUILT_IN_TOOLS.map((tool) => tool.name));
 
 const normalizeBuiltInTools = (settings: Settings) => {
   const configuredBuiltIns = new Map(
-    [...settings.builtInTools, ...settings.tools.filter((tool) => builtInToolNames.has(tool.name))]
-      .map((tool) => [tool.name, tool]),
+    [
+      ...settings.builtInTools,
+      ...settings.tools.filter((tool) => builtInToolNames.has(tool.name)),
+    ].map((tool) => [tool.name, tool]),
   );
 
   return BUILT_IN_TOOLS.map((defaultTool) => {
@@ -116,8 +112,7 @@ const getLegacyTimeZone = (settings: Partial<Settings> | unknown) => {
   }
 
   const record = settings as Record<string, unknown>;
-  const timeZone =
-    record.timeZone ?? getLegacyPrimaryModelUsageLimit(settings)?.timeZone;
+  const timeZone = record.timeZone ?? getLegacyPrimaryModelUsageLimit(settings)?.timeZone;
   const result = timeZoneConfigSchema.safeParse(timeZone);
 
   return result.success ? result.data : DEFAULT_SETTINGS.timeZone;
@@ -138,11 +133,9 @@ const getLegacySettings = async (appKv: KVNamespace) => {
   return {
     ...DEFAULT_SETTINGS,
     ...settings,
-    primaryModelUsageLimit:
-      settings.primaryModelUsageLimit ?? getPrimaryModelUsageLimit(settings),
+    primaryModelUsageLimit: settings.primaryModelUsageLimit ?? getPrimaryModelUsageLimit(settings),
     timeZone: settings.timeZone ?? getLegacyTimeZone(savedSettings),
-    globalPrompt:
-      settings.globalPrompt ?? systemPrompt ?? DEFAULT_SETTINGS.globalPrompt,
+    globalPrompt: settings.globalPrompt ?? systemPrompt ?? DEFAULT_SETTINGS.globalPrompt,
   };
 };
 
@@ -214,14 +207,12 @@ export const getSettings = async (appKv: KVNamespace) => {
         settingKey === "timeZone" && parsedValue === undefined
           ? getLegacyTimeZone(legacySettings)
           : settingKey === "primaryModelUsageLimit" && Array.isArray(parsedValue)
-          ? getPrimaryModelUsageLimit({
-              ...legacySettings,
-              usageLimits: parsedValue,
-            } as Partial<Settings> & { usageLimits: typeof parsedValue })
-          : parsedValue;
-      const result = settingsFieldSchemaMap[settingKey].safeParse(
-        settingValue,
-      );
+            ? getPrimaryModelUsageLimit({
+                ...legacySettings,
+                usageLimits: parsedValue,
+              } as Partial<Settings> & { usageLimits: typeof parsedValue })
+            : parsedValue;
+      const result = settingsFieldSchemaMap[settingKey].safeParse(settingValue);
 
       return [
         settingKey,
@@ -256,23 +247,6 @@ const createSettingsResponse = (settings: Settings, env: Env) =>
     ...settings,
     apiTokenMask: maskApiToken(env.API_TOKEN),
   });
-
-const requireAdmin: MiddlewareHandler<AppBindings> = async (c, next) => {
-  const user = c.get("user");
-
-  if (!user) {
-    return c.json(parseResponse(errorResponseSchema, { error: "Unauthorized" }), 401);
-  }
-
-  if (!hasAdminRole(user, c.env)) {
-    return c.json(
-      parseResponse(errorResponseSchema, { error: "Forbidden", requiredRole: "admin" }),
-      403,
-    );
-  }
-
-  await next();
-};
 
 export const settingsRoute = new Hono<AppBindings>()
   .get("/api/settings", validateQuery(emptyQuerySchema), async (c) => {

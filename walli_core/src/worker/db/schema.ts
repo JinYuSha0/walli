@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const user = sqliteTable("user", {
   id: text("id").primaryKey(),
@@ -58,3 +58,14 @@ export const verification = sqliteTable("verification", {
   createdAt: integer("createdAt", { mode: "timestamp" }),
   updatedAt: integer("updatedAt", { mode: "timestamp" }),
 });
+
+export const telegramWhitelistUser = sqliteTable("telegram_whitelist_user", {
+  type: text("type", { enum: ["private", "group"] }).notNull(),
+  id: text("id").notNull(),
+  remark: text("remark"),
+  createdAt: integer("createdAt").notNull(),
+}, (table) => [
+  primaryKey({
+    columns: [table.type, table.id],
+  }),
+]);

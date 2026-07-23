@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppBindings } from "../api/types";
-import { parseCronSchedule } from "./cron";
+import { parseCronSchedule } from "../utils/cron";
 
 const isValidTimeZone = (timeZone: string) => {
   try {

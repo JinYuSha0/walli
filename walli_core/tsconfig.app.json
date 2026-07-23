@@ -16,9 +16,10 @@
     "jsx": "react-jsx",
     "resolveJsonModule": true,
     "types": ["vite/client", "./worker-configuration.d.ts"],
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/react-app/*"]
+      "@/*": ["./src/react-app/*"],
+      "@shared/*": ["./src/shared/*"],
+      "@worker/*": ["./src/worker/*"]
     },
 
     /* Linting */

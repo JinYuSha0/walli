@@ -37,7 +37,6 @@ export function AppLayout() {
     await authClient.signOut({
       fetchOptions: {
         onSuccess: () => {
-          queryClient.removeQueries({ queryKey: ["admin-status"] });
           queryClient.removeQueries({ queryKey: ["me"] });
           setActivePanel("overview");
           void navigate({ to: "/login" });
