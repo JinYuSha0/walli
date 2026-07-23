@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import { clientPlatformSchema } from "@shared/client";
 import type { AppBindings } from "../api/types";
+import { createUserDoName, type UserDoClientPlatform } from "../durable-objects/user/types";
 import { parseCronSchedule } from "../utils/cron";
 
 const isValidTimeZone = (timeZone: string) => {
@@ -17,6 +19,7 @@ const scheduledTaskActionSchema = z
   .object({
     action: z.enum(["create", "list", "cancel"]),
     userId: z.string().trim().min(1),
+    clientPlatform: clientPlatformSchema,
     taskId: z.string().trim().optional(),
     status: z.enum(["pending", "completed", "failed", "canceled", "all"]).default("pending"),
     type: z.string().trim().min(1).default("generic"),
@@ -89,7 +92,11 @@ const scheduledTaskActionSchema = z
     }
   });
 
-const getScheduler = (env: Env, userId: string) => env.USER_DO.getByName(userId);
+const normalizeUserDoName = (platform: UserDoClientPlatform, userId: string) =>
+  userId.startsWith(`${platform}:`) ? userId : createUserDoName(platform, userId);
+
+const getScheduler = (env: Env, platform: UserDoClientPlatform, userId: string) =>
+  env.USER_DO.getByName(normalizeUserDoName(platform, userId));
 
 const serializeError = (error: unknown) => {
   if (error instanceof Error) {
@@ -114,7 +121,7 @@ export const scheduledTaskToolRoute = new Hono<AppBindings>().post(
       );
     }
 
-    const scheduler = getScheduler(c.env, result.data.userId);
+    const scheduler = getScheduler(c.env, result.data.clientPlatform, result.data.userId);
 
     try {
       if (result.data.action === "create") {

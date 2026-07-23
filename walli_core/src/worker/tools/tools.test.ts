@@ -17,7 +17,11 @@ import { handleTelegramWebhookUpdate, telegramRoute } from "../api/telegram";
 import { getSettings, settingsRoute } from "../api/settings";
 import type { AppBindings } from "../api/types";
 import { createDb } from "../db/client";
-import { createChatRunnerTools } from "../lib/chat-runner";
+import {
+  createChatRunnerInstructions,
+  createChatRunnerTools,
+  createChatUserInfo,
+} from "../lib/chat-runner";
 import {
   buildChatTools,
   createLooseToolInputSchema,
@@ -33,6 +37,7 @@ import {
   type VoiceToTextContext,
 } from "./tool-media";
 import { toolsRoute } from ".";
+import { createNotificationTools } from "./tool-notification";
 import { getNextCronScheduledAt } from "../utils/cron";
 
 const env = {
@@ -90,6 +95,102 @@ describe("chat tools", () => {
 
   beforeEach(() => {
     aiRun.mockClear();
+  });
+
+  it("includes request time zone and language in chat instructions", () => {
+    expect(
+      createChatRunnerInstructions(
+        "Be concise.",
+        createChatUserInfo({
+          userId: "123",
+          clientPlatform: "telegram",
+        }),
+        {
+          timeZone: "Asia/Shanghai",
+          language: "zh",
+        },
+      ),
+    ).toContain(["User request context:", "Time zone: Asia/Shanghai", "Language: zh"].join("\n"));
+  });
+
+  it("sets a normalized notification channel for Telegram chat user info", () => {
+    expect(
+      createChatUserInfo({
+        userId: "123",
+        clientPlatform: "telegram",
+      }),
+    ).toEqual({
+      userId: "123",
+      clientPlatform: "telegram",
+      notificationChannel: {
+        type: "telegram",
+        userId: "123",
+      },
+    });
+    expect(
+      createChatUserInfo({
+        userId: "web-user",
+        clientPlatform: "web",
+      }),
+    ).toEqual({
+      userId: "web-user",
+      clientPlatform: "web",
+      notificationChannel: {
+        type: "web",
+        userId: "web-user",
+      },
+    });
+    expect(
+      createChatUserInfo({
+        userId: "flutter-user",
+        clientPlatform: "flutter",
+      }),
+    ).toEqual({
+      userId: "flutter-user",
+      clientPlatform: "flutter",
+      notificationChannel: {
+        type: "flutter",
+        userId: "flutter-user",
+      },
+    });
+  });
+
+  it("creates chat user info from auth data through the unified input", () => {
+    expect(
+      createChatUserInfo({
+        authUserInfo: {
+          userId: "auth-user",
+          name: "Ada",
+          email: "ada@example.com",
+          role: "admin",
+        },
+        userId: "fallback-user",
+        clientPlatform: "web",
+      }),
+    ).toEqual({
+      userId: "auth-user",
+      name: "Ada",
+      email: "ada@example.com",
+      clientPlatform: "web",
+      notificationChannel: {
+        type: "web",
+        userId: "auth-user",
+      },
+      attributes: {
+        role: "admin",
+      },
+    });
+  });
+
+  it("creates notification tools for non-Telegram channels with TODO delivery", async () => {
+    const tools = createNotificationTools(env, {
+      type: "web",
+      userId: "web-user",
+    });
+
+    await expect(tools.send_notification.execute?.({ text: "hello" }, {})).rejects.toThrow(
+      "TODO: Web notification delivery is not implemented",
+    );
   });
 
   it("keeps the expected built-in tool order", () => {
@@ -843,12 +944,13 @@ describe("tools route", () => {
       canceledAt: null,
       lastError: null,
     }));
+    const getByName = vi.fn(() => ({
+      createTask,
+    }));
     const scheduledTaskEnv = {
       ...env,
       USER_DO: {
-        getByName: vi.fn(() => ({
-          createTask,
-        })),
+        getByName,
       },
     } as unknown as Env;
 
@@ -863,6 +965,7 @@ describe("tools route", () => {
         body: JSON.stringify({
           action: "create",
           userId: "user-1",
+          clientPlatform: "telegram",
           type: "reminder",
           description: "Send the weekly report reminder.",
           scheduledAt: 1000,
@@ -880,6 +983,7 @@ describe("tools route", () => {
     );
 
     expect(response.status).toBe(201);
+    expect(getByName).toHaveBeenCalledWith("telegram:user-1");
     expect(createTask).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "user-1",
@@ -896,12 +1000,13 @@ describe("tools route", () => {
 
   it("lists pending scheduled tasks by default", async () => {
     const listTasks = vi.fn(async () => []);
+    const getByName = vi.fn(() => ({
+      listTasks,
+    }));
     const scheduledTaskEnv = {
       ...env,
       USER_DO: {
-        getByName: vi.fn(() => ({
-          listTasks,
-        })),
+        getByName,
       },
     } as unknown as Env;
 
@@ -916,23 +1021,26 @@ describe("tools route", () => {
         body: JSON.stringify({
           action: "list",
           userId: "user-1",
+          clientPlatform: "telegram",
         }),
       },
       scheduledTaskEnv,
     );
 
     expect(response.status).toBe(200);
+    expect(getByName).toHaveBeenCalledWith("telegram:user-1");
     expect(listTasks).toHaveBeenCalledWith("pending");
   });
 
   it("supports listing scheduled tasks across all statuses", async () => {
     const listTasks = vi.fn(async () => []);
+    const getByName = vi.fn(() => ({
+      listTasks,
+    }));
     const scheduledTaskEnv = {
       ...env,
       USER_DO: {
-        getByName: vi.fn(() => ({
-          listTasks,
-        })),
+        getByName,
       },
     } as unknown as Env;
 
@@ -947,6 +1055,7 @@ describe("tools route", () => {
         body: JSON.stringify({
           action: "list",
           userId: "user-1",
+          clientPlatform: "telegram",
           status: "all",
         }),
       },
@@ -954,6 +1063,7 @@ describe("tools route", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(getByName).toHaveBeenCalledWith("telegram:user-1");
     expect(listTasks).toHaveBeenCalledWith("all");
   });
 
@@ -969,6 +1079,7 @@ describe("tools route", () => {
         body: JSON.stringify({
           action: "create",
           userId: "user-1",
+          clientPlatform: "telegram",
           description: "Send the weekly report reminder.",
           scheduledAt: 1000,
           cron: "0 17 * * 1",
@@ -977,10 +1088,32 @@ describe("tools route", () => {
       },
       env,
     );
-    const body = settingsResponseSchema.parse(await response.json());
+    const body = (await response.json()) as Record<string, unknown>;
 
     expect(response.status).toBe(400);
     expect(JSON.stringify(body)).toContain("recurrenceEndAt must be greater than scheduledAt");
+  });
+
+  it("requires clientPlatform for scheduled task operations", async () => {
+    const response = await toolsRoute.request(
+      "/api/tools/scheduled-tasks",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "list",
+          userId: "user-1",
+        }),
+      },
+      env,
+    );
+    const body = (await response.json()) as Record<string, unknown>;
+
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(body)).toContain("clientPlatform");
   });
 });
 
@@ -1494,6 +1627,9 @@ describe("telegram webhook", () => {
           chat_id: "123",
           text: "Please contact the administrator to add private ID <code>456</code> to the whitelist.",
           parse_mode: "HTML",
+          link_preview_options: {
+            is_disabled: true,
+          },
         }),
       }),
     );
@@ -1545,6 +1681,9 @@ describe("telegram webhook", () => {
           chat_id: "-100",
           text: "Please contact the administrator to add group ID <code>-100</code> to the whitelist.",
           parse_mode: "HTML",
+          link_preview_options: {
+            is_disabled: true,
+          },
         }),
       }),
     );

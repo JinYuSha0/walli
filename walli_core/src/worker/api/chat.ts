@@ -14,7 +14,12 @@ import type { AppBindings } from "./types";
 import { getSettings } from "./settings";
 import { errorResponseSchema, parseResponse } from "./helper/validation";
 import { requireAdmin } from "./helper/middleware";
-import { createChatRunnerInstructions, createChatRunnerTools } from "../lib/chat-runner";
+import {
+  createChatRunnerInstructions,
+  createChatRunnerTools,
+  createChatUserInfo,
+  type ChatUserInfo,
+} from "../lib/chat-runner";
 import { createGateway, normalizeGatewayModelId, unified } from "../lib/llm";
 
 const chatMessageSchema = z
@@ -91,26 +96,6 @@ const getUserInfoFromAuthBody = (body: unknown) => {
   return undefined;
 };
 
-const createAuthenticatedUserInfo = (userInfo: unknown, fallbackUserId: string) => {
-  if (typeof userInfo === "object" && userInfo !== null && !Array.isArray(userInfo)) {
-    const userInfoRecord = userInfo as Record<string, unknown>;
-    const returnedUserId = userInfoRecord.userId;
-
-    if (typeof returnedUserId === "string" && returnedUserId.trim().length > 0) {
-      return userInfoRecord;
-    }
-
-    return {
-      ...userInfoRecord,
-      userId: fallbackUserId,
-    };
-  }
-
-  return {
-    userId: fallbackUserId,
-  };
-};
-
 const verifyChatAuth = async (
   authSettings: Awaited<ReturnType<typeof getClientAuthSettings>>,
   credentials: {
@@ -176,7 +161,7 @@ const verifyChatAuth = async (
 const streamChat = async (
   c: Context<AppBindings>,
   body: ParsedChatRequest,
-  userInfo: unknown,
+  userInfo: ChatUserInfo,
   additionalSystemPrompt = "",
 ) => {
   const settings = await getSettings(c.env.APP_KV);
@@ -367,7 +352,11 @@ export const chatRoute = new Hono<AppBindings>()
     return streamChat(
       c,
       bodyResult.data,
-      createAuthenticatedUserInfo(authResult.userInfo, bodyResult.data.userId),
+      createChatUserInfo({
+        authUserInfo: authResult.userInfo,
+        userId: bodyResult.data.userId,
+        clientPlatform: platform,
+      }),
       basicSettings.additionalSystemPrompt,
     );
   })
@@ -391,9 +380,14 @@ export const chatRoute = new Hono<AppBindings>()
       );
     }
 
-    return streamChat(c, bodyResult.data, {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-    });
+    return streamChat(
+      c,
+      bodyResult.data,
+      createChatUserInfo({
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        clientPlatform: "web",
+      }),
+    );
   });

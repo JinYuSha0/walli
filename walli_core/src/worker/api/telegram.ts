@@ -2,10 +2,19 @@ import { Hono } from "hono";
 import { Output, type ModelMessage } from "ai";
 import { z } from "zod";
 import { and, asc, count, desc, eq } from "drizzle-orm";
-import { runChatCompletion } from "@worker/lib/chat-runner";
-import { renderTelegramHtmlFromMarkdown } from "@worker/lib/telegram-format";
+import { createChatUserInfo, runChatCompletion } from "@worker/lib/chat-runner";
 import type { Database } from "@worker/db/client";
 import { telegramWhitelistUser } from "@worker/db/schema";
+import {
+  createTelegramApiUrl,
+  createTelegramFileUrl,
+  getTelegramMessageAccessContext,
+  getTelegramMessageIdentity,
+  postTelegramApi,
+  replyTelegramText,
+  sendTelegramText,
+  stringifyTelegramId,
+} from "@worker/utils/tg";
 import {
   getClientBasicSettings,
   getOrCreateClientId,
@@ -88,15 +97,9 @@ const telegramUpdateSchema = z
 
 type TelegramMessage = z.output<typeof telegramMessageSchema>;
 
-type TelegramApiResult = {
+type TelegramFileResult = {
   ok: boolean;
   description?: string;
-};
-
-type TelegramApiMethod =
-  "sendMessage" | "sendChatAction" | "getFile" | "sendVoice" | "readBusinessMessage";
-
-type TelegramFileResult = TelegramApiResult & {
   result?: {
     file_path?: string;
   };
@@ -125,8 +128,6 @@ type TelegramWebhookDeps = {
   runLlm: (message: TelegramMessage, messages: ModelMessage[]) => Promise<TelegramReply>;
 };
 
-const stringifyChatId = (chatId: string | number) => String(chatId);
-
 const isEmptyTelegramMessage = (message: TelegramMessage) => {
   const record = message as Record<string, unknown>;
 
@@ -151,12 +152,6 @@ const getImagePrompt = (text: string) => {
 
   return text ? `${basePrompt} Additional message text/caption: ${text}` : basePrompt;
 };
-
-const createTelegramApiUrl = (token: string, method: TelegramApiMethod) =>
-  `https://api.telegram.org/bot${token}/${method}`;
-
-const createTelegramFileUrl = (token: string, filePath: string) =>
-  `https://api.telegram.org/file/bot${token}/${filePath}`;
 
 const inferTelegramFileContentType = (filePath: string) => {
   const normalizedPath = filePath.toLowerCase();
@@ -236,25 +231,6 @@ const createTelegramFileProxyUrl = async (
   return url.toString();
 };
 
-const postTelegramApi = async (
-  token: string,
-  method: TelegramApiMethod,
-  payload: Record<string, unknown>,
-) => {
-  const response = await fetch(createTelegramApiUrl(token, method), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-  const result = (await response.json().catch(() => undefined)) as TelegramApiResult | undefined;
-
-  if (!response.ok || result?.ok === false) {
-    throw new Error(result?.description ?? `Telegram ${method} request failed`);
-  }
-};
-
 const getTelegramFilePath = async (token: string, fileId: string) => {
   const response = await fetch(createTelegramApiUrl(token, "getFile"), {
     method: "POST",
@@ -280,15 +256,7 @@ const sendTelegramVoice = async (token: string, chatId: string, voice: TelegramV
   body.set("chat_id", chatId);
   body.set("voice", voice.voice, voice.filename);
 
-  const response = await fetch(createTelegramApiUrl(token, "sendVoice"), {
-    method: "POST",
-    body,
-  });
-  const result = (await response.json().catch(() => undefined)) as TelegramApiResult | undefined;
-
-  if (!response.ok || result?.ok === false) {
-    throw new Error(result?.description ?? "Telegram sendVoice request failed");
-  }
+  await postTelegramApi(token, "sendVoice", body);
 };
 
 const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWebhookDeps> => {
@@ -298,25 +266,8 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
     throw new Error("Telegram bot token is not configured");
   }
 
-  const sendMessage: TelegramWebhookDeps["sendMessage"] = async (chatId, text) => {
-    const fallbackPayload = {
-      chat_id: chatId,
-      text: text.slice(0, 4096),
-    };
-
-    try {
-      await postTelegramApi(token, "sendMessage", {
-        ...fallbackPayload,
-        text: renderTelegramHtmlFromMarkdown(text).slice(0, 4096),
-        parse_mode: "HTML",
-        link_preview_options: {
-          is_disabled: true,
-        },
-      });
-    } catch {
-      await postTelegramApi(token, "sendMessage", fallbackPayload);
-    }
-  };
+  const sendMessage: TelegramWebhookDeps["sendMessage"] = (chatId, text) =>
+    sendTelegramText(token, chatId, text);
   const sendVoice: TelegramWebhookDeps["sendVoice"] = async (chatId, voice) => {
     await sendTelegramVoice(token, chatId, voice);
   };
@@ -347,25 +298,21 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
     describeImage: (context) => describeImage(env, origin, context),
     synthesizeVoice: (text) => synthesizeVoice(env, origin, text),
     runLlm: async (message, messages) => {
-      const userId =
-        message.from?.id === undefined ? stringifyChatId(message.chat.id) : String(message.from.id);
-      const userName = [message.from?.first_name, message.from?.last_name]
-        .filter(Boolean)
-        .join(" ");
+      const { userId, chatId, userName } = getTelegramMessageIdentity(message);
       const settings = await getSettings(env.APP_KV);
       const basicSettings = await getClientBasicSettings(env.APP_KV, "telegram");
       const result = await runChatCompletion({
         env,
         origin,
-        userInfo: {
+        userInfo: createChatUserInfo({
           userId,
           name: userName || message.from?.username || userId,
-          telegram: {
-            chatId: stringifyChatId(message.chat.id),
-            username: message.from?.username,
-            languageCode: message.from?.language_code,
+          clientPlatform: "telegram",
+          notificationChannel: {
+            type: "telegram",
+            userId: chatId,
           },
-        },
+        }),
         messages,
         settings,
         excludeToolNames: [...BUILT_IN_MEDIA_TOOL_NAMES],
@@ -377,6 +324,7 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
         extraInstructions: [
           basicSettings.additionalSystemPrompt,
           "Reply to the Telegram user using the provided message text and media analysis.",
+          "When creating a scheduled task that should notify this Telegram conversation, call scheduled_task with clientPlatform set to telegram and userId equal to Authenticated userInfo.notificationChannel.userId.",
           'Return JSON structured output with {"type":"text"|"voice","text":"..."} after using any needed tools.',
           "The text field must be the human-readable reply text, never an audio URL or generated media payload.",
           "Follow the preferred reply type unless the user explicitly asks otherwise; image replies are unsupported, so explain that in text.",
@@ -404,7 +352,7 @@ export const handleTelegramWebhookUpdate = async (update: unknown, deps: Telegra
     return;
   }
 
-  const chatId = stringifyChatId(message.chat.id);
+  const chatId = stringifyTelegramId(message.chat.id);
   const text = message.text?.trim() ?? message.caption?.trim() ?? "";
   const photo = selectBestTelegramPhoto(message.photo);
   const canHandleMessage = Boolean(message.text?.trim() || photo || message.voice);
@@ -505,60 +453,6 @@ export const handleTelegramWebhookUpdate = async (update: unknown, deps: Telegra
 
 const hasValidTelegramWebhookSecret = (request: Request, secret: string) => {
   return request.headers.get("x-telegram-bot-api-secret-token") === secret;
-};
-
-const replyTelegramText = async (token: string, update: unknown, text: string) => {
-  const result = telegramUpdateSchema.safeParse(update);
-
-  if (!result.success) {
-    return;
-  }
-
-  const chatId = result.data.message?.chat.id;
-
-  if (chatId === undefined) {
-    return;
-  }
-
-  const fallbackPayload = {
-    chat_id: stringifyChatId(chatId),
-    text,
-  };
-
-  try {
-    await postTelegramApi(token, "sendMessage", {
-      ...fallbackPayload,
-      text: renderTelegramHtmlFromMarkdown(text),
-      parse_mode: "HTML",
-    });
-  } catch {
-    await postTelegramApi(token, "sendMessage", fallbackPayload);
-  }
-};
-
-const getTelegramMessageAccessContext = (update: unknown) => {
-  const result = telegramUpdateSchema.safeParse(update);
-
-  if (!result.success || !result.data.message) {
-    return undefined;
-  }
-
-  const { message } = result.data;
-  const userId =
-    message.from?.id === undefined ? stringifyChatId(message.chat.id) : String(message.from.id);
-  const chatId = stringifyChatId(message.chat.id);
-  const chatType = message.chat.type;
-  const whitelistType: TelegramWhitelistType =
-    chatType === "group" || chatType === "supergroup" ? "group" : "private";
-  const whitelistId = whitelistType === "group" ? chatId : userId;
-
-  return {
-    chatId,
-    chatType,
-    userId,
-    whitelistType,
-    whitelistId,
-  };
 };
 
 const telegramWhitelistQuerySchema = z.object({

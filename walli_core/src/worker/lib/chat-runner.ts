@@ -1,15 +1,39 @@
 import { generateText, isStepCount, type ToolSet, Output } from "ai";
 import type { ModelMessage } from "ai";
+import type { ClientPlatform } from "@shared/client";
 import { BUILT_IN_TOOLS, type Settings, type ToolConfig } from "@shared/const";
 import { toolsRoute } from "../tools";
 import { getSettings } from "../api/settings";
 import { buildChatTools } from "./chat-tools";
 import { createGatewayFromEnv, normalizeGatewayModelId, unified } from "./llm";
+import {
+  createUserNotificationChannel,
+  type UserNotificationChannel,
+} from "../durable-objects/user/types";
+
+export type ChatUserInfo = {
+  userId: string;
+  name?: string;
+  email?: string;
+  clientPlatform: ClientPlatform;
+  notificationChannel: UserNotificationChannel;
+  attributes?: Record<string, unknown>;
+};
+
+export type CreateChatUserInfoInput = {
+  userId: string;
+  clientPlatform: ClientPlatform;
+  authUserInfo?: unknown;
+  name?: string;
+  email?: string;
+  notificationChannel?: UserNotificationChannel;
+  attributes?: Record<string, unknown>;
+};
 
 type RunChatOptions = {
   env: Env;
   messages: ModelMessage[];
-  userInfo?: unknown;
+  userInfo?: ChatUserInfo;
   origin?: string;
   excludeToolNames?: string[];
   settings?: Settings;
@@ -19,7 +43,46 @@ type RunChatOptions = {
   output?: Output.Output;
 };
 
-const createChatInstructions = (globalPrompt: string, userInfo: unknown) => {
+const normalizeOptionalString = (value: unknown) =>
+  typeof value === "string" && value.trim().length > 0 ? value : undefined;
+
+export const createChatUserInfo = (input: CreateChatUserInfoInput): ChatUserInfo => {
+  const authUserInfo =
+    typeof input.authUserInfo === "object" &&
+    input.authUserInfo !== null &&
+    !Array.isArray(input.authUserInfo)
+      ? (input.authUserInfo as Record<string, unknown>)
+      : undefined;
+  const userId = normalizeOptionalString(authUserInfo?.userId) ?? input.userId;
+  const name = input.name ?? normalizeOptionalString(authUserInfo?.name);
+  const email = input.email ?? normalizeOptionalString(authUserInfo?.email);
+  const authAttributes = authUserInfo
+    ? Object.fromEntries(
+        Object.entries(authUserInfo).filter(
+          ([key]) =>
+            !["userId", "name", "email", "clientPlatform", "notificationChannel"].includes(key),
+        ),
+      )
+    : {};
+  const attributes = Object.fromEntries(
+    Object.entries({
+      ...authAttributes,
+      ...(input.attributes ?? {}),
+    }),
+  );
+
+  return {
+    userId,
+    ...(name ? { name } : {}),
+    ...(email ? { email } : {}),
+    clientPlatform: input.clientPlatform,
+    notificationChannel:
+      input.notificationChannel ?? createUserNotificationChannel(input.clientPlatform, userId),
+    ...(Object.keys(attributes).length > 0 ? { attributes } : {}),
+  };
+};
+
+const createChatInstructions = (globalPrompt: string, userInfo: ChatUserInfo | undefined) => {
   const instructions = globalPrompt.trim();
 
   if (userInfo === undefined) {

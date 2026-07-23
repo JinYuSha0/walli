@@ -1,3 +1,4 @@
+import { CLIENT_PLATFORMS } from "../client";
 import type { ToolConfig } from "../const";
 
 export const scheduledTaskTool = {
@@ -23,7 +24,15 @@ export const scheduledTaskTool = {
       {
         name: "userId",
         type: "string",
-        description: "The user ID whose Durable Object stores the scheduled task.",
+        description:
+          "The user ID whose Durable Object stores the scheduled task. Notifications for the task are sent to this same ID.",
+        required: true,
+        defaultValue: "",
+      },
+      {
+        name: "clientPlatform",
+        type: "string",
+        description: `Client platform for the user ID namespace. Supported values: ${CLIENT_PLATFORMS.join(", ")}.`,
         required: true,
         defaultValue: "",
       },

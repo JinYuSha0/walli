@@ -3,10 +3,14 @@ import { and, asc, eq, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/durable-sqlite";
 import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import type { ModelMessage } from "ai";
-import { runChatCompletion } from "../../lib/chat-runner";
+import { createChatUserInfo, runChatCompletion } from "../../lib/chat-runner";
 import { getNextCronScheduledAt } from "../../utils/cron";
 import userDoMigrations from "./migrations/migrations";
 import { scheduledTasks, userDoSchema } from "./schema";
+import { parseUserDoNotificationChannel } from "./types";
+import { sendNotificationText } from "@worker/utils/notification";
+export { createUserDoName, parseUserDoNotificationChannel } from "./types";
+export type { UserDoClientPlatform, UserDoName, UserNotificationChannel } from "./types";
 
 export type ScheduledTaskStatus = "pending" | "completed" | "failed" | "canceled";
 export type ScheduledTaskStatusFilter = ScheduledTaskStatus | "all";
@@ -89,6 +93,11 @@ const serializeError = (error: unknown) => {
   return "Unknown error";
 };
 
+const createTaskFailureNotificationText = (task: ScheduledTaskRow, lastError: string) =>
+  [`The scheduled task "${task.description}" failed to execute.`, `Reason: ${lastError}`].join(
+    "\n",
+  );
+
 const isScheduledTaskMessage = (value: unknown): value is ModelMessage => {
   if (typeof value !== "object" || value === null) {
     return false;
@@ -118,8 +127,8 @@ const createTaskMessages = (task: ScheduledTaskRow): ModelMessage[] => {
       role: "user",
       content: [
         "Execute this scheduled task now.",
-        "If this task asks to notify, remind, send, or push a message, use the available delivery tools such as Telegram or other configured messaging tools.",
-        "Do not only generate a text response when a delivery tool is available and the task requires sending a message.",
+        "Generate the exact notification message that should be sent to the user.",
+        "Do not say that you sent the notification; only return the notification text.",
         `Task description: ${task.description}`,
         `Task type: ${task.type}`,
         `Task payload: ${task.payload}`,
@@ -254,6 +263,8 @@ export class UserDO extends DurableObject<Env> {
         return;
       }
 
+      await this.notifyTaskFailure(task, lastError);
+
       this.db
         .update(scheduledTasks)
         .set({
@@ -285,14 +296,49 @@ export class UserDO extends DurableObject<Env> {
   }
 
   private async runTask(task: ScheduledTaskRow): Promise<void> {
-    await runChatCompletion({
+    const notificationChannel = parseUserDoNotificationChannel(this.ctx.id.name);
+
+    const result = await runChatCompletion({
       env: this.env,
       messages: createTaskMessages(task),
-      userInfo: {
-        userId: task.userId,
-      },
+      userInfo: notificationChannel
+        ? createChatUserInfo({
+            userId: task.userId,
+            clientPlatform: notificationChannel.type,
+            notificationChannel,
+          })
+        : undefined,
       excludeToolNames: ["scheduled_task"],
     });
+
+    if (!notificationChannel) {
+      return;
+    }
+
+    const notificationText = result.text.trim();
+
+    if (!notificationText) {
+      this.notifyTaskFailure(task, "Scheduled task produced empty notification text");
+      return;
+    }
+
+    await sendNotificationText(this.env, notificationChannel, notificationText);
+  }
+
+  private async notifyTaskFailure(task: ScheduledTaskRow, lastError: string): Promise<void> {
+    const notificationChannel = parseUserDoNotificationChannel(this.ctx.id.name);
+
+    if (!notificationChannel) {
+      return;
+    }
+
+    const message = createTaskFailureNotificationText(task, lastError);
+
+    try {
+      await sendNotificationText(this.env, notificationChannel, message);
+    } catch (error) {
+      console.error(error);
+    }
   }
 
   private async createNextRecurringTask(task: ScheduledTaskRow): Promise<void> {
