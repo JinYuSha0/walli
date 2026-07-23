@@ -4,11 +4,6 @@ compatibility_date = "2025-10-08"
 compatibility_flags = ["nodejs_compat"]
 upload_source_maps = true
 
-[[rules]]
-type = "Text"
-globs = ["**/*.sql"]
-fallthrough = true
-
 [observability]
 enabled = true
 
@@ -33,7 +28,3 @@ id = "a3ead2192a94459db359c9d11e47bc92"
 [[durable_objects.bindings]]
 name = "USER_DO"
 class_name = "UserDO"
-
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["UserDO"]

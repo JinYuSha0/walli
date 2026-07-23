@@ -73,7 +73,7 @@
     "build": "tsc -b && vite build",
     "cf-typegen": "wrangler types",
     "check": "tsc && vite build && wrangler deploy --dry-run",
-    "deploy": "vite build && wrangler deploy",
+    "deploy": "pnpm migrations:generate && pnpm db:migrate:remote && vite build && wrangler deploy",
     "deploy:dist": "wrangler deploy",
     "dev": "vite",
     "lint": "eslint .",
