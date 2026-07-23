@@ -89,7 +89,7 @@
   "telegramAuthSettingsPolicyPublic": "Public",
   "telegramAuthSettingsPolicyWhitelist": "Whitelist",
   "telegramAuthSettingsWhitelistTitle": "Whitelist",
-  "telegramAuthSettingsWhitelistDescription": "Private entries use Telegram user IDs. Group entries use Telegram chat IDs.",
+  "telegramAuthSettingsWhitelistDescription": "Send a message to the bot to get the ID that should be added to the whitelist.",
   "telegramAuthSettingsSave": "Save Telegram auth settings",
   "telegramAuthSettingsSaveSuccess": "Telegram auth settings saved",
   "telegramWhitelistType": "Type",

@@ -14,5 +14,5 @@ interface Env {
   AI: Ai;
   DB: D1Database;
   APP_KV: KVNamespace;
-  USER: DurableObjectNamespace<import("./durable-objects/user").User>;
+  USER_DO: DurableObjectNamespace<import("./durable-objects/user").UserDO>;
 }

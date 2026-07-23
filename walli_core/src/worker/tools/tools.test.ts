@@ -845,7 +845,7 @@ describe("tools route", () => {
     }));
     const scheduledTaskEnv = {
       ...env,
-      USER: {
+      USER_DO: {
         getByName: vi.fn(() => ({
           createTask,
         })),
@@ -898,7 +898,7 @@ describe("tools route", () => {
     const listTasks = vi.fn(async () => []);
     const scheduledTaskEnv = {
       ...env,
-      USER: {
+      USER_DO: {
         getByName: vi.fn(() => ({
           listTasks,
         })),
@@ -929,7 +929,7 @@ describe("tools route", () => {
     const listTasks = vi.fn(async () => []);
     const scheduledTaskEnv = {
       ...env,
-      USER: {
+      USER_DO: {
         getByName: vi.fn(() => ({
           listTasks,
         })),
@@ -1492,7 +1492,8 @@ describe("telegram webhook", () => {
       expect.objectContaining({
         body: JSON.stringify({
           chat_id: "123",
-          text: "Please contact the administrator to add private ID 456 to the whitelist.",
+          text: "Please contact the administrator to add private ID <code>456</code> to the whitelist.",
+          parse_mode: "HTML",
         }),
       }),
     );
@@ -1542,7 +1543,8 @@ describe("telegram webhook", () => {
       expect.objectContaining({
         body: JSON.stringify({
           chat_id: "-100",
-          text: "Please contact the administrator to add group ID -100 to the whitelist.",
+          text: "Please contact the administrator to add group ID <code>-100</code> to the whitelist.",
+          parse_mode: "HTML",
         }),
       }),
     );

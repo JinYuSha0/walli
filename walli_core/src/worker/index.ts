@@ -9,7 +9,7 @@ import { telegramRoute } from "./api/telegram";
 import type { AppBindings } from "./api/types";
 import { createDb } from "./db/client";
 import { toolsRoute } from "./tools";
-export { User } from "./durable-objects/user";
+export { UserDO } from "./durable-objects/user";
 
 const app = new Hono<AppBindings>();
 

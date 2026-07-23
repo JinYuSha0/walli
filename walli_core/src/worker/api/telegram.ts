@@ -520,10 +520,20 @@ const replyTelegramText = async (token: string, update: unknown, text: string) =
     return;
   }
 
-  await postTelegramApi(token, "sendMessage", {
+  const fallbackPayload = {
     chat_id: stringifyChatId(chatId),
     text,
-  });
+  };
+
+  try {
+    await postTelegramApi(token, "sendMessage", {
+      ...fallbackPayload,
+      text: renderTelegramHtmlFromMarkdown(text),
+      parse_mode: "HTML",
+    });
+  } catch {
+    await postTelegramApi(token, "sendMessage", fallbackPayload);
+  }
 };
 
 const getTelegramMessageAccessContext = (update: unknown) => {
@@ -760,7 +770,7 @@ export const telegramRoute = new Hono<AppBindings>()
         await replyTelegramText(
           token,
           update,
-          `Please contact the administrator to add ${whitelistType ?? "private"} ID ${whitelistId ?? "unknown"} to the whitelist.`,
+          `Please contact the administrator to add ${whitelistType ?? "private"} ID \`${whitelistId ?? "unknown"}\` to the whitelist.`,
         );
 
         return c.json({ ok: true });

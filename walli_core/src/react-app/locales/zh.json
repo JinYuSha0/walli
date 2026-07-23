@@ -89,7 +89,7 @@
   "telegramAuthSettingsPolicyPublic": "公开",
   "telegramAuthSettingsPolicyWhitelist": "白名单",
   "telegramAuthSettingsWhitelistTitle": "白名单",
-  "telegramAuthSettingsWhitelistDescription": "私人白名单使用 Telegram user id，群聊白名单使用 Telegram chat id。",
+  "telegramAuthSettingsWhitelistDescription": "发送消息给机器人获得需要加入白名单的 ID。",
   "telegramAuthSettingsSave": "保存 Telegram 鉴权设置",
   "telegramAuthSettingsSaveSuccess": "Telegram 鉴权设置已保存",
   "telegramWhitelistType": "类型",

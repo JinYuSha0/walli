@@ -1,0 +1,21 @@
+CREATE TABLE `scheduled_tasks` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text NOT NULL,
+	`type` text NOT NULL,
+	`description` text NOT NULL,
+	`payload` text NOT NULL,
+	`scheduled_at` integer NOT NULL,
+	`cron` text,
+	`time_zone` text,
+	`recurrence_end_at` integer,
+	`max_runs` integer,
+	`run_number` integer NOT NULL,
+	`max_retry` integer NOT NULL,
+	`retry_count` integer NOT NULL,
+	`status` text NOT NULL,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	`executed_at` integer,
+	`canceled_at` integer,
+	`last_error` text
+);

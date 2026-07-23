@@ -1,32 +1,12 @@
 import { DurableObject } from "cloudflare:workers";
 import { and, asc, eq, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/durable-sqlite";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import type { ModelMessage } from "ai";
-import { runChatCompletion } from "../lib/chat-runner";
-import { getNextCronScheduledAt } from "../utils/cron";
-
-const scheduledTasks = sqliteTable("scheduled_tasks", {
-  id: text("id").primaryKey(),
-  userId: text("user_id").notNull(),
-  type: text("type").notNull(),
-  description: text("description").notNull(),
-  payload: text("payload").notNull(),
-  scheduledAt: integer("scheduled_at").notNull(),
-  cron: text("cron"),
-  timeZone: text("time_zone"),
-  recurrenceEndAt: integer("recurrence_end_at"),
-  maxRuns: integer("max_runs"),
-  runNumber: integer("run_number").notNull(),
-  maxRetry: integer("max_retry").notNull(),
-  retryCount: integer("retry_count").notNull(),
-  status: text("status").notNull(),
-  createdAt: integer("created_at").notNull(),
-  updatedAt: integer("updated_at").notNull(),
-  executedAt: integer("executed_at"),
-  canceledAt: integer("canceled_at"),
-  lastError: text("last_error"),
-});
+import { runChatCompletion } from "../../lib/chat-runner";
+import { getNextCronScheduledAt } from "../../utils/cron";
+import userDoMigrations from "./migrations/migrations";
+import { scheduledTasks, userDoSchema } from "./schema";
 
 export type ScheduledTaskStatus = "pending" | "completed" | "failed" | "canceled";
 export type ScheduledTaskStatusFilter = ScheduledTaskStatus | "all";
@@ -148,39 +128,15 @@ const createTaskMessages = (task: ScheduledTaskRow): ModelMessage[] => {
   ];
 };
 
-export class User extends DurableObject<Env> {
-  private readonly db: ReturnType<typeof drizzle<{ scheduledTasks: typeof scheduledTasks }>>;
+export class UserDO extends DurableObject<Env> {
+  private readonly db: ReturnType<typeof drizzle<typeof userDoSchema>>;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    this.db = drizzle(ctx.storage, { schema: { scheduledTasks } });
+    this.db = drizzle(ctx.storage, { schema: userDoSchema });
 
     ctx.blockConcurrencyWhile(async () => {
-      this.ctx.storage.sql.exec(`
-        CREATE TABLE IF NOT EXISTS scheduled_tasks (
-          id TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL,
-          type TEXT NOT NULL,
-          description TEXT NOT NULL,
-          payload TEXT NOT NULL,
-          scheduled_at INTEGER NOT NULL,
-          cron TEXT,
-          time_zone TEXT,
-          recurrence_end_at INTEGER,
-          max_runs INTEGER,
-          run_number INTEGER NOT NULL,
-          max_retry INTEGER NOT NULL,
-          retry_count INTEGER NOT NULL,
-          status TEXT NOT NULL,
-          created_at INTEGER NOT NULL,
-          updated_at INTEGER NOT NULL,
-          executed_at INTEGER,
-          canceled_at INTEGER,
-          last_error TEXT
-        );
-        CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_due
-          ON scheduled_tasks (status, scheduled_at);
-      `);
+      await migrate(this.db, userDoMigrations);
     });
   }
 

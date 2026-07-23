@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1784781135647,
+      "tag": "0000_scheduled_tasks",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1784781161479,
+      "tag": "0001_scheduled_tasks_due_index",
+      "breakpoints": true
+    }
+  ]
+}

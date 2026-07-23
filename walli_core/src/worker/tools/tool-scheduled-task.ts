@@ -89,7 +89,7 @@ const scheduledTaskActionSchema = z
     }
   });
 
-const getScheduler = (env: Env, userId: string) => env.USER.getByName(userId);
+const getScheduler = (env: Env, userId: string) => env.USER_DO.getByName(userId);
 
 const serializeError = (error: unknown) => {
   if (error instanceof Error) {
