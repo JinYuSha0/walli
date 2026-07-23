@@ -46,7 +46,7 @@ export const BUILT_IN_MEDIA_TOOL_NAMES = [
 ] satisfies BuiltInMediaToolName[];
 
 const AUTO_TTS_STYLE_PROMPT =
-  "[Automatically detect the language of the following text and read it with a natural native accent for that language. For Chinese, use standard Mandarin with a warm, natural tone, slightly slower pacing, and clear pronunciation.]";
+  "[Automatically detect the language of the following text and read it with a natural native accent for that language.]";
 
 export const extractVoiceOutput = async (result: unknown): Promise<VoiceOutput> => {
   if (typeof result === "string") {
