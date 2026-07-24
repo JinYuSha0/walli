@@ -1,1 +1,0 @@
-CREATE INDEX `idx_scheduled_tasks_due` ON `scheduled_tasks` (`status`,`scheduled_at`);

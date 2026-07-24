@@ -21,6 +21,7 @@ export const SETTINGS_KEY_MAP = {
   authEnabled: "settings:auth-enabled",
   authEndpointUrl: "settings:auth-endpoint-url",
   corsAllowedOrigins: "settings:cors-allowed-origins",
+  clientSessionMode: "settings:client-session-mode",
 } as const;
 
 export type SettingsKey = keyof typeof SETTINGS_KEY_MAP;
@@ -44,6 +45,17 @@ export const modelConfigSchema = z
   .strict();
 
 export type ModelConfig = z.output<typeof modelConfigSchema>;
+
+export const clientSessionModeSchema = z
+  .object({
+    telegram: z.boolean(),
+    web: z.boolean(),
+    "react-native": z.boolean(),
+    flutter: z.boolean(),
+  })
+  .strict();
+
+export type ClientSessionMode = z.output<typeof clientSessionModeSchema>;
 
 export const UTC_OFFSET_TIME_ZONES = Array.from(
   { length: 27 },
@@ -129,17 +141,9 @@ export const primaryModelUsageLimitConfigSchema = z.preprocess(
   primaryModelUsageLimitConfigBaseSchema,
 );
 
-export type PrimaryModelUsageLimitConfig = z.output<
-  typeof primaryModelUsageLimitConfigSchema
->;
+export type PrimaryModelUsageLimitConfig = z.output<typeof primaryModelUsageLimitConfigSchema>;
 
-export const TOOL_SCHEMA_FIELD_TYPES = [
-  "string",
-  "number",
-  "boolean",
-  "array",
-  "object",
-] as const;
+export const TOOL_SCHEMA_FIELD_TYPES = ["string", "number", "boolean", "array", "object"] as const;
 
 export type ToolSchemaFieldType = (typeof TOOL_SCHEMA_FIELD_TYPES)[number];
 
@@ -222,13 +226,15 @@ const toolSchemaSchema = z
   })
   .strict();
 
-const toolConfigBaseSchema = z.object({
-  enabled: z.boolean().default(true),
-  name: z.string().trim().min(1),
-  description: z.string().trim().min(1),
-  invocation: toolInvocationSchema.default(defaultToolInvocation),
-  schema: toolSchemaSchema,
-}).strict();
+const toolConfigBaseSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    name: z.string().trim().min(1),
+    description: z.string().trim().min(1),
+    invocation: toolInvocationSchema.default(defaultToolInvocation),
+    schema: toolSchemaSchema,
+  })
+  .strict();
 
 const normalizeToolConfig = <Tool extends z.output<typeof toolConfigBaseSchema>>(tool: Tool) => ({
   ...tool,
@@ -286,27 +292,27 @@ const builtInToolConfigSchema = toolConfigBaseSchema
   })
   .transform(normalizeToolConfig);
 
-export const builtInToolSettingSchema = z.union([
-  builtInToolConfigSchema,
-  legacyBuiltInToolSettingSchema,
-]).refine(
-  (tool) => BUILT_IN_TOOLS.some((builtInTool) => builtInTool.name === tool.name),
-  "Unknown built-in tool",
-).transform((tool) => {
-  const defaultTool = BUILT_IN_TOOLS.find((builtInTool) => builtInTool.name === tool.name)!;
+export const builtInToolSettingSchema = z
+  .union([builtInToolConfigSchema, legacyBuiltInToolSettingSchema])
+  .refine(
+    (tool) => BUILT_IN_TOOLS.some((builtInTool) => builtInTool.name === tool.name),
+    "Unknown built-in tool",
+  )
+  .transform((tool) => {
+    const defaultTool = BUILT_IN_TOOLS.find((builtInTool) => builtInTool.name === tool.name)!;
 
-  if ("description" in tool) {
+    if ("description" in tool) {
+      return {
+        ...tool,
+        name: defaultTool.name,
+      };
+    }
+
     return {
-      ...tool,
-      name: defaultTool.name,
+      ...defaultTool,
+      enabled: tool.enabled,
     };
-  }
-
-  return {
-    ...defaultTool,
-    enabled: tool.enabled,
-  };
-});
+  });
 
 export type BuiltInToolSetting = z.output<typeof builtInToolSettingSchema>;
 
@@ -327,6 +333,7 @@ export const settingsFieldSchemaMap = {
   authEnabled: z.boolean(),
   authEndpointUrl: z.string(),
   corsAllowedOrigins: z.array(z.string()),
+  clientSessionMode: clientSessionModeSchema,
 } satisfies Record<SettingsKey, z.ZodType>;
 
 const hasDuplicateToolNames = (settings: {
@@ -411,4 +418,10 @@ export const DEFAULT_SETTINGS = {
   authEnabled: false,
   authEndpointUrl: "",
   corsAllowedOrigins: [],
+  clientSessionMode: {
+    telegram: false,
+    web: true,
+    "react-native": true,
+    flutter: true,
+  },
 } satisfies Settings;

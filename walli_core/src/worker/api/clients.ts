@@ -117,7 +117,7 @@ const defaultUsageLimit = {
   autoDeletePeriod: "week",
 } satisfies ClientUsageLimit;
 
-const getClientUsageLimit = async (appKv: KVNamespace, platform: ClientPlatform) => {
+export const getClientUsageLimit = async (appKv: KVNamespace, platform: ClientPlatform) => {
   const savedUsageLimit = await appKv.get(clientUsageLimitKey(platform), "json");
   const result = clientUsageLimitSchema.partial().safeParse(savedUsageLimit);
 

@@ -1,20 +1,63 @@
 import { DurableObject } from "cloudflare:workers";
-import { and, asc, eq, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lt, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/durable-sqlite";
 import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import type { ModelMessage } from "ai";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc.js";
 import { createChatUserInfo, runChatCompletion } from "../../lib/chat-runner";
 import { createNotificationTools } from "../../tools/tool-notification";
+import { getClientUsageLimit } from "../../api/clients";
+import { getSettings, isMultiSessionClient } from "../../api/settings";
 import { getNextCronScheduledAt } from "../../utils/cron";
 import userDoMigrations from "./migrations/migrations";
-import { scheduledTasks, userDoSchema } from "./schema";
+import { messages, scheduledTasks, sessions, userDoSchema } from "./schema";
 import { parseUserDoNotificationChannel } from "./types";
 import { sendNotificationText } from "@worker/utils/notification";
 export { createUserDoName, parseUserDoNotificationChannel } from "./types";
 export type { UserDoClientPlatform, UserDoName, UserNotificationChannel } from "./types";
 
+dayjs.extend(utc);
+
 export type ScheduledTaskStatus = "pending" | "completed" | "failed" | "canceled";
 export type ScheduledTaskStatusFilter = ScheduledTaskStatus | "all";
+
+export type ChatSession = {
+  id: string;
+  client: string;
+  summary: string;
+  createdAt: number;
+};
+
+export type CreateChatSessionInput = {
+  id?: string;
+  client?: string;
+  summary?: string;
+};
+
+export type ChatMessage = {
+  id: string;
+  sessionId: string;
+  content: string;
+  inputToken: number;
+  outputToken: number;
+  createdAt: number;
+};
+
+export type CreateChatMessageInput = {
+  id?: string;
+  sessionId: string;
+  content: string;
+  inputToken?: number;
+  outputToken?: number;
+  createdAt?: number;
+};
+
+export type TokenUsage = {
+  inputToken: number;
+  outputToken: number;
+  totalToken: number;
+};
 
 export type ScheduledTask = {
   id: string;
@@ -22,6 +65,7 @@ export type ScheduledTask = {
   type: string;
   description: string;
   payload: unknown;
+  systemCreated: boolean;
   scheduledAt: number;
   cron: string | null;
   timeZone: string | null;
@@ -44,6 +88,7 @@ export type CreateScheduledTaskInput = {
   type: string;
   description: string;
   payload: unknown;
+  systemCreated?: boolean;
   scheduledAt?: number;
   cron?: string | null;
   timeZone?: string | null;
@@ -55,6 +100,52 @@ export type CreateScheduledTaskInput = {
 };
 
 type ScheduledTaskRow = typeof scheduledTasks.$inferSelect;
+type ChatSessionRow = typeof sessions.$inferSelect;
+type ChatMessageRow = typeof messages.$inferSelect;
+
+const SINGLE_SESSION_ID = "single";
+const SYSTEM_CONVERSATION_CLEANUP_TASK_TYPE = "system:conversation-cleanup";
+const getConversationCleanupRetentionDays = (autoDeletePeriod: string) => {
+  switch (autoDeletePeriod) {
+    case "day":
+      return 1;
+    case "week":
+      return 7;
+    case "month":
+      return 30;
+    default:
+      return undefined;
+  }
+};
+
+const getStartOfDayAt = (timestamp: number, timeZone: string) => {
+  const offsetMinutes = Number(timeZone.slice(3)) * 60;
+
+  return dayjs(timestamp).utcOffset(offsetMinutes).startOf("day").valueOf();
+};
+
+const getNextStartOfDayAt = (timestamp: number, timeZone: string) => {
+  const offsetMinutes = Number(timeZone.slice(3)) * 60;
+  const startOfDay = dayjs(timestamp).utcOffset(offsetMinutes).startOf("day");
+
+  return startOfDay.isAfter(timestamp) ? startOfDay.valueOf() : startOfDay.add(1, "day").valueOf();
+};
+
+const toChatSession = (row: ChatSessionRow): ChatSession => ({
+  id: row.id,
+  client: row.client,
+  summary: row.summary,
+  createdAt: row.createdAt,
+});
+
+const toChatMessage = (row: ChatMessageRow): ChatMessage => ({
+  id: row.id,
+  sessionId: row.sessionId,
+  content: row.content,
+  inputToken: row.inputToken,
+  outputToken: row.outputToken,
+  createdAt: row.createdAt,
+});
 
 const parseTaskPayload = (payload: string) => {
   try {
@@ -70,6 +161,7 @@ const toScheduledTask = (row: ScheduledTaskRow): ScheduledTask => ({
   type: row.type,
   description: row.description,
   payload: parseTaskPayload(row.payload),
+  systemCreated: row.systemCreated === 1,
   scheduledAt: row.scheduledAt,
   cron: row.cron,
   timeZone: row.timeZone,
@@ -148,7 +240,182 @@ export class UserDO extends DurableObject<Env> {
 
     ctx.blockConcurrencyWhile(async () => {
       await migrate(this.db, userDoMigrations);
+
+      try {
+        await this.createNextConversationCleanupTask();
+      } catch (error) {
+        console.error(error);
+      }
     });
+  }
+
+  async createSession(input: CreateChatSessionInput = {}): Promise<ChatSession> {
+    const notificationChannel = parseUserDoNotificationChannel(this.ctx.id.name);
+
+    if (notificationChannel && !(await isMultiSessionClient(this.env, notificationChannel.type))) {
+      return this.getOrCreateSingleSession(notificationChannel.type, input.summary);
+    }
+
+    const now = Date.now();
+    const row = this.db
+      .insert(sessions)
+      .values({
+        id: input.id ?? crypto.randomUUID(),
+        client: input.client?.trim() || notificationChannel?.type || "unknown",
+        summary: input.summary?.trim() ?? "",
+        createdAt: now,
+      })
+      .returning()
+      .get();
+
+    return toChatSession(row);
+  }
+
+  async listSessions(limit?: number): Promise<ChatSession[]> {
+    const orderedQuery = this.db
+      .select()
+      .from(sessions)
+      .orderBy(desc(sessions.createdAt))
+      .$dynamic();
+    const limitedQuery = limit === undefined ? orderedQuery : orderedQuery.limit(limit);
+
+    return limitedQuery.all().map(toChatSession);
+  }
+
+  async addMessages(inputs: CreateChatMessageInput[]): Promise<ChatMessage[]> {
+    if (inputs.length === 0) {
+      return [];
+    }
+
+    const now = Date.now();
+    const rows = this.db
+      .insert(messages)
+      .values(
+        inputs.map((input) => ({
+          id: input.id ?? crypto.randomUUID(),
+          sessionId: input.sessionId,
+          content: input.content,
+          inputToken: Math.max(0, Math.trunc(input.inputToken ?? 0)),
+          outputToken: Math.max(0, Math.trunc(input.outputToken ?? 0)),
+          createdAt: input.createdAt ?? now,
+        })),
+      )
+      .returning()
+      .all();
+
+    return rows.map(toChatMessage);
+  }
+
+  async listRecentMessages(sessionId: string, limit: number): Promise<ChatMessage[]> {
+    const messageLimit = Math.max(0, Math.trunc(limit));
+
+    if (messageLimit === 0) {
+      return [];
+    }
+
+    return this.db
+      .select()
+      .from(messages)
+      .where(eq(messages.sessionId, sessionId))
+      .orderBy(desc(messages.createdAt))
+      .limit(messageLimit)
+      .all()
+      .map(toChatMessage)
+      .reverse();
+  }
+
+  async getTokenUsageSince(startAt: number, endAt = Date.now()): Promise<TokenUsage> {
+    const row = this.db
+      .select({
+        inputToken: sql<number>`coalesce(sum(${messages.inputToken}), 0)`,
+        outputToken: sql<number>`coalesce(sum(${messages.outputToken}), 0)`,
+      })
+      .from(messages)
+      .where(and(gte(messages.createdAt, startAt), lt(messages.createdAt, endAt)))
+      .get();
+    const inputToken = Number(row?.inputToken ?? 0);
+    const outputToken = Number(row?.outputToken ?? 0);
+
+    return {
+      inputToken,
+      outputToken,
+      totalToken: inputToken + outputToken,
+    };
+  }
+
+  async getTodayTokenUsage(dayStartAt: number, dayEndAt: number): Promise<TokenUsage> {
+    return this.getTokenUsageSince(dayStartAt, dayEndAt);
+  }
+
+  async deleteMessagesBefore(cutoffAt: number): Promise<number> {
+    const row = this.db
+      .select({
+        count: sql<number>`count(*)`,
+      })
+      .from(messages)
+      .where(lt(messages.createdAt, cutoffAt))
+      .get();
+
+    this.db
+      .delete(messages)
+      .where(lt(messages.createdAt, cutoffAt))
+      .run();
+
+    return Number(row?.count ?? 0);
+  }
+
+  async deleteConversationDataBefore(cutoffAt: number): Promise<{
+    deletedMessageCount: number;
+    deletedSessionCount: number;
+  }> {
+    const deletedMessageCount = await this.deleteMessagesBefore(cutoffAt);
+    const emptyOldSessionCondition = and(
+      lt(sessions.createdAt, cutoffAt),
+      sql`not exists (
+        select 1 from ${messages}
+        where ${messages.sessionId} = ${sessions.id}
+      )`,
+    );
+    const row = this.db
+      .select({
+        count: sql<number>`count(*)`,
+      })
+      .from(sessions)
+      .where(emptyOldSessionCondition)
+      .get();
+
+    this.db.delete(sessions).where(emptyOldSessionCondition).run();
+
+    return {
+      deletedMessageCount,
+      deletedSessionCount: Number(row?.count ?? 0),
+    };
+  }
+
+  private getOrCreateSingleSession(client: string, summary?: string): ChatSession {
+    const savedSession = this.db
+      .select()
+      .from(sessions)
+      .where(eq(sessions.id, SINGLE_SESSION_ID))
+      .limit(1)
+      .get();
+
+    if (savedSession) {
+      return toChatSession(savedSession);
+    }
+
+    const row = this.db
+      .insert(sessions)
+      .values({
+        id: SINGLE_SESSION_ID,
+        client,
+        summary: summary?.trim() ?? "",
+        createdAt: Date.now(),
+      })
+      .returning()
+      .get();
+
+    return toChatSession(row);
   }
 
   async createTask(input: CreateScheduledTaskInput): Promise<ScheduledTask> {
@@ -170,6 +437,7 @@ export class UserDO extends DurableObject<Env> {
         type: input.type,
         description: input.description,
         payload: JSON.stringify(input.payload),
+        systemCreated: input.systemCreated ? 1 : 0,
         scheduledAt,
         cron: input.cron ?? null,
         timeZone: input.cron ? (input.timeZone ?? "UTC") : null,
@@ -197,16 +465,16 @@ export class UserDO extends DurableObject<Env> {
     status: ScheduledTaskStatusFilter = "pending",
     limit?: number,
   ): Promise<ScheduledTask[]> {
-    const query = this.db.select().from(scheduledTasks).$dynamic();
+    const taskFilter =
+      status === "all"
+        ? eq(scheduledTasks.systemCreated, 0)
+        : and(eq(scheduledTasks.systemCreated, 0), eq(scheduledTasks.status, status));
 
-    if (status !== "all") {
-      query.where(eq(scheduledTasks.status, status));
-    }
-
-    const orderedQuery = query.orderBy(
-      asc(scheduledTasks.scheduledAt),
-      asc(scheduledTasks.createdAt),
-    );
+    const orderedQuery = this.db
+      .select()
+      .from(scheduledTasks)
+      .where(taskFilter)
+      .orderBy(asc(scheduledTasks.scheduledAt), asc(scheduledTasks.createdAt));
     const limitedQuery = limit === undefined ? orderedQuery : orderedQuery.limit(limit);
 
     return limitedQuery.all().map(toScheduledTask);
@@ -271,7 +539,9 @@ export class UserDO extends DurableObject<Env> {
         return;
       }
 
-      await this.notifyTaskFailure(task, lastError);
+      if (!this.isSystemConversationCleanupTask(task)) {
+        await this.notifyTaskFailure(task, lastError);
+      }
 
       this.db
         .update(scheduledTasks)
@@ -285,7 +555,9 @@ export class UserDO extends DurableObject<Env> {
         .where(and(eq(scheduledTasks.id, task.id), eq(scheduledTasks.status, "pending")))
         .run();
 
-      await this.createNextRecurringTask(task);
+      if (!this.isSystemConversationCleanupTask(task)) {
+        await this.createNextRecurringTask(task);
+      }
       return;
     }
 
@@ -300,10 +572,20 @@ export class UserDO extends DurableObject<Env> {
       .where(and(eq(scheduledTasks.id, task.id), eq(scheduledTasks.status, "pending")))
       .run();
 
+    if (this.isSystemConversationCleanupTask(task)) {
+      await this.createNextConversationCleanupTask();
+      return;
+    }
+
     await this.createNextRecurringTask(task);
   }
 
   private async runTask(task: ScheduledTaskRow): Promise<void> {
+    if (this.isSystemConversationCleanupTask(task)) {
+      await this.runConversationCleanupTask();
+      return;
+    }
+
     const notificationChannel = parseUserDoNotificationChannel(this.ctx.id.name);
 
     await runChatCompletion({
@@ -318,6 +600,106 @@ export class UserDO extends DurableObject<Env> {
         : undefined,
       excludeToolNames: ["scheduled_task"],
       extraTools: createNotificationTools(this.env, notificationChannel),
+    });
+  }
+
+  private isSystemConversationCleanupTask(task: Pick<ScheduledTaskRow, "type" | "systemCreated">) {
+    return task.systemCreated === 1 && task.type === SYSTEM_CONVERSATION_CLEANUP_TASK_TYPE;
+  }
+
+  private async runConversationCleanupTask(): Promise<void> {
+    const notificationChannel = parseUserDoNotificationChannel(this.ctx.id.name);
+
+    if (!notificationChannel) {
+      return;
+    }
+
+    const usageLimit = await getClientUsageLimit(this.env.APP_KV, notificationChannel.type);
+    const retentionDays = getConversationCleanupRetentionDays(usageLimit.autoDeletePeriod);
+
+    if (retentionDays === undefined) {
+      return;
+    }
+
+    const settings = await getSettings(this.env.APP_KV);
+    const cutoffAt = dayjs(getStartOfDayAt(Date.now(), settings.timeZone))
+      .subtract(retentionDays, "day")
+      .valueOf();
+
+    await this.deleteConversationDataBefore(cutoffAt);
+  }
+
+  private async createNextConversationCleanupTask(): Promise<void> {
+    const notificationChannel = parseUserDoNotificationChannel(this.ctx.id.name);
+
+    if (!notificationChannel) {
+      return;
+    }
+
+    const usageLimit = await getClientUsageLimit(this.env.APP_KV, notificationChannel.type);
+    const pendingTask = this.db
+      .select({
+        id: scheduledTasks.id,
+      })
+      .from(scheduledTasks)
+      .where(
+        and(
+          eq(scheduledTasks.status, "pending"),
+          eq(scheduledTasks.type, SYSTEM_CONVERSATION_CLEANUP_TASK_TYPE),
+          eq(scheduledTasks.systemCreated, 1),
+        ),
+      )
+      .limit(1)
+      .get();
+    const now = Date.now();
+
+    if (usageLimit.autoDeletePeriod === "never") {
+      if (pendingTask) {
+        this.db
+          .update(scheduledTasks)
+          .set({
+            status: "canceled",
+            updatedAt: now,
+            canceledAt: now,
+          })
+          .where(and(eq(scheduledTasks.id, pendingTask.id), eq(scheduledTasks.status, "pending")))
+          .run();
+      }
+
+      await this.scheduleNextAlarm();
+      return;
+    }
+
+    const settings = await getSettings(this.env.APP_KV);
+    const scheduledAt = getNextStartOfDayAt(now, settings.timeZone);
+    const payload = {
+      autoDeletePeriod: usageLimit.autoDeletePeriod,
+      timeZone: settings.timeZone,
+    };
+
+    if (pendingTask) {
+      this.db
+        .update(scheduledTasks)
+        .set({
+          payload: JSON.stringify(payload),
+          scheduledAt,
+          updatedAt: now,
+        })
+        .where(and(eq(scheduledTasks.id, pendingTask.id), eq(scheduledTasks.status, "pending")))
+        .run();
+
+      await this.scheduleNextAlarm();
+      return;
+    }
+
+    await this.createTask({
+      userId: notificationChannel.userId,
+      type: SYSTEM_CONVERSATION_CLEANUP_TASK_TYPE,
+      description: "System conversation data cleanup",
+      payload,
+      systemCreated: true,
+      scheduledAt,
+      maxRetry: 1,
     });
   }
 

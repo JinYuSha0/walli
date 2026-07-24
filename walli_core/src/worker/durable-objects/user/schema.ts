@@ -1,5 +1,36 @@
 import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
+export const sessions = sqliteTable(
+  "sessions",
+  {
+    id: text("id").primaryKey(),
+    client: text("client").notNull(),
+    summary: text("summary").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [index("idx_sessions_created_at").on(table.createdAt)],
+);
+
+export const messages = sqliteTable(
+  "messages",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id").notNull(),
+    content: text("content").notNull(),
+    inputToken: integer("input_token").notNull(),
+    outputToken: integer("output_token").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    index("idx_messages_session_created_at").on(table.sessionId, table.createdAt),
+    index("idx_messages_token_usage").on(
+      table.createdAt,
+      table.inputToken,
+      table.outputToken,
+    ),
+  ],
+);
+
 export const scheduledTasks = sqliteTable(
   "scheduled_tasks",
   {
@@ -8,6 +39,7 @@ export const scheduledTasks = sqliteTable(
     type: text("type").notNull(),
     description: text("description").notNull(),
     payload: text("payload").notNull(),
+    systemCreated: integer("system_created").notNull().default(0),
     scheduledAt: integer("scheduled_at").notNull(),
     cron: text("cron"),
     timeZone: text("time_zone"),
@@ -29,5 +61,7 @@ export const scheduledTasks = sqliteTable(
 );
 
 export const userDoSchema = {
+  sessions,
+  messages,
   scheduledTasks,
 };

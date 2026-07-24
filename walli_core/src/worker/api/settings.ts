@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import type { ClientPlatform } from "@shared/client";
 import type { AppBindings } from "./types";
 import { requireAdmin } from "./helper/middleware";
 import { emptyQuerySchema, parseResponse, validateQuery } from "./helper/validation";
@@ -57,7 +58,7 @@ const withMigratedSettingsDefaults = (settings: unknown) => {
   }
 
   return {
-    toolPlannerModel: DEFAULT_SETTINGS.toolPlannerModel,
+    ...DEFAULT_SETTINGS,
     ...settings,
   };
 };
@@ -226,6 +227,12 @@ export const getSettings = async (appKv: KVNamespace) => {
   await appKv.put(SETTINGS_KV_KEY, JSON.stringify(settings));
 
   return settings;
+};
+
+export const isMultiSessionClient = async (env: Env, platform: ClientPlatform) => {
+  const settings = await getSettings(env.APP_KV);
+
+  return settings.clientSessionMode[platform];
 };
 
 const maskApiToken = (token: string | undefined) => {

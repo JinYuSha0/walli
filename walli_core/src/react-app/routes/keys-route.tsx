@@ -1140,6 +1140,7 @@ function ClientUsageSettingsTab({
                   disabled={saveMutation.isPending}
                   {...field}
                 >
+                  <option value="never">{t("usageSettingsAutoDeletePeriod.never")}</option>
                   <option value="day">{t("usageSettingsAutoDeletePeriod.day")}</option>
                   <option value="week">{t("usageSettingsAutoDeletePeriod.week")}</option>
                   <option value="month">{t("usageSettingsAutoDeletePeriod.month")}</option>
