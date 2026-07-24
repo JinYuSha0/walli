@@ -516,6 +516,7 @@ export class UserDO extends DurableObject<Env> {
 
   private async executeTask(task: ScheduledTaskRow): Promise<void> {
     const now = Date.now();
+    const isSystemConversationCleanupTask = this.isSystemConversationCleanupTask(task);
 
     try {
       await this.runTask(task);
@@ -539,7 +540,7 @@ export class UserDO extends DurableObject<Env> {
         return;
       }
 
-      if (!this.isSystemConversationCleanupTask(task)) {
+      if (!isSystemConversationCleanupTask) {
         await this.notifyTaskFailure(task, lastError);
       }
 
@@ -555,7 +556,9 @@ export class UserDO extends DurableObject<Env> {
         .where(and(eq(scheduledTasks.id, task.id), eq(scheduledTasks.status, "pending")))
         .run();
 
-      if (!this.isSystemConversationCleanupTask(task)) {
+      if (isSystemConversationCleanupTask) {
+        await this.createNextConversationCleanupTask();
+      } else {
         await this.createNextRecurringTask(task);
       }
       return;
@@ -572,7 +575,7 @@ export class UserDO extends DurableObject<Env> {
       .where(and(eq(scheduledTasks.id, task.id), eq(scheduledTasks.status, "pending")))
       .run();
 
-    if (this.isSystemConversationCleanupTask(task)) {
+    if (isSystemConversationCleanupTask) {
       await this.createNextConversationCleanupTask();
       return;
     }

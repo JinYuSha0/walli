@@ -18,6 +18,7 @@ import {
 } from "@worker/utils/tg";
 import {
   getClientBasicSettings,
+  getClientUsageLimit,
   getOrCreateClientId,
   getTelegramBotToken,
   getTelegramSettings,
@@ -41,6 +42,7 @@ import {
   type VoiceOutput,
   type VoiceToTextContext,
 } from "@worker/tools/tool-media";
+import { createUserDoName } from "@worker/durable-objects/user/types";
 
 const telegramChatSchema = z
   .object({
@@ -117,6 +119,11 @@ const telegramReplySchema = z
 
 type TelegramReply = z.output<typeof telegramReplySchema>;
 
+type StoredTelegramMessage = {
+  id: string;
+  content: string;
+};
+
 type TelegramWebhookDeps = {
   sendMessage: (chatId: string, text: string) => Promise<void>;
   sendVoice: (chatId: string, voice: TelegramVoiceOutput) => Promise<void>;
@@ -172,6 +179,30 @@ const inferTelegramFileContentType = (filePath: string) => {
 
   return (match?.[1] as string | undefined) ?? "application/octet-stream";
 };
+
+const parseStoredTelegramMessage = (message: StoredTelegramMessage): ModelMessage | undefined => {
+  try {
+    const parsed = JSON.parse(message.content) as unknown;
+
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "role" in parsed &&
+      typeof (parsed as { role?: unknown }).role === "string"
+    ) {
+      return parsed as ModelMessage;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+};
+
+const serializeTelegramMessage = (message: ModelMessage) => JSON.stringify(message);
+
+const getTokenCount = (value: number | undefined) =>
+  typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
 
 const bytesToHex = (bytes: ArrayBuffer) =>
   [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -294,6 +325,24 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
       const { userId, chatId, userName } = getTelegramMessageIdentity(message);
       const settings = await getSettings(env.APP_KV);
       const basicSettings = await getClientBasicSettings(env.APP_KV, "telegram");
+      const usageLimitSettings = await getClientUsageLimit(env.APP_KV, "telegram");
+      const userDO = env.USER_DO.getByName(createUserDoName("telegram", chatId));
+      const session = await userDO.createSession({ client: "telegram" });
+
+      if (!session) {
+        throw new Error("Can not get session");
+      }
+
+      const storedTelegramMessage = await userDO
+        .listRecentMessages(session.id, usageLimitSettings.historyMessageLimit)
+        .catch((err) => {
+          console.error(err);
+          return [];
+        });
+      const historyMessages = storedTelegramMessage
+        .map(parseStoredTelegramMessage)
+        .filter((storedMessage): storedMessage is ModelMessage => storedMessage !== undefined);
+
       const result = await runChatCompletion({
         env,
         origin,
@@ -306,7 +355,7 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
             userId: chatId,
           },
         }),
-        messages,
+        messages: [...historyMessages, ...messages],
         settings,
         excludeToolNames: [...BUILT_IN_MEDIA_TOOL_NAMES],
         output: Output.object({
@@ -326,6 +375,29 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
           .filter((instruction) => instruction.length > 0)
           .join("\n\n"),
       });
+
+      const inputTokens = getTokenCount(result.usage.inputTokens);
+      const outputTokens = getTokenCount(result.usage.outputTokens);
+      const responseMessages = result.responseMessages as ModelMessage[];
+
+      await userDO
+        .addMessages([
+          ...messages.map((inputMessage, index) => ({
+            sessionId: session.id,
+            content: serializeTelegramMessage(inputMessage),
+            inputToken: index === messages.length - 1 ? inputTokens : 0,
+            outputToken: 0,
+          })),
+          ...responseMessages.map((responseMessage, index) => ({
+            sessionId: session.id,
+            content: serializeTelegramMessage(responseMessage),
+            inputToken: 0,
+            outputToken: index === responseMessages.length - 1 ? outputTokens : 0,
+          })),
+        ])
+        .catch((error) => {
+          console.error(error);
+        });
 
       return result.output;
     },

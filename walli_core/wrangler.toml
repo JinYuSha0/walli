@@ -28,3 +28,7 @@ id = "a3ead2192a94459db359c9d11e47bc92"
 [[durable_objects.bindings]]
 name = "USER_DO"
 class_name = "UserDO"
+
+[exports.UserDO]
+type = "durable-object"
+storage = "sqlite"

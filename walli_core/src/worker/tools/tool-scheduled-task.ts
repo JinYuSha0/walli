@@ -56,10 +56,7 @@ const scheduledTaskActionSchema = z
       });
     }
 
-    if (
-      task.action === "create" &&
-      task.recurrenceEndAt !== undefined
-    ) {
+    if (task.action === "create" && task.recurrenceEndAt !== undefined) {
       const scheduledAt = task.scheduledAt ?? Date.now() + (task.delayMs ?? 0);
 
       if (task.recurrenceEndAt <= scheduledAt) {
@@ -103,9 +100,6 @@ const scheduledTaskActionSchema = z
 const normalizeUserDoName = (platform: UserDoClientPlatform, userId: string) =>
   userId.startsWith(`${platform}:`) ? userId : createUserDoName(platform, userId);
 
-const getScheduler = (env: Env, platform: UserDoClientPlatform, userId: string) =>
-  env.USER_DO.getByName(normalizeUserDoName(platform, userId));
-
 const getListTasksLimit = (status: z.output<typeof scheduledTaskActionSchema>["status"]) =>
   status === "pending" ? undefined : 20;
 
@@ -132,14 +126,16 @@ export const scheduledTaskToolRoute = new Hono<AppBindings>().post(
       );
     }
 
-    const scheduler = getScheduler(c.env, result.data.clientPlatform, result.data.userId);
+    const userDO = c.env.USER_DO.getByName(
+      normalizeUserDoName(result.data.clientPlatform, result.data.userId),
+    );
 
     try {
       if (result.data.action === "create") {
         const { delayMs, ...taskInput } = result.data;
         const scheduledAt =
           taskInput.scheduledAt ?? (delayMs === undefined ? undefined : Date.now() + delayMs);
-        const task = await scheduler.createTask({
+        const task = await userDO.createTask({
           ...taskInput,
           scheduledAt,
           description: taskInput.description!,
@@ -149,7 +145,7 @@ export const scheduledTaskToolRoute = new Hono<AppBindings>().post(
       }
 
       if (result.data.action === "list") {
-        const tasks = await scheduler.listTasks(
+        const tasks = await userDO.listTasks(
           result.data.status,
           getListTasksLimit(result.data.status),
         );
@@ -157,7 +153,7 @@ export const scheduledTaskToolRoute = new Hono<AppBindings>().post(
         return c.json({ tasks });
       }
 
-      const task = await scheduler.cancelTask(result.data.taskId!);
+      const task = await userDO.cancelTask(result.data.taskId!);
 
       if (!task) {
         return c.json({ error: "Task not found" }, 404);
