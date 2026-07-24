@@ -44,6 +44,7 @@ import {
 } from "@worker/tools/tool-media";
 import { createUserDoName } from "@worker/durable-objects/user/types";
 import { allSettledValues, hasNoPromiseSettledError } from "@worker/utils/common";
+import { limitModelMessagesByTokens, sanitizeModelMessageHistory } from "@worker/utils/llm";
 
 const telegramChatSchema = z
   .object({
@@ -205,6 +206,17 @@ const serializeTelegramMessage = (message: ModelMessage) => JSON.stringify(messa
 const getTokenCount = (value: number | undefined) =>
   typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
 
+const getPositiveTokenLimit = (value: number) => (value > 0 ? value : undefined);
+
+const getRemainingTokenLimit = (limit: number, used: number) =>
+  limit > 0 ? Math.max(0, limit - used) : undefined;
+
+const minDefinedTokenLimit = (...limits: Array<number | undefined>) => {
+  const definedLimits = limits.filter((limit): limit is number => limit !== undefined);
+
+  return definedLimits.length > 0 ? Math.min(...definedLimits) : undefined;
+};
+
 const bytesToHex = (bytes: ArrayBuffer) =>
   [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 
@@ -342,12 +354,13 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
 
       const [settings, basicSettings, usageLimitSettings, session] = settingsResult;
 
-      const sholudCheckUserUsageLimit =
-        usageLimitSettings.perUserDailyInputLimit > 0 || usageLimitSettings.perUserDailyOutputLimit;
+      const shouldCheckUserUsageLimit =
+        usageLimitSettings.perUserDailyInputLimit > 0 ||
+        usageLimitSettings.perUserDailyOutputLimit > 0;
 
       const userResult = await allSettledValues([
         userDO.listRecentMessages(session.id, usageLimitSettings.historyMessageLimit),
-        sholudCheckUserUsageLimit ? userDO.getTodayTokenUsage() : Promise.resolve(null),
+        shouldCheckUserUsageLimit ? userDO.getTodayTokenUsage() : Promise.resolve(null),
       ] as const);
 
       if (!hasNoPromiseSettledError(userResult)) {
@@ -361,8 +374,10 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
 
       if (
         todayTokenUsage &&
-        (todayTokenUsage.inputToken >= usageLimitSettings.perUserDailyInputLimit ||
-          todayTokenUsage.outputToken >= usageLimitSettings.perUserDailyOutputLimit)
+        ((usageLimitSettings.perUserDailyInputLimit > 0 &&
+          todayTokenUsage.inputToken >= usageLimitSettings.perUserDailyInputLimit) ||
+          (usageLimitSettings.perUserDailyOutputLimit > 0 &&
+            todayTokenUsage.outputToken >= usageLimitSettings.perUserDailyOutputLimit))
       ) {
         return {
           type: "text",
@@ -370,9 +385,52 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
         };
       }
 
-      const historyMessages = storedTelegramMessage
-        .map(parseStoredTelegramMessage)
-        .filter((storedMessage): storedMessage is ModelMessage => storedMessage !== undefined);
+      const historyMessages = sanitizeModelMessageHistory(
+        storedTelegramMessage
+          .map(parseStoredTelegramMessage)
+          .filter((storedMessage): storedMessage is ModelMessage => storedMessage !== undefined),
+      );
+      const dailyInputRemaining = todayTokenUsage
+        ? getRemainingTokenLimit(
+            usageLimitSettings.perUserDailyInputLimit,
+            todayTokenUsage.inputToken,
+          )
+        : undefined;
+      const inputTokenLimit = minDefinedTokenLimit(
+        getPositiveTokenLimit(usageLimitSettings.perRequestInputLimit),
+        dailyInputRemaining,
+      );
+      const currentMessagesTokenResult = limitModelMessagesByTokens(
+        messages,
+        inputTokenLimit,
+        messages.length,
+      );
+
+      if (
+        inputTokenLimit !== undefined &&
+        currentMessagesTokenResult.tokenCount > inputTokenLimit
+      ) {
+        return {
+          type: "text",
+          text: "Input token limit exceeded.",
+        };
+      }
+
+      const limitedMessageResult = limitModelMessagesByTokens(
+        [...historyMessages, ...messages],
+        inputTokenLimit,
+        messages.length,
+      );
+      const dailyOutputRemaining = todayTokenUsage
+        ? getRemainingTokenLimit(
+            usageLimitSettings.perUserDailyOutputLimit,
+            todayTokenUsage.outputToken,
+          )
+        : undefined;
+      const outputTokenLimit = minDefinedTokenLimit(
+        getPositiveTokenLimit(usageLimitSettings.perRequestOutputLimit),
+        dailyOutputRemaining,
+      );
 
       const result = await runChatCompletion({
         env,
@@ -386,7 +444,7 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
             userId: chatId,
           },
         }),
-        messages: [...historyMessages, ...messages],
+        messages: limitedMessageResult.messages,
         settings,
         excludeToolNames: [...BUILT_IN_MEDIA_TOOL_NAMES],
         output: Output.object({
@@ -394,7 +452,7 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
           name: "telegram_reply",
           description: "Telegram reply type and final reply content.",
         }),
-        maxOutputTokens: usageLimitSettings.perRequestOutputLimit || undefined,
+        maxOutputTokens: outputTokenLimit,
         extraInstructions: [
           basicSettings.additionalSystemPrompt,
           "Reply to the Telegram user using the provided message text and media analysis.",

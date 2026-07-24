@@ -44,6 +44,32 @@ type RunChatOptions = {
   maxOutputTokens?: number;
 };
 
+const usesOpenAICompletionTokenLimit = (modelId: string) =>
+  /^openai\/(?:gpt-5|o[134](?:-|$))/.test(modelId);
+
+export const createOutputTokenLimitOptions = (
+  modelId: string,
+  maxOutputTokens: number | undefined,
+) => {
+  if (maxOutputTokens === undefined) {
+    return {};
+  }
+
+  if (!usesOpenAICompletionTokenLimit(modelId)) {
+    return {
+      maxOutputTokens,
+    };
+  }
+
+  return {
+    providerOptions: {
+      Unified: {
+        max_completion_tokens: maxOutputTokens,
+      },
+    },
+  };
+};
+
 const normalizeOptionalString = (value: unknown) =>
   typeof value === "string" && value.trim().length > 0 ? value : undefined;
 
@@ -188,9 +214,10 @@ export const runChatCompletion = async ({
   extraInstructions,
   toolsEnabled = true,
   output,
-  // maxOutputTokens,
+  maxOutputTokens,
 }: RunChatOptions) => {
   const resolvedSettings = settings ?? (await getSettings(env.APP_KV));
+  const modelId = normalizeGatewayModelId(resolvedSettings.primaryModel);
   const gateway = createGatewayFromEnv(env);
   const tools = toolsEnabled
     ? buildChatTools(createToolConfigs(resolvedSettings, env, origin, excludeToolNames), {
@@ -200,14 +227,14 @@ export const runChatCompletion = async ({
     : undefined;
 
   return generateText({
-    model: gateway(unified(normalizeGatewayModelId(resolvedSettings.primaryModel))),
+    model: gateway(unified(modelId)),
     instructions: joinInstructions(
       createChatInstructions(resolvedSettings.globalPrompt, userInfo),
       extraInstructions,
     ),
     messages,
     output,
-    // maxOutputTokens,
+    ...createOutputTokenLimitOptions(modelId, maxOutputTokens),
     ...(toolsEnabled
       ? {
           tools: {

@@ -18,6 +18,7 @@ import { getSettings, settingsRoute } from "../api/settings";
 import type { AppBindings } from "../api/types";
 import { createDb } from "../db/client";
 import {
+  createOutputTokenLimitOptions,
   createChatRunnerInstructions,
   createChatRunnerTools,
   createChatUserInfo,
@@ -39,6 +40,10 @@ import {
 import { toolsRoute } from ".";
 import { createNotificationTools } from "./tool-notification";
 import { getNextCronScheduledAt } from "../utils/cron";
+import {
+  limitModelMessagesByTokens,
+  sanitizeModelMessageHistory,
+} from "../utils/llm";
 
 const env = {
   API_TOKEN: "test-token",
@@ -91,6 +96,19 @@ describe("chat tools", () => {
       "workers-ai/@cf/zai-org/glm-4.7-flash",
     );
     expect(normalizeGatewayModelId("openai/gpt-5.4-mini")).toBe("openai/gpt-5.4-mini");
+  });
+
+  it("uses max_completion_tokens for OpenAI GPT-5 models", () => {
+    expect(createOutputTokenLimitOptions("openai/gpt-5.4-mini", 128)).toEqual({
+      providerOptions: {
+        Unified: {
+          max_completion_tokens: 128,
+        },
+      },
+    });
+    expect(createOutputTokenLimitOptions("openai/gpt-4o", 128)).toEqual({
+      maxOutputTokens: 128,
+    });
   });
 
   beforeEach(() => {
@@ -1743,6 +1761,155 @@ describe("telegram webhook", () => {
     expect(output.voice).toBeInstanceOf(Blob);
     expect(fetchMock).toHaveBeenCalledWith("https://example.com/reply.mp3");
     fetchMock.mockRestore();
+  });
+
+  it("drops Telegram history tool messages without preceding tool calls", () => {
+    const sanitized = sanitizeModelMessageHistory([
+      {
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId: "call-orphaned",
+            toolName: "scheduled_task",
+            output: {
+              type: "json",
+              value: {
+                ok: true,
+              },
+            },
+          },
+        ],
+      },
+      {
+        role: "assistant",
+        content: "Previous final answer",
+      },
+    ]);
+
+    expect(sanitized).toEqual([
+      {
+        role: "assistant",
+        content: "Previous final answer",
+      },
+    ]);
+  });
+
+  it("removes Telegram history assistant tool calls when their results were truncated", () => {
+    const sanitized = sanitizeModelMessageHistory([
+      {
+        role: "user",
+        content: "Remind me later",
+      },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "text",
+            text: "I'll create that reminder.",
+          },
+          {
+            type: "tool-call",
+            toolCallId: "call-missing-result",
+            toolName: "scheduled_task",
+            input: {
+              description: "reminder",
+            },
+          },
+        ],
+      },
+    ]);
+
+    expect(sanitized).toEqual([
+      {
+        role: "user",
+        content: "Remind me later",
+      },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "text",
+            text: "I'll create that reminder.",
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("keeps Telegram history assistant tool calls with adjacent results", () => {
+    const messages = [
+      {
+        role: "assistant" as const,
+        content: [
+          {
+            type: "tool-call" as const,
+            toolCallId: "call-complete",
+            toolName: "scheduled_task",
+            input: {
+              description: "reminder",
+            },
+          },
+        ],
+      },
+      {
+        role: "tool" as const,
+        content: [
+          {
+            type: "tool-result" as const,
+            toolCallId: "call-complete",
+            toolName: "scheduled_task",
+            output: {
+              type: "json" as const,
+              value: {
+                ok: true,
+              },
+            },
+          },
+        ],
+      },
+    ];
+
+    expect(sanitizeModelMessageHistory(messages)).toEqual(messages);
+  });
+
+  it("counts mixed-language model message tokens", () => {
+    expect(
+      limitModelMessagesByTokens([
+        {
+          role: "user",
+          content: "hello 世界",
+        },
+      ]).tokenCount,
+    ).toBe(6);
+  });
+
+  it("trims old history messages to fit the input token limit", () => {
+    const messages = [
+      {
+        role: "user" as const,
+        content: "old history message with many words",
+      },
+      {
+        role: "assistant" as const,
+        content: "old answer",
+      },
+      {
+        role: "user" as const,
+        content: "new question",
+      },
+    ];
+
+    expect(limitModelMessagesByTokens(messages, 12, 1).messages).toEqual([
+      {
+        role: "assistant",
+        content: "old answer",
+      },
+      {
+        role: "user",
+        content: "new question",
+      },
+    ]);
   });
 
   it("proxies Telegram files with a filename suffix and forced content type", async () => {
