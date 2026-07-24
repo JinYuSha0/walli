@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
@@ -17,6 +17,7 @@ import {
 import { useUnsavedChangesPrompt } from "@/hooks/use-unsaved-changes-prompt";
 import { cn } from "@/lib/utils";
 import {
+  DEFAULT_SETTINGS,
   MODEL_CAPABILITY_TAGS,
   type ModelCapabilityTag,
   type Settings,
@@ -48,6 +49,7 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
   const [openDeleteTooltipId, setOpenDeleteTooltipId] = useState<string | null>(
     null,
   );
+  const [resetConfirming, setResetConfirming] = useState(false);
   const form = useForm<ModelSettingsForm>({
     defaultValues: {
       models: settings.models,
@@ -106,6 +108,27 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
       toast.success(t("modelSettingsSaveSuccess"));
     },
   });
+  const resetSettingsMutation = useMutation({
+    mutationFn: () =>
+      updateSettings({
+        models: DEFAULT_SETTINGS.models,
+        primaryModel: DEFAULT_SETTINGS.primaryModel,
+        toolPlannerModel: DEFAULT_SETTINGS.toolPlannerModel,
+        embeddingModel: DEFAULT_SETTINGS.embeddingModel,
+      }),
+    onSuccess: (values) => {
+      queryClient.setQueryData(["settings"], values);
+      form.reset({
+        models: values.models,
+        primaryModel: values.primaryModel,
+        toolPlannerModel: values.toolPlannerModel,
+        embeddingModel: values.embeddingModel,
+      });
+      setResetConfirming(false);
+      toast.success(t("modelSettingsResetSuccess"));
+    },
+  });
+  const pending = updateSettingsMutation.isPending || resetSettingsMutation.isPending;
 
   useEffect(() => {
     form.reset({
@@ -162,7 +185,7 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
       toolPlannerModel: settings.toolPlannerModel,
       embeddingModel: settings.embeddingModel,
     },
-    disabled: updateSettingsMutation.isPending,
+    disabled: pending,
   });
 
   return (
@@ -179,7 +202,7 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
             type="button"
             variant="outline"
             onClick={() => append(createEmptyModel())}
-            disabled={updateSettingsMutation.isPending}
+            disabled={pending}
           >
             <Plus />
             {t("modelSettingsAddModel")}
@@ -229,7 +252,7 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
                           <Input
                             id={`model-name-${field.id}`}
                             aria-invalid={fieldState.invalid}
-                            disabled={updateSettingsMutation.isPending}
+                            disabled={pending}
                             placeholder={t("modelSettingsModelNamePlaceholder")}
                             {...nameField}
                           />
@@ -249,7 +272,7 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
                       size="icon"
                       aria-label={t("modelSettingsMoveUp")}
                       onClick={() => move(index, index - 1)}
-                      disabled={updateSettingsMutation.isPending || index === 0}
+                      disabled={pending || index === 0}
                     >
                       <ArrowUp />
                     </Button>
@@ -260,7 +283,7 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
                       aria-label={t("modelSettingsMoveDown")}
                       onClick={() => move(index, index + 1)}
                       disabled={
-                        updateSettingsMutation.isPending ||
+                        pending ||
                         index === fields.length - 1
                       }
                     >
@@ -291,7 +314,7 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
 
                             remove(index);
                           }}
-                          disabled={updateSettingsMutation.isPending}
+                          disabled={pending}
                         >
                           <Trash2 />
                         </Button>
@@ -330,7 +353,7 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
                                   tagsField.onChange,
                                 )
                               }
-                              disabled={updateSettingsMutation.isPending}
+                              disabled={pending}
                             >
                               {t(`modelCapability.${tag}`)}
                             </Button>
@@ -382,7 +405,7 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
                 id="primary-model"
                 aria-label={t("modelSettingsPrimaryModel")}
                 aria-invalid={fieldState.invalid}
-                disabled={updateSettingsMutation.isPending}
+                disabled={pending}
                 {...field}
               >
                 <option value="">
@@ -429,7 +452,7 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
                 id="tool-planner-model"
                 aria-label={t("modelSettingsToolPlannerModel")}
                 aria-invalid={fieldState.invalid}
-                disabled={updateSettingsMutation.isPending}
+                disabled={pending}
                 {...field}
               >
                 <option value="">
@@ -476,7 +499,7 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
                 id="embedding-model"
                 aria-label={t("modelSettingsEmbeddingModel")}
                 aria-invalid={fieldState.invalid}
-                disabled={updateSettingsMutation.isPending}
+                disabled={pending}
                 {...field}
               >
                 <option value="">
@@ -499,7 +522,54 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
       </section>
 
       <div className="flex justify-end gap-2 border-t border-border pt-8">
-        <Button type="submit" disabled={updateSettingsMutation.isPending}>
+        <Button
+          type="button"
+          variant="destructive"
+          disabled={pending}
+          onClick={() => setResetConfirming(true)}
+        >
+          <RefreshCcw />
+          {t("modelSettingsReset")}
+        </Button>
+        {resetConfirming ? (
+          <div
+            className="fixed inset-0 z-50 grid place-items-center bg-background/80 p-4 backdrop-blur-sm"
+            role="presentation"
+          >
+            <div
+              aria-modal="true"
+              className="grid w-full max-w-md gap-5 rounded-lg border border-border bg-background p-6 shadow-lg"
+              role="dialog"
+            >
+              <div className="grid gap-2">
+                <h2 className="text-lg font-semibold">{t("modelSettingsResetTitle")}</h2>
+                <p className="text-sm text-muted-foreground">
+                  {t("modelSettingsResetConfirmDescription")}
+                </p>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={pending}
+                  onClick={() => setResetConfirming(false)}
+                >
+                  {t("modelSettingsResetCancel")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={pending}
+                  onClick={() => resetSettingsMutation.mutate()}
+                >
+                  <RefreshCcw />
+                  {t("modelSettingsResetConfirm")}
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        <Button type="submit" disabled={pending}>
           {t("modelSettingsSave")}
         </Button>
       </div>

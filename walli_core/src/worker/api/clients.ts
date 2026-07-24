@@ -113,6 +113,8 @@ const defaultUsageLimit = {
   perRequestOutputLimit: 0,
   perUserDailyInputLimit: 0,
   perUserDailyOutputLimit: 0,
+  historyMessageLimit: 20,
+  autoDeletePeriod: "week",
 } satisfies ClientUsageLimit;
 
 const getClientUsageLimit = async (appKv: KVNamespace, platform: ClientPlatform) => {

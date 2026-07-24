@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Pencil, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { useUnsavedChangesPrompt } from "@/hooks/use-unsaved-changes-prompt";
 import {
   BUILT_IN_TOOLS,
+  DEFAULT_SETTINGS,
   TOOL_API_METHODS,
   TOOL_INVOCATION_TYPES,
   TOOL_NAME_PATTERN,
@@ -139,6 +140,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [editingToolId, setEditingToolId] = useState<string | null>(null);
+  const [resetConfirming, setResetConfirming] = useState(false);
   const savedSettings = {
     tools: createToolFormValues(builtInTools, tools),
   };
@@ -164,6 +166,23 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
       toast.success(t("toolSettingsSaveSuccess"));
     },
   });
+  const resetSettingsMutation = useMutation({
+    mutationFn: () =>
+      updateSettings({
+        builtInTools: DEFAULT_SETTINGS.builtInTools,
+        tools: DEFAULT_SETTINGS.tools,
+      }),
+    onSuccess: (values) => {
+      queryClient.setQueryData(["settings"], values);
+      form.reset({
+        tools: createToolFormValues(values.builtInTools, values.tools),
+      });
+      setEditingToolId(null);
+      setResetConfirming(false);
+      toast.success(t("toolSettingsResetSuccess"));
+    },
+  });
+  const pending = updateSettingsMutation.isPending || resetSettingsMutation.isPending;
 
   useEffect(() => {
     form.reset({
@@ -436,7 +455,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
   useUnsavedChangesPrompt({
     current: watchedSettings,
     saved: savedSettings,
-    disabled: updateSettingsMutation.isPending,
+    disabled: pending,
   });
 
   return (
@@ -461,7 +480,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
               });
               setEditingToolId(formId);
             }}
-            disabled={updateSettingsMutation.isPending}
+            disabled={pending}
           >
             <Plus />
             {t("toolSettingsAddTool")}
@@ -520,7 +539,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                           </span>
                           <Switch
                             checked={enabledField.value}
-                            disabled={updateSettingsMutation.isPending}
+                            disabled={pending}
                             onCheckedChange={enabledField.onChange}
                           />
                           <span className="sr-only">
@@ -535,7 +554,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                       size="icon"
                       aria-label={t("toolSettingsEditTool")}
                       onClick={() => setEditingToolId(isEditing ? null : toolFormId)}
-                      disabled={updateSettingsMutation.isPending}
+                      disabled={pending}
                     >
                       <Pencil />
                     </Button>
@@ -553,7 +572,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                           aria-label={t("toolSettingsMoveUp")}
                           onClick={() => move(index, index - 1)}
                           disabled={
-                            updateSettingsMutation.isPending ||
+                            pending ||
                             index === firstCustomToolIndex
                           }
                         >
@@ -566,7 +585,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                           aria-label={t("toolSettingsMoveDown")}
                           onClick={() => move(index, index + 1)}
                           disabled={
-                            updateSettingsMutation.isPending ||
+                            pending ||
                             index === fields.length - 1
                           }
                         >
@@ -583,7 +602,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                               setEditingToolId(null);
                             }
                           }}
-                          disabled={updateSettingsMutation.isPending}
+                          disabled={pending}
                         >
                           <Trash2 />
                         </Button>
@@ -615,7 +634,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                             <Input
                               id={`tool-name-${field.id}`}
                               aria-invalid={fieldState.invalid}
-                              disabled={updateSettingsMutation.isPending || isBuiltIn}
+                              disabled={pending || isBuiltIn}
                               placeholder={t("toolSettingsToolNamePlaceholder")}
                               {...nameField}
                             />
@@ -645,7 +664,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                               id={`tool-description-${field.id}`}
                               className="min-h-20 w-full rounded-lg border border-input bg-input/30 px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40"
                               aria-invalid={fieldState.invalid}
-                              disabled={updateSettingsMutation.isPending}
+                              disabled={pending}
                               placeholder={t(
                                 "toolSettingsToolDescriptionPlaceholder",
                               )}
@@ -682,7 +701,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                         name={`tools.${index}.invocation.type`}
                         render={({ field: invocationTypeField }) => (
                           <Select
-                            disabled={updateSettingsMutation.isPending}
+                            disabled={pending}
                             {...invocationTypeField}
                           >
                             {TOOL_INVOCATION_TYPES.map((type) => (
@@ -708,7 +727,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                             <div className="grid gap-2">
                               <Select
                                 aria-invalid={fieldState.invalid}
-                                disabled={updateSettingsMutation.isPending}
+                                disabled={pending}
                                 {...invocationModelField}
                               >
                                 <option value="">
@@ -739,7 +758,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                               name={`tools.${index}.invocation.method`}
                               render={({ field: invocationMethodField }) => (
                                 <Select
-                                  disabled={updateSettingsMutation.isPending}
+                                  disabled={pending}
                                   {...invocationMethodField}
                                 >
                                   {TOOL_API_METHODS.map((method) => (
@@ -778,7 +797,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                                 <div className="grid gap-2">
                                   <Input
                                     aria-invalid={fieldState.invalid}
-                                    disabled={updateSettingsMutation.isPending}
+                                    disabled={pending}
                                     placeholder={t(
                                       "toolSettingsInvocationUrlPlaceholder",
                                     )}
@@ -812,7 +831,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                       variant="outline"
                       size="sm"
                       onClick={() => addSchemaField(index)}
-                      disabled={updateSettingsMutation.isPending}
+                      disabled={pending}
                     >
                       <Plus />
                       {t("toolSettingsAddSchemaField")}
@@ -847,7 +866,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                               <div className="grid gap-2">
                                 <Input
                                   aria-invalid={fieldState.invalid}
-                                  disabled={updateSettingsMutation.isPending}
+                                  disabled={pending}
                                   placeholder={t(
                                     "toolSettingsSchemaFieldNamePlaceholder",
                                   )}
@@ -870,7 +889,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                             name={`tools.${index}.schema.fields.${schemaFieldIndex}.type`}
                             render={({ field: schemaTypeField }) => (
                               <Select
-                                disabled={updateSettingsMutation.isPending}
+                                disabled={pending}
                                 {...schemaTypeField}
                               >
                                 {TOOL_SCHEMA_FIELD_TYPES.map((type) => (
@@ -902,7 +921,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                               <div className="grid gap-2">
                                 <Input
                                   aria-invalid={fieldState.invalid}
-                                  disabled={updateSettingsMutation.isPending}
+                                  disabled={pending}
                                   placeholder={t(
                                     "toolSettingsSchemaFieldDescriptionPlaceholder",
                                   )}
@@ -927,7 +946,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                             name={`tools.${index}.schema.fields.${schemaFieldIndex}.defaultValue`}
                             render={({ field: schemaDefaultValueField }) => (
                               <Input
-                                disabled={updateSettingsMutation.isPending}
+                                disabled={pending}
                                 placeholder={t(
                                   "toolSettingsSchemaFieldDefaultValuePlaceholder",
                                 )}
@@ -949,7 +968,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                                   requiredField.onChange(event.target.checked)
                                 }
                                 disabled={
-                                  updateSettingsMutation.isPending ||
+                                  pending ||
                                   (schemaRequired &&
                                     requiredField.value &&
                                     requiredFieldCount <= 1)
@@ -969,7 +988,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                             removeSchemaField(index, schemaFieldIndex)
                           }
                           disabled={
-                            updateSettingsMutation.isPending ||
+                            pending ||
                             (schemaRequired && schemaFields.length <= 1) ||
                             isLastRequiredField
                           }
@@ -999,7 +1018,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                         variant="outline"
                         size="sm"
                         onClick={() => addApiHeader(index)}
-                        disabled={updateSettingsMutation.isPending}
+                        disabled={pending}
                       >
                         <Plus />
                         {t("toolSettingsInvocationAddHeader")}
@@ -1027,7 +1046,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                                   <div className="grid gap-2">
                                     <Input
                                       aria-invalid={fieldState.invalid}
-                                      disabled={updateSettingsMutation.isPending}
+                                      disabled={pending}
                                       placeholder={t(
                                         "toolSettingsInvocationHeaderNamePlaceholder",
                                       )}
@@ -1057,7 +1076,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                                   <div className="grid gap-2">
                                     <Input
                                       aria-invalid={fieldState.invalid}
-                                      disabled={updateSettingsMutation.isPending}
+                                      disabled={pending}
                                       placeholder={t(
                                         "toolSettingsInvocationHeaderValuePlaceholder",
                                       )}
@@ -1079,7 +1098,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
                               size="icon"
                               aria-label={t("toolSettingsInvocationRemoveHeader")}
                               onClick={() => removeApiHeader(index, headerIndex)}
-                              disabled={updateSettingsMutation.isPending}
+                              disabled={pending}
                             >
                               <Trash2 />
                             </Button>
@@ -1113,7 +1132,54 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
       </section>
 
       <div className="flex justify-end gap-2 border-t border-border pt-8">
-        <Button type="submit" disabled={updateSettingsMutation.isPending}>
+        <Button
+          type="button"
+          variant="destructive"
+          disabled={pending}
+          onClick={() => setResetConfirming(true)}
+        >
+          <RefreshCcw />
+          {t("toolSettingsReset")}
+        </Button>
+        {resetConfirming ? (
+          <div
+            className="fixed inset-0 z-50 grid place-items-center bg-background/80 p-4 backdrop-blur-sm"
+            role="presentation"
+          >
+            <div
+              aria-modal="true"
+              className="grid w-full max-w-md gap-5 rounded-lg border border-border bg-background p-6 shadow-lg"
+              role="dialog"
+            >
+              <div className="grid gap-2">
+                <h2 className="text-lg font-semibold">{t("toolSettingsResetTitle")}</h2>
+                <p className="text-sm text-muted-foreground">
+                  {t("toolSettingsResetConfirmDescription")}
+                </p>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={pending}
+                  onClick={() => setResetConfirming(false)}
+                >
+                  {t("toolSettingsResetCancel")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={pending}
+                  onClick={() => resetSettingsMutation.mutate()}
+                >
+                  <RefreshCcw />
+                  {t("toolSettingsResetConfirm")}
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        <Button type="submit" disabled={pending}>
           {t("toolSettingsSave")}
         </Button>
       </div>

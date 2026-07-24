@@ -94,6 +94,8 @@ type ClientUsageSettingsForm = {
     perRequestOutputLimit: string;
     perUserDailyInputLimit: string;
     perUserDailyOutputLimit: string;
+    historyMessageLimit: string;
+    autoDeletePeriod: ClientUsageLimit["autoDeletePeriod"];
   };
 };
 
@@ -141,6 +143,8 @@ const toUsageFormValues = (usageLimit: ClientUsageLimit): ClientUsageSettingsFor
     perRequestOutputLimit: toLimitValue(usageLimit.perRequestOutputLimit),
     perUserDailyInputLimit: toLimitValue(usageLimit.perUserDailyInputLimit),
     perUserDailyOutputLimit: toLimitValue(usageLimit.perUserDailyOutputLimit),
+    historyMessageLimit: toLimitValue(usageLimit.historyMessageLimit),
+    autoDeletePeriod: usageLimit.autoDeletePeriod,
   },
 });
 
@@ -982,6 +986,8 @@ function ClientUsageSettingsTab({
       perRequestOutputLimit: parseLimit(values.usageLimit.perRequestOutputLimit),
       perUserDailyInputLimit: parseLimit(values.usageLimit.perUserDailyInputLimit),
       perUserDailyOutputLimit: parseLimit(values.usageLimit.perUserDailyOutputLimit),
+      historyMessageLimit: parseLimit(values.usageLimit.historyMessageLimit),
+      autoDeletePeriod: values.usageLimit.autoDeletePeriod,
     });
   };
   useUnsavedChangesPrompt({
@@ -1083,6 +1089,63 @@ function ClientUsageSettingsTab({
                 )}
               />
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4">
+        <div className="grid gap-1">
+          <h2 className="text-sm font-medium">{t("usageSettingsLlmMessageTitle")}</h2>
+        </div>
+
+        <div className="grid gap-4 rounded-lg border border-border p-4">
+          <div className="grid gap-2 lg:max-w-[calc(50%-0.5rem)]">
+            <Label htmlFor={`client-usage-history-messages-${platform}`}>
+              {t("usageSettingsLlmMessageLimit")}
+            </Label>
+            <Controller
+              control={form.control}
+              name="usageLimit.historyMessageLimit"
+              render={({ field }) => (
+                <Input
+                  id={`client-usage-history-messages-${platform}`}
+                  type="number"
+                  min={0}
+                  step={1}
+                  disabled={saveMutation.isPending}
+                  {...field}
+                />
+              )}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4">
+        <div className="grid gap-1">
+          <h2 className="text-sm font-medium">{t("usageSettingsConversationCleanupTitle")}</h2>
+        </div>
+
+        <div className="grid gap-4 rounded-lg border border-border p-4">
+          <div className="grid gap-2 lg:max-w-[calc(50%-0.5rem)]">
+            <Label htmlFor={`client-usage-auto-delete-${platform}`}>
+              {t("usageSettingsConversationCleanupPeriod")}
+            </Label>
+            <Controller
+              control={form.control}
+              name="usageLimit.autoDeletePeriod"
+              render={({ field }) => (
+                <Select
+                  id={`client-usage-auto-delete-${platform}`}
+                  disabled={saveMutation.isPending}
+                  {...field}
+                >
+                  <option value="day">{t("usageSettingsAutoDeletePeriod.day")}</option>
+                  <option value="week">{t("usageSettingsAutoDeletePeriod.week")}</option>
+                  <option value="month">{t("usageSettingsAutoDeletePeriod.month")}</option>
+                </Select>
+              )}
+            />
           </div>
         </div>
       </section>

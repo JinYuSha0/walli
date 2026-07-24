@@ -44,6 +44,8 @@ export const clientUsageLimitSchema = z
     perRequestOutputLimit: z.number().int().min(0),
     perUserDailyInputLimit: z.number().int().min(0),
     perUserDailyOutputLimit: z.number().int().min(0),
+    historyMessageLimit: z.number().int().min(0),
+    autoDeletePeriod: z.enum(["day", "week", "month"]),
   })
   .strict();
 
