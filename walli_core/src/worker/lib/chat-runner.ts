@@ -41,6 +41,7 @@ type RunChatOptions = {
   extraInstructions?: string;
   toolsEnabled?: boolean;
   output?: Output.Output;
+  maxOutputTokens?: number;
 };
 
 const normalizeOptionalString = (value: unknown) =>
@@ -187,6 +188,7 @@ export const runChatCompletion = async ({
   extraInstructions,
   toolsEnabled = true,
   output,
+  // maxOutputTokens,
 }: RunChatOptions) => {
   const resolvedSettings = settings ?? (await getSettings(env.APP_KV));
   const gateway = createGatewayFromEnv(env);
@@ -205,6 +207,7 @@ export const runChatCompletion = async ({
     ),
     messages,
     output,
+    // maxOutputTokens,
     ...(toolsEnabled
       ? {
           tools: {

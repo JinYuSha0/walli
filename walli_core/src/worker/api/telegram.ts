@@ -43,6 +43,7 @@ import {
   type VoiceToTextContext,
 } from "@worker/tools/tool-media";
 import { createUserDoName } from "@worker/durable-objects/user/types";
+import { allSettledValues, hasNoPromiseSettledError } from "@worker/utils/common";
 
 const telegramChatSchema = z
   .object({
@@ -321,24 +322,54 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
     transcribeVoice: (context) => transcribeVoice(env, origin, context),
     describeImage: (context) => describeImage(env, origin, context),
     synthesizeVoice: (text) => synthesizeVoice(env, origin, text),
-    runLlm: async (message, messages) => {
+    runLlm: async (message, messages): Promise<TelegramReply> => {
       const { userId, chatId, userName } = getTelegramMessageIdentity(message);
-      const settings = await getSettings(env.APP_KV);
-      const basicSettings = await getClientBasicSettings(env.APP_KV, "telegram");
-      const usageLimitSettings = await getClientUsageLimit(env.APP_KV, "telegram");
       const userDO = env.USER_DO.getByName(createUserDoName("telegram", chatId));
-      const session = await userDO.createSession({ client: "telegram" });
 
-      if (!session) {
-        throw new Error("Can not get session");
+      const settingsResult = await allSettledValues([
+        getSettings(env.APP_KV),
+        getClientBasicSettings(env.APP_KV, "telegram"),
+        getClientUsageLimit(env.APP_KV, "telegram"),
+        userDO.createSession({ client: "telegram" }),
+      ] as const);
+
+      if (!hasNoPromiseSettledError(settingsResult)) {
+        return {
+          type: "text",
+          text: "System error",
+        };
       }
 
-      const storedTelegramMessage = await userDO
-        .listRecentMessages(session.id, usageLimitSettings.historyMessageLimit)
-        .catch((err) => {
-          console.error(err);
-          return [];
-        });
+      const [settings, basicSettings, usageLimitSettings, session] = settingsResult;
+
+      const sholudCheckUserUsageLimit =
+        usageLimitSettings.perUserDailyInputLimit > 0 || usageLimitSettings.perUserDailyOutputLimit;
+
+      const userResult = await allSettledValues([
+        userDO.listRecentMessages(session.id, usageLimitSettings.historyMessageLimit),
+        sholudCheckUserUsageLimit ? userDO.getTodayTokenUsage() : Promise.resolve(null),
+      ] as const);
+
+      if (!hasNoPromiseSettledError(userResult)) {
+        return {
+          type: "text",
+          text: "System error",
+        };
+      }
+
+      const [storedTelegramMessage, todayTokenUsage] = userResult;
+
+      if (
+        todayTokenUsage &&
+        (todayTokenUsage.inputToken >= usageLimitSettings.perUserDailyInputLimit ||
+          todayTokenUsage.outputToken >= usageLimitSettings.perUserDailyOutputLimit)
+      ) {
+        return {
+          type: "text",
+          text: "Usage limit reached.",
+        };
+      }
+
       const historyMessages = storedTelegramMessage
         .map(parseStoredTelegramMessage)
         .filter((storedMessage): storedMessage is ModelMessage => storedMessage !== undefined);
@@ -363,6 +394,7 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
           name: "telegram_reply",
           description: "Telegram reply type and final reply content.",
         }),
+        maxOutputTokens: usageLimitSettings.perRequestOutputLimit || undefined,
         extraInstructions: [
           basicSettings.additionalSystemPrompt,
           "Reply to the Telegram user using the provided message text and media analysis.",

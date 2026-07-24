@@ -54,6 +54,8 @@ export type CreateChatMessageInput = {
 };
 
 export type TokenUsage = {
+  startAt: number;
+  endAt: number;
   inputToken: number;
   outputToken: number;
   totalToken: number;
@@ -122,6 +124,12 @@ const getStartOfDayAt = (timestamp: number, timeZone: string) => {
   const offsetMinutes = Number(timeZone.slice(3)) * 60;
 
   return dayjs(timestamp).utcOffset(offsetMinutes).startOf("day").valueOf();
+};
+
+const getEndOfDayAt = (timestamp: number, timeZone: string) => {
+  const offsetMinutes = Number(timeZone.slice(3)) * 60;
+
+  return dayjs(timestamp).utcOffset(offsetMinutes).endOf("day").valueOf();
 };
 
 const getNextStartOfDayAt = (timestamp: number, timeZone: string) => {
@@ -212,7 +220,7 @@ const createTaskMessages = (task: ScheduledTaskRow): ModelMessage[] => {
       "Execute this scheduled task now.",
       "If this task asks to notify, remind, send, or push a message, use the available send_notification tool.",
       'Choose send_notification.type from the task intent: use "voice" for voice/audio/spoken/语音/音频 replies, "image" when an image URL or data URI should be sent, otherwise use "text".',
-      'For voice notifications, pass only the human-readable spoken content in send_notification.text; the text-to-speech layer will automatically detect the language and apply the right voice style.',
+      "For voice notifications, pass only the human-readable spoken content in send_notification.text; the text-to-speech layer will automatically detect the language and apply the right voice style.",
       "Use the user's requested language and wording when composing the notification.",
       `Task description: ${task.description}`,
       `Task type: ${task.type}`,
@@ -337,13 +345,19 @@ export class UserDO extends DurableObject<Env> {
     const outputToken = Number(row?.outputToken ?? 0);
 
     return {
+      startAt,
+      endAt,
       inputToken,
       outputToken,
       totalToken: inputToken + outputToken,
     };
   }
 
-  async getTodayTokenUsage(dayStartAt: number, dayEndAt: number): Promise<TokenUsage> {
+  async getTodayTokenUsage(): Promise<TokenUsage> {
+    const now = Date.now();
+    const settings = await getSettings(this.env.APP_KV);
+    const dayStartAt = getStartOfDayAt(now, settings.timeZone);
+    const dayEndAt = getEndOfDayAt(now, settings.timeZone);
     return this.getTokenUsageSince(dayStartAt, dayEndAt);
   }
 
@@ -356,10 +370,7 @@ export class UserDO extends DurableObject<Env> {
       .where(lt(messages.createdAt, cutoffAt))
       .get();
 
-    this.db
-      .delete(messages)
-      .where(lt(messages.createdAt, cutoffAt))
-      .run();
+    this.db.delete(messages).where(lt(messages.createdAt, cutoffAt)).run();
 
     return Number(row?.count ?? 0);
   }
