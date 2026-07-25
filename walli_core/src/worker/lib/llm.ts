@@ -3,8 +3,6 @@ import { unified } from "ai-gateway-provider/providers/unified";
 import type { Context } from "hono";
 import type { AppBindings } from "../api/types";
 
-export { generateText } from "ai";
-
 export const createGatewayFromEnv = (env: Env) =>
   createAiGateway({
     accountId: env.CLOUDFLARE_ACCOUNT_ID,

@@ -1,4 +1,4 @@
-import { dynamicTool, type ToolSet } from "ai";
+import { dynamicTool, generateText, isStepCount, type ToolSet } from "ai";
 import { z } from "zod";
 import {
   TOOL_NAME_PATTERN,
@@ -8,9 +8,20 @@ import {
 } from "../../shared/const";
 import { adaptBuiltInToolModelInput, adaptBuiltInToolModelOutput } from "../../shared/tools";
 
-type ChatToolRuntime = {
+type ToolRuntime = {
   AI: Ai;
   fetch?: typeof fetch;
+};
+
+type ToolExecutionOptions = Parameters<NonNullable<ToolSet[string]["execute"]>>[1];
+
+type RunToolWithContextOptions = {
+  model?: Parameters<typeof generateText>[0]["model"];
+  toolName: string;
+  tool: ToolSet[string];
+  toolConfig?: ToolConfig;
+  taskContext: unknown;
+  toolCallId?: string;
 };
 
 const parseDefaultValue = (fieldType: ToolSchemaFieldType, value: string): unknown => {
@@ -86,9 +97,6 @@ export const createLooseToolInputSchema = (toolConfig: ToolConfig) =>
     ),
   );
 
-export const safeParseLooseToolInputWithDefaults = (toolConfig: ToolConfig, input: unknown) =>
-  createLooseToolInputSchema(toolConfig).safeParse(input);
-
 const createApiInvocationInput = (toolConfig: ToolConfig, input: unknown) => {
   const schemaDefaults = Object.fromEntries(
     toolConfig.schema.fields
@@ -112,7 +120,7 @@ const createApiInvocationInput = (toolConfig: ToolConfig, input: unknown) => {
 const runConfiguredTool = async (
   toolConfig: ToolConfig,
   input: unknown,
-  runtime: ChatToolRuntime,
+  runtime: ToolRuntime,
 ): Promise<unknown> => {
   const parsedInput = createToolInputSchema(toolConfig).parse(input);
 
@@ -164,7 +172,7 @@ const runConfiguredTool = async (
   return body;
 };
 
-export const buildChatTools = (toolConfigs: ToolConfig[], runtime: ChatToolRuntime): ToolSet => {
+export const buildChatTools = (toolConfigs: ToolConfig[], runtime: ToolRuntime): ToolSet => {
   const entries = toolConfigs
     .filter((toolConfig) => toolConfig.enabled !== false && isValidChatToolName(toolConfig.name))
     .map((toolConfig) => [
@@ -177,4 +185,68 @@ export const buildChatTools = (toolConfigs: ToolConfig[], runtime: ChatToolRunti
     ]);
 
   return Object.fromEntries(entries) as ToolSet;
+};
+
+export const runToolWithContext = async ({
+  model,
+  toolName,
+  tool,
+  toolConfig,
+  taskContext,
+  toolCallId = `tool_${toolName}`,
+}: RunToolWithContextOptions) => {
+  if (!tool.execute) {
+    throw new Error(`${toolName} is not executable`);
+  }
+
+  const toolExecutionOptions = {
+    toolCallId,
+    messages: [],
+    context: undefined,
+  } satisfies ToolExecutionOptions;
+
+  if (toolConfig) {
+    const directInput = createLooseToolInputSchema(toolConfig)
+      .pipe(createToolInputSchema(toolConfig))
+      .safeParse(taskContext);
+
+    if (directInput.success) {
+      return tool.execute(directInput.data, toolExecutionOptions);
+    }
+  }
+
+  if (!model) {
+    throw new Error(`${toolName} requires a planner model to infer tool input`);
+  }
+
+  const result = await generateText({
+    model,
+    instructions: [
+      `Call the ${toolName} tool exactly once.`,
+      "Infer the tool input from the task context and the tool schema.",
+      "Do not answer directly.",
+    ].join("\n"),
+    messages: [
+      {
+        role: "user",
+        content: JSON.stringify(taskContext),
+      },
+    ],
+    tools: {
+      [toolName]: tool,
+    },
+    toolChoice: {
+      type: "tool",
+      toolName,
+    },
+    stopWhen: isStepCount(1),
+  });
+
+  const output = result.toolResults[0]?.output;
+
+  if (output === undefined) {
+    throw new Error(`${toolName} did not return a result`);
+  }
+
+  return output;
 };

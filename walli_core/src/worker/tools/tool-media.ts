@@ -1,7 +1,6 @@
-import { generateText, isStepCount } from "ai";
 import { createChatRunnerTools } from "../lib/chat-runner";
-import { safeParseLooseToolInputWithDefaults } from "../lib/chat-tools";
 import { createGatewayFromEnv, normalizeGatewayModelId, unified } from "../lib/llm";
+import { runToolWithContext } from "../lib/tool-runner";
 import { getSettings } from "../api/settings";
 import { adaptBuiltInToolModelOutput } from "@shared/tools";
 
@@ -120,8 +119,6 @@ export const runBuiltInMediaTool = async <ToolName extends BuiltInMediaToolName>
   toolName: ToolName,
   taskContext: BuiltInMediaToolContextMap[ToolName],
 ) => {
-  let normalizedContext: Record<string, unknown> | undefined;
-
   try {
     const settings = await getSettings(env.APP_KV);
     const toolConfig = [...settings.builtInTools, ...settings.tools].find(
@@ -133,62 +130,21 @@ export const runBuiltInMediaTool = async <ToolName extends BuiltInMediaToolName>
       throw new Error(`${toolName} is not available`);
     }
 
-    // Fast path: callers like Telegram usually already provide the exact built-in tool input.
-    // Executing directly avoids an extra planner-model request before the actual media tool call.
-    if (toolConfig) {
-      const directInput = safeParseLooseToolInputWithDefaults(toolConfig, taskContext);
-
-      if (directInput.success) {
-        normalizedContext = directInput.data;
-        const execute = tool.execute as unknown as (
-          input: Record<string, unknown>,
-          options: unknown,
-        ) => Promise<unknown>;
-
-        return await execute(normalizedContext, {
-          toolCallId: `media_${toolName}`,
-          messages: [],
-          context: undefined,
-        });
-      }
-    }
-
-    // Fallback for fuzzy task context: this intentionally uses a planner LLM to translate the
-    // context into one tool invocation, so a media request may involve planner + media LLM calls.
-    const result = await generateText({
-      model: createGatewayFromEnv(env)(unified(normalizeGatewayModelId(settings.toolPlannerModel))),
-      instructions: [
-        `Call the ${toolName} tool exactly once.`,
-        "Infer the tool input from the task context and the tool schema.",
-        "Do not answer directly.",
-      ].join("\n"),
-      messages: [
-        {
-          role: "user",
-          content: JSON.stringify(taskContext),
-        },
-      ],
-      tools: {
-        [toolName]: tool,
-      },
-      toolChoice: {
-        type: "tool",
-        toolName,
-      },
-      stopWhen: isStepCount(1),
+    const gateway = createGatewayFromEnv(env);
+    const output = await runToolWithContext({
+      model: gateway(unified(normalizeGatewayModelId(settings.toolPlannerModel))),
+      toolName,
+      tool,
+      toolConfig,
+      taskContext,
+      toolCallId: `media_${toolName}`,
     });
-
-    const output = result.toolResults[0]?.output;
-
-    if (output === undefined) {
-      throw new Error(`${toolName} did not return a result`);
-    }
 
     return output;
   } catch (error) {
     console.error("[tool-media] Built-in media tool failed", {
       toolName,
-      context: normalizedContext ?? taskContext,
+      context: taskContext,
       error,
     });
     throw error;

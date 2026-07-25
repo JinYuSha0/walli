@@ -28,7 +28,8 @@ import {
   createLooseToolInputSchema,
   createToolInputSchema,
   isValidChatToolName,
-} from "../lib/chat-tools.ts";
+  runToolWithContext,
+} from "../lib/tool-runner";
 import { normalizeGatewayModelId } from "../lib/llm";
 import { renderTelegramHtmlFromMarkdown } from "../lib/telegram-format";
 import {
@@ -814,20 +815,86 @@ describe("chat tools", () => {
     });
   });
 
-  it("validates tool input before execution", async () => {
+  it("normalizes tool input before execution", async () => {
     const tools = buildChatTools([voiceToTextTool], fakeRuntime);
-    const executionOptions = {} as Parameters<NonNullable<typeof tools.voice_to_text.execute>>[1];
 
     await expect(
-      tools.voice_to_text.execute?.(
-        {
+      runToolWithContext({
+        model: undefined as Parameters<typeof runToolWithContext>[0]["model"],
+        toolName: "voice_to_text",
+        tool: tools.voice_to_text,
+        toolConfig: voiceToTextTool,
+        taskContext: {
           file: "data:audio/ogg;base64,AAAA",
           mime_type: "audio/ogg",
         },
-        executionOptions,
-      ),
-    ).rejects.toThrow();
-    expect(aiRun).not.toHaveBeenCalled();
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      input: {
+        file: "data:audio/ogg;base64,AAAA",
+      },
+    });
+    expect(aiRun).toHaveBeenCalledWith("openai/gpt-4o-transcribe", {
+      file: "data:audio/ogg;base64,AAAA",
+    });
+  });
+
+  it("normalizes model tool input before adapting provider payload", async () => {
+    const tools = buildChatTools([imageToTextTool], fakeRuntime);
+
+    await expect(
+      runToolWithContext({
+        model: undefined as Parameters<typeof runToolWithContext>[0]["model"],
+        toolName: "image_to_text",
+        tool: tools.image_to_text,
+        toolConfig: imageToTextTool,
+        taskContext: {
+          file: ["https://example.com/image.png"],
+          width: 100,
+        },
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      input: {
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "Describe the image and extract any visible text.",
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: "https://example.com/image.png",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    });
+    expect(aiRun).toHaveBeenCalledWith("openai/gpt-5.4-mini", {
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Describe the image and extract any visible text.",
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: "https://example.com/image.png",
+              },
+            },
+          ],
+        },
+      ],
+    });
   });
 
   it("requires object input for tools without schema fields", async () => {

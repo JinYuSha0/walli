@@ -4,8 +4,8 @@ import type { ClientPlatform } from "@shared/client";
 import { BUILT_IN_TOOLS, type Settings, type ToolConfig } from "@shared/const";
 import { toolsRoute } from "../tools";
 import { getSettings } from "../api/settings";
-import { buildChatTools } from "./chat-tools";
 import { createGatewayFromEnv, normalizeGatewayModelId, unified } from "./llm";
+import { buildChatTools } from "./tool-runner";
 import {
   createUserNotificationChannel,
   type UserNotificationChannel,
@@ -44,9 +44,6 @@ type RunChatOptions = {
   maxOutputTokens?: number;
 };
 
-const usesOpenAICompletionTokenLimit = (modelId: string) =>
-  /^openai\/(?:gpt-5|o[134](?:-|$))/.test(modelId);
-
 export const createOutputTokenLimitOptions = (
   modelId: string,
   maxOutputTokens: number | undefined,
@@ -55,7 +52,7 @@ export const createOutputTokenLimitOptions = (
     return {};
   }
 
-  if (!usesOpenAICompletionTokenLimit(modelId)) {
+  if (!/^openai\/(?:gpt-5|o[134](?:-|$))/.test(modelId)) {
     return {
       maxOutputTokens,
     };
@@ -135,39 +132,34 @@ const joinInstructions = (...parts: Array<string | undefined>) =>
     .filter((part) => part.length > 0)
     .join("\n\n") || undefined;
 
-const withInternalApiInvocation = (tool: ToolConfig, env: Env, origin: string): ToolConfig => ({
-  ...tool,
-  invocation:
-    tool.invocation.type === "api"
-      ? {
-          ...tool.invocation,
-          url: new URL(tool.invocation.url, origin).toString(),
-          headers: [
-            {
-              name: "authorization",
-              defaultValue: `Bearer ${env.API_TOKEN}`,
-            },
-          ],
-        }
-      : tool.invocation,
-});
-
 const createBuiltInTools = (env: Env, origin: string, settings: Settings): ToolConfig[] => {
   const configuredByName = new Map(settings.builtInTools.map((tool) => [tool.name, tool]));
 
   return BUILT_IN_TOOLS.map((tool) => {
     const configuredTool = configuredByName.get(tool.name);
+    const builtInTool = configuredTool
+      ? {
+          ...configuredTool,
+          name: tool.name,
+        }
+      : tool;
 
-    return withInternalApiInvocation(
-      configuredTool
-        ? {
-            ...configuredTool,
-            name: tool.name,
-          }
-        : tool,
-      env,
-      origin,
-    );
+    return {
+      ...builtInTool,
+      invocation:
+        builtInTool.invocation.type === "api"
+          ? {
+              ...builtInTool.invocation,
+              url: new URL(builtInTool.invocation.url, origin).toString(),
+              headers: [
+                {
+                  name: "authorization",
+                  defaultValue: `Bearer ${env.API_TOKEN}`,
+                },
+              ],
+            }
+          : builtInTool.invocation,
+    };
   });
 };
 
@@ -203,6 +195,19 @@ const createToolConfigs = (
   );
 };
 
+export const createChatRunnerTools = (
+  settings: Settings,
+  env: Env,
+  origin: string,
+  excludeToolNames: string[] = [],
+) =>
+  buildChatTools(createToolConfigs(settings, env, origin, excludeToolNames), {
+    AI: env.AI,
+    fetch: createInternalToolFetch(env, origin),
+  });
+
+export const createChatRunnerInstructions = createChatInstructions;
+
 export const runChatCompletion = async ({
   env,
   messages,
@@ -219,11 +224,9 @@ export const runChatCompletion = async ({
   const resolvedSettings = settings ?? (await getSettings(env.APP_KV));
   const modelId = normalizeGatewayModelId(resolvedSettings.primaryModel);
   const gateway = createGatewayFromEnv(env);
+
   const tools = toolsEnabled
-    ? buildChatTools(createToolConfigs(resolvedSettings, env, origin, excludeToolNames), {
-        AI: env.AI,
-        fetch: createInternalToolFetch(env, origin),
-      })
+    ? createChatRunnerTools(resolvedSettings, env, origin, excludeToolNames)
     : undefined;
 
   return generateText({
@@ -247,16 +250,3 @@ export const runChatCompletion = async ({
       : {}),
   });
 };
-
-export const createChatRunnerTools = (
-  settings: Settings,
-  env: Env,
-  origin: string,
-  excludeToolNames: string[] = [],
-) =>
-  buildChatTools(createToolConfigs(settings, env, origin, excludeToolNames), {
-    AI: env.AI,
-    fetch: createInternalToolFetch(env, origin),
-  });
-
-export const createChatRunnerInstructions = createChatInstructions;
