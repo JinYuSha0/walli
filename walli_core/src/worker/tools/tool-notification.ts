@@ -5,7 +5,7 @@ import {
   sendNotificationImage,
   sendNotificationText,
   sendNotificationVoice,
-} from "@worker/utils/notification";
+} from "@worker/lib/notification";
 import { synthesizeVoice } from "./tool-media";
 
 export const createNotificationTools = (
@@ -28,7 +28,9 @@ export const createNotificationTools = (
         .trim()
         .min(1)
         .optional()
-        .describe("Text content. Required for text and voice notifications; optional image caption."),
+        .describe(
+          "Text content. Required for text and voice notifications; optional image caption.",
+        ),
       image: z
         .string()
         .trim()

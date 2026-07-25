@@ -31,7 +31,7 @@ import {
   runToolWithContext,
 } from "../lib/tool-runner";
 import { normalizeGatewayModelId } from "../lib/llm";
-import { renderTelegramHtmlFromMarkdown } from "../lib/telegram-format";
+import { renderTelegramHtmlFromMarkdown } from "../utils/telegram-format";
 import {
   extractVoiceOutput,
   synthesizeVoice,
@@ -41,10 +41,7 @@ import {
 import { toolsRoute } from ".";
 import { createNotificationTools } from "./tool-notification";
 import { getNextCronScheduledAt } from "../utils/cron";
-import {
-  limitModelMessagesByTokens,
-  sanitizeModelMessageHistory,
-} from "../utils/llm";
+import { limitModelMessagesByTokens, sanitizeModelMessageHistory } from "../utils/llm";
 
 const env = {
   API_TOKEN: "test-token",
@@ -293,11 +290,14 @@ describe("chat tools", () => {
 
     try {
       await expect(
-        tools.send_notification.execute?.({
-          type: "image",
-          image: "https://example.com/image.png",
-          text: "**image** reminder",
-        }, {}),
+        tools.send_notification.execute?.(
+          {
+            type: "image",
+            image: "https://example.com/image.png",
+            text: "**image** reminder",
+          },
+          {},
+        ),
       ).resolves.toEqual({
         ok: true,
         channel: "telegram",

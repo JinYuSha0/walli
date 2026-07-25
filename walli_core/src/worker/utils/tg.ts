@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { renderTelegramHtmlFromMarkdown } from "../lib/telegram-format";
+import { renderTelegramHtmlFromMarkdown } from "./telegram-format";
 
 type TelegramApiResult = {
   ok: boolean;
@@ -7,12 +7,7 @@ type TelegramApiResult = {
 };
 
 export type TelegramApiMethod =
-  | "sendMessage"
-  | "sendChatAction"
-  | "getFile"
-  | "sendPhoto"
-  | "sendVoice"
-  | "readBusinessMessage";
+  "sendMessage" | "sendChatAction" | "getFile" | "sendPhoto" | "sendVoice" | "readBusinessMessage";
 
 export type TelegramVoiceUpload = {
   voice: Blob;

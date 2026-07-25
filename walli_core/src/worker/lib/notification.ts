@@ -5,7 +5,7 @@ import {
   sendTelegramVoice,
   type TelegramPhotoUpload,
   type TelegramVoiceUpload,
-} from "./tg";
+} from "../utils/tg";
 import type { UserNotificationChannel } from "../durable-objects/user/types";
 
 const sendNotificationTelegramText = async (env: Env, chatId: string, text: string) => {

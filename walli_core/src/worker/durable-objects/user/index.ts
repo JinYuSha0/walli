@@ -13,7 +13,7 @@ import { getNextCronScheduledAt } from "../../utils/cron";
 import userDoMigrations from "./migrations/migrations";
 import { messages, scheduledTasks, sessions, userDoSchema } from "./schema";
 import { parseUserDoNotificationChannel } from "./types";
-import { sendNotificationText } from "@worker/utils/notification";
+import { sendNotificationText } from "@worker/lib/notification";
 export { createUserDoName, parseUserDoNotificationChannel } from "./types";
 export type { UserDoClientPlatform, UserDoName, UserNotificationChannel } from "./types";
 
