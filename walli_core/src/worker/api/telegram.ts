@@ -10,6 +10,7 @@ import {
   createTelegramFileUrl,
   getTelegramMessageAccessContext,
   getTelegramMessageIdentity,
+  parseTelegramMessageContent,
   postTelegramApi,
   replyTelegramText,
   sendTelegramText,
@@ -136,25 +137,6 @@ type TelegramWebhookDeps = {
   describeImage?: (context: ImageToTextContext) => Promise<string>;
   synthesizeVoice?: (text: string) => Promise<TelegramVoiceOutput>;
   runLlm: (message: TelegramMessage, messages: ModelMessage[]) => Promise<TelegramReply>;
-};
-
-const isEmptyTelegramMessage = (message: TelegramMessage) => {
-  const record = message as Record<string, unknown>;
-
-  return Object.keys(record).every((key) => ["message_id", "chat", "from"].includes(key));
-};
-
-const selectBestTelegramPhoto = (photos: TelegramMessage["photo"]) => {
-  if (!photos || photos.length === 0) {
-    return undefined;
-  }
-
-  return photos.reduce((bestPhoto, photo) => {
-    const bestScore = bestPhoto.file_size ?? bestPhoto.width * bestPhoto.height;
-    const score = photo.file_size ?? photo.width * photo.height;
-
-    return score > bestScore ? photo : bestPhoto;
-  });
 };
 
 const getImagePrompt = (text: string) => {
@@ -508,17 +490,15 @@ export const handleTelegramWebhookUpdate = async (update: unknown, deps: Telegra
   }
 
   const chatId = stringifyTelegramId(message.chat.id);
-  const text = message.text?.trim() ?? message.caption?.trim() ?? "";
-  const photo = selectBestTelegramPhoto(message.photo);
-  const canHandleMessage = Boolean(message.text?.trim() || photo || message.voice);
+  const parsedContent = parseTelegramMessageContent(message);
 
-  if (!canHandleMessage && isEmptyTelegramMessage(message)) {
+  if (parsedContent.type === "unsupported" && parsedContent.empty) {
     return;
   }
 
   await Promise.resolve(deps.markMessageRead(message)).catch(() => undefined);
 
-  if (!canHandleMessage) {
+  if (parsedContent.type === "unsupported") {
     await deps.sendMessage(chatId, "Sorry, this Telegram media type is not supported yet.");
     return;
   }
@@ -528,14 +508,16 @@ export const handleTelegramWebhookUpdate = async (update: unknown, deps: Telegra
   try {
     const content: string[] = [];
 
-    if (message.text?.trim()) {
-      content.push(`Message text: ${text}`);
-    } else if (message.caption?.trim()) {
-      content.push(`Message caption/additional info: ${text}`);
+    if (parsedContent.text) {
+      content.push(
+        parsedContent.textSource === "text"
+          ? `Message text: ${parsedContent.text}`
+          : `Message caption/additional info: ${parsedContent.text}`,
+      );
     }
 
-    if (message.voice) {
-      const voiceFile = await deps.getFileUrl(message.voice.file_id);
+    if (parsedContent.type === "audio") {
+      const voiceFile = await deps.getFileUrl(parsedContent.audio.file_id);
       const transcription = await deps.transcribeVoice?.({
         file: voiceFile,
       });
@@ -553,11 +535,11 @@ export const handleTelegramWebhookUpdate = async (update: unknown, deps: Telegra
       );
     }
 
-    if (photo) {
-      const imageFile = await deps.getFileUrl(photo.file_id);
+    if (parsedContent.type === "image") {
+      const imageFile = await deps.getFileUrl(parsedContent.photo.file_id);
       const imageDescription = await deps.describeImage?.({
         file: [imageFile],
-        prompt: getImagePrompt(text),
+        prompt: getImagePrompt(parsedContent.text),
       });
 
       if (imageDescription === undefined) {
@@ -596,9 +578,9 @@ export const handleTelegramWebhookUpdate = async (update: unknown, deps: Telegra
     console.error(error);
     let fallbackText = "Sorry, I couldn't process this message.";
 
-    if (message.voice) {
+    if (parsedContent.type === "audio") {
       fallbackText = "Sorry, I couldn't process this audio message.";
-    } else if (photo) {
+    } else if (parsedContent.type === "image") {
       fallbackText = "Sorry, I couldn't process this image message.";
     }
 

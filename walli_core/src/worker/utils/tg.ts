@@ -40,6 +40,47 @@ export type TelegramMessageAccessContext = {
   whitelistId: string;
 };
 
+export type TelegramMediaFileInput = {
+  file_id: string;
+  width?: number;
+  height?: number;
+  file_size?: number;
+};
+
+export type TelegramMessageContentInput = {
+  message_id?: number;
+  text?: string;
+  caption?: string;
+  photo?: TelegramMediaFileInput[];
+  voice?: TelegramMediaFileInput;
+  audio?: TelegramMediaFileInput;
+  chat?: unknown;
+  from?: unknown;
+};
+
+export type ParsedTelegramMessageContent =
+  | {
+      type: "text";
+      text: string;
+      textSource: "text";
+    }
+  | {
+      type: "audio";
+      text: string;
+      textSource?: "text" | "caption";
+      audio: TelegramMediaFileInput;
+    }
+  | {
+      type: "image";
+      text: string;
+      textSource?: "text" | "caption";
+      photo: TelegramMediaFileInput;
+    }
+  | {
+      type: "unsupported";
+      empty: boolean;
+    };
+
 const telegramReplyTargetSchema = z
   .object({
     message: z
@@ -117,6 +158,68 @@ export const getTelegramMessageAccessContext = (
     userId,
     whitelistType,
     whitelistId,
+  };
+};
+
+const isEmptyTelegramMessageContent = (message: TelegramMessageContentInput) => {
+  const record = message as Record<string, unknown>;
+
+  return Object.keys(record).every((key) => ["message_id", "chat", "from"].includes(key));
+};
+
+const selectBestTelegramPhoto = (photos: TelegramMessageContentInput["photo"]) => {
+  if (!photos || photos.length === 0) {
+    return undefined;
+  }
+
+  return photos.reduce((bestPhoto, photo) => {
+    const bestScore = bestPhoto.file_size ?? (bestPhoto.width ?? 0) * (bestPhoto.height ?? 0);
+    const score = photo.file_size ?? (photo.width ?? 0) * (photo.height ?? 0);
+
+    return score > bestScore ? photo : bestPhoto;
+  });
+};
+
+export const parseTelegramMessageContent = (
+  message: TelegramMessageContentInput,
+): ParsedTelegramMessageContent => {
+  const textValue = message.text?.trim();
+  const captionValue = message.caption?.trim();
+  const text = textValue ?? captionValue ?? "";
+  const textSource = textValue ? "text" : captionValue ? "caption" : undefined;
+  const audio = message.voice ?? message.audio;
+
+  if (audio) {
+    return {
+      type: "audio",
+      text,
+      ...(textSource ? { textSource } : {}),
+      audio,
+    };
+  }
+
+  const photo = selectBestTelegramPhoto(message.photo);
+
+  if (photo) {
+    return {
+      type: "image",
+      text,
+      ...(textSource ? { textSource } : {}),
+      photo,
+    };
+  }
+
+  if (textValue) {
+    return {
+      type: "text",
+      text: textValue,
+      textSource: "text",
+    };
+  }
+
+  return {
+    type: "unsupported",
+    empty: isEmptyTelegramMessageContent(message),
   };
 };
 
