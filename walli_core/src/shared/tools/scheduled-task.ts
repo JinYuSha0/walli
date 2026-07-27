@@ -77,7 +77,7 @@ export const scheduledTaskTool = {
         name: "scheduledAt",
         type: "number",
         description:
-          "Future Unix timestamp in milliseconds for action=create. Use only for explicit absolute dates/times. Never use this for relative requests like 'in 1 minute' or 'after 2 hours'; use delayMs instead.",
+          "Future Unix timestamp in milliseconds for action=create. Use only for explicit absolute dates/times after resolving them against the execution-time current timestamp provided by the tool planner. Never use this for relative requests like 'in 10 seconds', 'in 1 minute', or 'after 2 hours'; use delayMs instead.",
         required: false,
         defaultValue: "",
       },
@@ -85,7 +85,7 @@ export const scheduledTaskTool = {
         name: "delayMs",
         type: "number",
         description:
-          "Relative delay in milliseconds for action=create. Required for relative requests like 'in 30 seconds', 'in 1 minute', 'in 5 minutes', or 'after 2 hours'. Do not call timestamp or compute scheduledAt for relative delays; the tool server adds delayMs to its current time.",
+          "Relative delay in milliseconds for action=create. Required for relative requests like 'in 10 seconds', 'in 30 seconds', 'in 1 minute', 'in 5 minutes', or 'after 2 hours'. Do not call timestamp or compute scheduledAt for relative delays; the tool server adds delayMs to its current execution time.",
         required: false,
         defaultValue: "",
       },

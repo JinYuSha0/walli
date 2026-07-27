@@ -144,6 +144,20 @@ const withToolRuntimeContext = (
   };
 };
 
+const createToolPlanningContext = (taskContext: unknown) => {
+  const now = Date.now();
+
+  return {
+    taskContext,
+    toolRuntimeContext: {
+      currentUnixTimestampMs: now,
+      currentIsoDatetime: new Date(now).toISOString(),
+      timePolicy:
+        "Use this execution-time current timestamp as now. Do not use timestamps from previous messages as the current time.",
+    },
+  };
+};
+
 const runConfiguredTool = async (
   toolConfig: ToolConfig,
   input: unknown,
@@ -253,13 +267,14 @@ export const runToolWithContext = async ({
     model,
     instructions: [
       `Call the ${toolName} tool exactly once.`,
-      "Infer the tool input from the task context and the tool schema.",
+      "Infer the tool input from taskContext and the tool schema.",
+      "Use toolRuntimeContext.currentUnixTimestampMs as the current time whenever current time is needed.",
       "Do not answer directly.",
     ].join("\n"),
     messages: [
       {
         role: "user",
-        content: JSON.stringify(taskContext),
+        content: JSON.stringify(createToolPlanningContext(taskContext)),
       },
     ],
     tools: {
