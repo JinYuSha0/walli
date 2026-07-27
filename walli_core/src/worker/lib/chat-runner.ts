@@ -3,6 +3,7 @@ import type { ModelMessage } from "ai";
 import type { ClientPlatform } from "@shared/client";
 import { BUILT_IN_TOOLS, type Settings, type ToolConfig } from "@shared/const";
 import { toolsRoute } from "../tools";
+import { getClientUsageLimit } from "../api/clients";
 import { getSettings } from "../api/settings";
 import { createGatewayFromEnv, normalizeGatewayModelId, unified } from "./llm";
 import { buildChatTools } from "./tool-runner";
@@ -10,6 +11,7 @@ import {
   createUserNotificationChannel,
   type UserNotificationChannel,
 } from "../durable-objects/user/types";
+import { limitModelMessagesByTokens, sanitizeModelMessageHistory } from "../utils/llm";
 
 export type ChatUserInfo = {
   userId: string;
@@ -42,7 +44,48 @@ type RunChatOptions = {
   toolsEnabled?: boolean;
   output?: Output.Output;
   maxOutputTokens?: number;
+  session?: RunChatSessionOptions;
 };
+
+type StoredChatMessage = {
+  content: string;
+};
+
+type ChatTokenUsage = {
+  inputToken: number;
+  outputToken: number;
+};
+
+type ChatSessionStore = {
+  createSession(input?: { client?: string; summary?: string }): Promise<{ id: string }>;
+  listRecentMessages(sessionId: string, limit: number): Promise<StoredChatMessage[]>;
+  getTodayTokenUsage(): Promise<ChatTokenUsage>;
+  addMessages(
+    inputs: Array<{
+      sessionId: string;
+      content: string;
+      inputToken?: number;
+      outputToken?: number;
+    }>,
+  ): Promise<unknown>;
+};
+
+type RunChatSessionOptions = {
+  store: ChatSessionStore;
+  client: ClientPlatform;
+  sessionId?: string;
+  summary?: string;
+};
+
+export class ChatCompletionLimitError extends Error {
+  constructor(
+    public readonly code: "usage_limit_reached" | "input_token_limit_exceeded",
+    message: string,
+  ) {
+    super(message);
+    this.name = "ChatCompletionLimitError";
+  }
+}
 
 export const createOutputTokenLimitOptions = (
   modelId: string,
@@ -132,6 +175,41 @@ const joinInstructions = (...parts: Array<string | undefined>) =>
     .filter((part) => part.length > 0)
     .join("\n\n") || undefined;
 
+const parseStoredChatMessage = (message: StoredChatMessage): ModelMessage | undefined => {
+  try {
+    const parsed = JSON.parse(message.content) as unknown;
+
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "role" in parsed &&
+      typeof (parsed as { role?: unknown }).role === "string"
+    ) {
+      return parsed as ModelMessage;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+};
+
+const serializeChatMessage = (message: ModelMessage) => JSON.stringify(message);
+
+const getTokenCount = (value: number | undefined) =>
+  typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
+
+const getPositiveTokenLimit = (value: number) => (value > 0 ? value : undefined);
+
+const getRemainingTokenLimit = (limit: number, used: number) =>
+  limit > 0 ? Math.max(0, limit - used) : undefined;
+
+const minDefinedTokenLimit = (...limits: Array<number | undefined>) => {
+  const definedLimits = limits.filter((limit): limit is number => limit !== undefined);
+
+  return definedLimits.length > 0 ? Math.min(...definedLimits) : undefined;
+};
+
 const createBuiltInTools = (env: Env, origin: string, settings: Settings): ToolConfig[] => {
   const configuredByName = new Map(settings.builtInTools.map((tool) => [tool.name, tool]));
 
@@ -220,8 +298,87 @@ export const runChatCompletion = async ({
   toolsEnabled = true,
   output,
   maxOutputTokens,
+  session,
 }: RunChatOptions) => {
   const resolvedSettings = settings ?? (await getSettings(env.APP_KV));
+  const usageLimitSettings = session
+    ? await getClientUsageLimit(env.APP_KV, session.client)
+    : undefined;
+  const chatSession = session
+    ? session.sessionId
+      ? { id: session.sessionId }
+      : await session.store.createSession({ client: session.client, summary: session.summary })
+    : undefined;
+  const shouldCheckUserUsageLimit =
+    usageLimitSettings !== undefined &&
+    (usageLimitSettings.perUserDailyInputLimit > 0 ||
+      usageLimitSettings.perUserDailyOutputLimit > 0);
+  const [storedMessages, todayTokenUsage] =
+    session && chatSession && usageLimitSettings
+      ? await Promise.all([
+          session.store.listRecentMessages(chatSession.id, usageLimitSettings.historyMessageLimit),
+          shouldCheckUserUsageLimit ? session.store.getTodayTokenUsage() : Promise.resolve(null),
+        ])
+      : [[], null];
+
+  if (
+    usageLimitSettings &&
+    todayTokenUsage &&
+    ((usageLimitSettings.perUserDailyInputLimit > 0 &&
+      todayTokenUsage.inputToken >= usageLimitSettings.perUserDailyInputLimit) ||
+      (usageLimitSettings.perUserDailyOutputLimit > 0 &&
+        todayTokenUsage.outputToken >= usageLimitSettings.perUserDailyOutputLimit))
+  ) {
+    throw new ChatCompletionLimitError("usage_limit_reached", "Usage limit reached.");
+  }
+
+  const historyMessages = sanitizeModelMessageHistory(
+    storedMessages
+      .map(parseStoredChatMessage)
+      .filter((storedMessage): storedMessage is ModelMessage => storedMessage !== undefined),
+  );
+  const dailyInputRemaining =
+    usageLimitSettings && todayTokenUsage
+      ? getRemainingTokenLimit(
+          usageLimitSettings.perUserDailyInputLimit,
+          todayTokenUsage.inputToken,
+        )
+      : undefined;
+  const inputTokenLimit = usageLimitSettings
+    ? minDefinedTokenLimit(
+        getPositiveTokenLimit(usageLimitSettings.perRequestInputLimit),
+        dailyInputRemaining,
+      )
+    : undefined;
+  const currentMessagesTokenResult = limitModelMessagesByTokens(
+    messages,
+    inputTokenLimit,
+    messages.length,
+  );
+
+  if (inputTokenLimit !== undefined && currentMessagesTokenResult.tokenCount > inputTokenLimit) {
+    throw new ChatCompletionLimitError("input_token_limit_exceeded", "Input token limit exceeded.");
+  }
+
+  const limitedMessageResult = limitModelMessagesByTokens(
+    [...historyMessages, ...messages],
+    inputTokenLimit,
+    messages.length,
+  );
+  const dailyOutputRemaining =
+    usageLimitSettings && todayTokenUsage
+      ? getRemainingTokenLimit(
+          usageLimitSettings.perUserDailyOutputLimit,
+          todayTokenUsage.outputToken,
+        )
+      : undefined;
+  const outputTokenLimit = minDefinedTokenLimit(
+    maxOutputTokens,
+    usageLimitSettings
+      ? getPositiveTokenLimit(usageLimitSettings.perRequestOutputLimit)
+      : undefined,
+    dailyOutputRemaining,
+  );
   const modelId = normalizeGatewayModelId(resolvedSettings.primaryModel);
   const gateway = createGatewayFromEnv(env);
 
@@ -229,15 +386,15 @@ export const runChatCompletion = async ({
     ? createChatRunnerTools(resolvedSettings, env, origin, excludeToolNames)
     : undefined;
 
-  return generateText({
+  const result = await generateText({
     model: gateway(unified(modelId)),
     instructions: joinInstructions(
       createChatInstructions(resolvedSettings.globalPrompt, userInfo),
       extraInstructions,
     ),
-    messages,
+    messages: limitedMessageResult.messages,
     output,
-    ...createOutputTokenLimitOptions(modelId, maxOutputTokens),
+    ...createOutputTokenLimitOptions(modelId, outputTokenLimit),
     ...(toolsEnabled
       ? {
           tools: {
@@ -249,4 +406,31 @@ export const runChatCompletion = async ({
         }
       : {}),
   });
+
+  if (session && chatSession) {
+    const inputTokens = getTokenCount(result.usage.inputTokens);
+    const outputTokens = getTokenCount(result.usage.outputTokens);
+    const responseMessages = result.responseMessages as ModelMessage[];
+
+    await session.store
+      .addMessages([
+        ...messages.map((inputMessage, index) => ({
+          sessionId: chatSession.id,
+          content: serializeChatMessage(inputMessage),
+          inputToken: index === messages.length - 1 ? inputTokens : 0,
+          outputToken: 0,
+        })),
+        ...responseMessages.map((responseMessage, index) => ({
+          sessionId: chatSession.id,
+          content: serializeChatMessage(responseMessage),
+          inputToken: 0,
+          outputToken: index === responseMessages.length - 1 ? outputTokens : 0,
+        })),
+      ])
+      .catch((error) => {
+        console.error(error);
+      });
+  }
+
+  return result;
 };

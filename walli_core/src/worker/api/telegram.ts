@@ -2,7 +2,11 @@ import { Hono } from "hono";
 import { Output, type ModelMessage } from "ai";
 import { z } from "zod";
 import { and, asc, count, desc, eq } from "drizzle-orm";
-import { createChatUserInfo, runChatCompletion } from "@worker/lib/chat-runner";
+import {
+  ChatCompletionLimitError,
+  createChatUserInfo,
+  runChatCompletion,
+} from "@worker/lib/chat-runner";
 import type { Database } from "@worker/db/client";
 import { telegramWhitelistUser } from "@worker/db/schema";
 import {
@@ -19,7 +23,6 @@ import {
 } from "@worker/utils/tg";
 import {
   getClientBasicSettings,
-  getClientUsageLimit,
   getOrCreateClientId,
   getTelegramBotToken,
   getTelegramSettings,
@@ -45,7 +48,6 @@ import {
 } from "@worker/tools/tool-media";
 import { createUserDoName } from "@worker/durable-objects/user/types";
 import { allSettledValues, hasNoPromiseSettledError } from "@worker/utils/common";
-import { limitModelMessagesByTokens, sanitizeModelMessageHistory } from "@worker/utils/llm";
 
 const telegramChatSchema = z
   .object({
@@ -122,11 +124,6 @@ const telegramReplySchema = z
 
 type TelegramReply = z.output<typeof telegramReplySchema>;
 
-type StoredTelegramMessage = {
-  id: string;
-  content: string;
-};
-
 type TelegramWebhookDeps = {
   sendMessage: (chatId: string, text: string) => Promise<void>;
   sendVoice: (chatId: string, voice: TelegramVoiceOutput) => Promise<void>;
@@ -162,41 +159,6 @@ const inferTelegramFileContentType = (filePath: string) => {
   );
 
   return (match?.[1] as string | undefined) ?? "application/octet-stream";
-};
-
-const parseStoredTelegramMessage = (message: StoredTelegramMessage): ModelMessage | undefined => {
-  try {
-    const parsed = JSON.parse(message.content) as unknown;
-
-    if (
-      typeof parsed === "object" &&
-      parsed !== null &&
-      "role" in parsed &&
-      typeof (parsed as { role?: unknown }).role === "string"
-    ) {
-      return parsed as ModelMessage;
-    }
-  } catch {
-    return undefined;
-  }
-
-  return undefined;
-};
-
-const serializeTelegramMessage = (message: ModelMessage) => JSON.stringify(message);
-
-const getTokenCount = (value: number | undefined) =>
-  typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
-
-const getPositiveTokenLimit = (value: number) => (value > 0 ? value : undefined);
-
-const getRemainingTokenLimit = (limit: number, used: number) =>
-  limit > 0 ? Math.max(0, limit - used) : undefined;
-
-const minDefinedTokenLimit = (...limits: Array<number | undefined>) => {
-  const definedLimits = limits.filter((limit): limit is number => limit !== undefined);
-
-  return definedLimits.length > 0 ? Math.min(...definedLimits) : undefined;
 };
 
 const bytesToHex = (bytes: ArrayBuffer) =>
@@ -323,8 +285,6 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
       const settingsResult = await allSettledValues([
         getSettings(env.APP_KV),
         getClientBasicSettings(env.APP_KV, "telegram"),
-        getClientUsageLimit(env.APP_KV, "telegram"),
-        userDO.createSession({ client: "telegram" }),
       ] as const);
 
       if (!hasNoPromiseSettledError(settingsResult)) {
@@ -334,144 +294,60 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
         };
       }
 
-      const [settings, basicSettings, usageLimitSettings, session] = settingsResult;
+      const [settings, basicSettings] = settingsResult;
 
-      const shouldCheckUserUsageLimit =
-        usageLimitSettings.perUserDailyInputLimit > 0 ||
-        usageLimitSettings.perUserDailyOutputLimit > 0;
-
-      const userResult = await allSettledValues([
-        userDO.listRecentMessages(session.id, usageLimitSettings.historyMessageLimit),
-        shouldCheckUserUsageLimit ? userDO.getTodayTokenUsage() : Promise.resolve(null),
-      ] as const);
-
-      if (!hasNoPromiseSettledError(userResult)) {
-        return {
-          type: "text",
-          text: "System error",
-        };
-      }
-
-      const [storedTelegramMessage, todayTokenUsage] = userResult;
-
-      if (
-        todayTokenUsage &&
-        ((usageLimitSettings.perUserDailyInputLimit > 0 &&
-          todayTokenUsage.inputToken >= usageLimitSettings.perUserDailyInputLimit) ||
-          (usageLimitSettings.perUserDailyOutputLimit > 0 &&
-            todayTokenUsage.outputToken >= usageLimitSettings.perUserDailyOutputLimit))
-      ) {
-        return {
-          type: "text",
-          text: "Usage limit reached.",
-        };
-      }
-
-      const historyMessages = sanitizeModelMessageHistory(
-        storedTelegramMessage
-          .map(parseStoredTelegramMessage)
-          .filter((storedMessage): storedMessage is ModelMessage => storedMessage !== undefined),
-      );
-      const dailyInputRemaining = todayTokenUsage
-        ? getRemainingTokenLimit(
-            usageLimitSettings.perUserDailyInputLimit,
-            todayTokenUsage.inputToken,
-          )
-        : undefined;
-      const inputTokenLimit = minDefinedTokenLimit(
-        getPositiveTokenLimit(usageLimitSettings.perRequestInputLimit),
-        dailyInputRemaining,
-      );
-      const currentMessagesTokenResult = limitModelMessagesByTokens(
-        messages,
-        inputTokenLimit,
-        messages.length,
-      );
-
-      if (
-        inputTokenLimit !== undefined &&
-        currentMessagesTokenResult.tokenCount > inputTokenLimit
-      ) {
-        return {
-          type: "text",
-          text: "Input token limit exceeded.",
-        };
-      }
-
-      const limitedMessageResult = limitModelMessagesByTokens(
-        [...historyMessages, ...messages],
-        inputTokenLimit,
-        messages.length,
-      );
-      const dailyOutputRemaining = todayTokenUsage
-        ? getRemainingTokenLimit(
-            usageLimitSettings.perUserDailyOutputLimit,
-            todayTokenUsage.outputToken,
-          )
-        : undefined;
-      const outputTokenLimit = minDefinedTokenLimit(
-        getPositiveTokenLimit(usageLimitSettings.perRequestOutputLimit),
-        dailyOutputRemaining,
-      );
-
-      const result = await runChatCompletion({
-        env,
-        origin,
-        userInfo: createChatUserInfo({
-          userId,
-          name: userName || message.from?.username || userId,
-          clientPlatform: "telegram",
-          notificationChannel: {
-            type: "telegram",
-            userId: chatId,
+      try {
+        const result = await runChatCompletion({
+          env,
+          origin,
+          userInfo: createChatUserInfo({
+            userId,
+            name: userName || message.from?.username || userId,
+            clientPlatform: "telegram",
+            notificationChannel: {
+              type: "telegram",
+              userId: chatId,
+            },
+          }),
+          messages,
+          settings,
+          session: {
+            store: userDO,
+            client: "telegram",
           },
-        }),
-        messages: limitedMessageResult.messages,
-        settings,
-        excludeToolNames: [...BUILT_IN_MEDIA_TOOL_NAMES],
-        output: Output.object({
-          schema: telegramReplySchema,
-          name: "telegram_reply",
-          description: "Telegram reply type and final reply content.",
-        }),
-        maxOutputTokens: outputTokenLimit,
-        extraInstructions: [
-          basicSettings.additionalSystemPrompt,
-          "Reply to the Telegram user using the provided message text and media analysis.",
-          "When creating a scheduled task that should notify this Telegram conversation, call scheduled_task with clientPlatform set to telegram and userId equal to Authenticated userInfo.notificationChannel.userId.",
-          'Return JSON structured output with {"type":"text"|"voice","text":"..."} after using any needed tools.',
-          "The text field must be the human-readable reply text, never an audio URL or generated media payload.",
-          "Follow the preferred reply type unless the user explicitly asks otherwise; image replies are unsupported, so explain that in text.",
-        ]
-          .map((instruction) => instruction.trim())
-          .filter((instruction) => instruction.length > 0)
-          .join("\n\n"),
-      });
-
-      const inputTokens = getTokenCount(result.usage.inputTokens);
-      const outputTokens = getTokenCount(result.usage.outputTokens);
-      const responseMessages = result.responseMessages as ModelMessage[];
-
-      await userDO
-        .addMessages([
-          ...messages.map((inputMessage, index) => ({
-            sessionId: session.id,
-            content: serializeTelegramMessage(inputMessage),
-            inputToken: index === messages.length - 1 ? inputTokens : 0,
-            outputToken: 0,
-          })),
-          ...responseMessages.map((responseMessage, index) => ({
-            sessionId: session.id,
-            content: serializeTelegramMessage(responseMessage),
-            inputToken: 0,
-            outputToken: index === responseMessages.length - 1 ? outputTokens : 0,
-          })),
-        ])
-        .catch((error) => {
-          console.error(error);
+          excludeToolNames: [...BUILT_IN_MEDIA_TOOL_NAMES],
+          output: Output.object({
+            schema: telegramReplySchema,
+            name: "telegram_reply",
+            description: "Telegram reply type and final reply content.",
+          }),
+          extraInstructions: [
+            basicSettings.additionalSystemPrompt,
+            "Reply to the Telegram user using the provided message text and media analysis.",
+            "When creating a scheduled task that should notify this Telegram conversation, call scheduled_task with clientPlatform set to telegram and userId equal to Authenticated userInfo.notificationChannel.userId.",
+            'Return JSON structured output with {"type":"text"|"voice","text":"..."} after using any needed tools.',
+            "The text field must be the human-readable reply text, never an audio URL or generated media payload.",
+            "Follow the preferred reply type unless the user explicitly asks otherwise; image replies are unsupported, so explain that in text.",
+          ]
+            .map((instruction) => instruction.trim())
+            .filter((instruction) => instruction.length > 0)
+            .join("\n\n"),
         });
 
-      return result.output;
+        return result.output;
+      } catch (error) {
+        if (error instanceof ChatCompletionLimitError) {
+          return {
+            type: "text",
+            text:
+              error.code === "usage_limit_reached"
+                ? "Usage limit reached."
+                : "Input token limit exceeded.",
+          };
+        }
+
+        throw error;
+      }
     },
   };
 };
