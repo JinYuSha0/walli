@@ -326,6 +326,7 @@ describe("chat tools", () => {
   it("keeps the expected built-in tool order", () => {
     expect(BUILT_IN_TOOLS.map((toolConfig) => toolConfig.name)).toEqual([
       "timestamp",
+      "memory",
       "scheduled_task",
       "voice_to_text",
       "text_to_voice",
@@ -471,6 +472,7 @@ describe("chat tools", () => {
 
     expect(Object.keys(tools)).toEqual([
       "timestamp",
+      "memory",
       "scheduled_task",
       "voice_to_text",
       "text_to_voice",
@@ -491,6 +493,7 @@ describe("chat tools", () => {
 
     expect(Object.keys(tools)).toEqual([
       "timestamp",
+      "memory",
       "voice_to_text",
       "text_to_voice",
       "image_to_text",
@@ -519,6 +522,7 @@ describe("chat tools", () => {
 
     expect(Object.keys(tools)).toEqual([
       "timestamp",
+      "memory",
       "voice_to_text",
       "text_to_voice",
       "image_to_text",
@@ -646,6 +650,7 @@ describe("chat tools", () => {
 
     expect(Object.keys(tools)).toEqual([
       "timestamp",
+      "memory",
       "scheduled_task",
       "voice_to_text",
       "text_to_voice",
@@ -1253,6 +1258,67 @@ describe("tools route", () => {
     }
   });
 
+  it("searches long-term memory through the user Durable Object", async () => {
+    const searchMemory = vi.fn(async () => [
+      {
+        id: "message-1",
+        sessionId: "session-1",
+        role: "user",
+        content: "User likes concise replies.",
+        score: -1.2,
+        createdAt: 10,
+      },
+    ]);
+    const getByName = vi.fn(() => ({
+      searchMemory,
+    }));
+    const memoryEnv = {
+      ...env,
+      USER_DO: {
+        getByName,
+      },
+    } as unknown as Env;
+
+    const response = await toolsRoute.request(
+      "/api/tools/memory",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          query: "concise replies",
+          userId: "user-1",
+          clientPlatform: "telegram",
+          sessionId: "session-1",
+          limit: 3,
+        }),
+      },
+      memoryEnv,
+    );
+
+    await expect(response.json()).resolves.toEqual({
+      memories: [
+        {
+          id: "message-1",
+          sessionId: "session-1",
+          role: "user",
+          content: "User likes concise replies.",
+          score: -1.2,
+          createdAt: 10,
+        },
+      ],
+    });
+    expect(response.status).toBe(200);
+    expect(getByName).toHaveBeenCalledWith("telegram:user-1");
+    expect(searchMemory).toHaveBeenCalledWith({
+      query: "concise replies",
+      sessionId: "session-1",
+      limit: 3,
+    });
+  });
+
   it.each([60_000, 1_700_000_000_000])(
     "rejects past scheduledAt value %s for one-time tasks",
     async (scheduledAt) => {
@@ -1460,6 +1526,7 @@ describe("settings tool migration", () => {
 
     expect(settings.builtInTools.map((tool) => tool.name)).toEqual([
       "timestamp",
+      "memory",
       "scheduled_task",
       "voice_to_text",
       "text_to_voice",

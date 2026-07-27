@@ -11,7 +11,7 @@ import { getClientUsageLimit } from "../../api/clients";
 import { getSettings, isMultiSessionClient } from "../../api/settings";
 import { getNextCronScheduledAt } from "../../utils/cron";
 import userDoMigrations from "./migrations/migrations";
-import { messages, scheduledTasks, sessions, userDoSchema } from "./schema";
+import { messages, messagesFts, scheduledTasks, sessions, userDoSchema } from "./schema";
 import { parseUserDoNotificationChannel } from "./types";
 import { sendNotificationText } from "@worker/lib/notification";
 export { createUserDoName, parseUserDoNotificationChannel } from "./types";
@@ -41,6 +41,15 @@ export type ChatMessage = {
   content: string;
   inputToken: number;
   outputToken: number;
+  createdAt: number;
+};
+
+export type MemorySearchResult = {
+  id: string;
+  sessionId: string;
+  role: string;
+  content: string;
+  score: number;
   createdAt: number;
 };
 
@@ -156,6 +165,30 @@ const toChatMessage = (row: ChatMessageRow): ChatMessage => ({
   outputToken: row.outputToken,
   createdAt: row.createdAt,
 });
+
+const toMemoryText = (content: string) => {
+  try {
+    const message = JSON.parse(content) as ModelMessage;
+    const messageContent = message.content;
+
+    return typeof messageContent === "string"
+      ? messageContent.trim()
+      : JSON.stringify(messageContent);
+  } catch {
+    return content.trim();
+  }
+};
+
+const createFtsQuery = (query: string) => {
+  const terms = query
+    .trim()
+    .split(/[\s,，;；、。.!！?？:：|]+/)
+    .map((term) => term.replace(/"/g, '""'))
+    .filter((term) => term.length > 0)
+    .slice(0, 12);
+
+  return terms.map((term) => `"${term}"`).join(" OR ");
+};
 
 const parseTaskPayload = (payload: string) => {
   try {
@@ -335,7 +368,86 @@ export class UserDO extends DurableObject<Env> {
       .returning()
       .all();
 
+    this.indexMessagesForMemory(rows);
+
     return rows.map(toChatMessage);
+  }
+
+  private indexMessagesForMemory(rows: ChatMessageRow[]) {
+    for (const row of rows) {
+      const text = toMemoryText(row.content);
+
+      if (!text) {
+        continue;
+      }
+
+      this.db
+        .insert(messagesFts)
+        .values({
+          messageId: row.id,
+          sessionId: row.sessionId,
+          role: "message",
+          content: text,
+        })
+        .run();
+    }
+  }
+
+  async searchMemory(input: {
+    query: string;
+    sessionId?: string | null;
+    limit?: number;
+  }): Promise<MemorySearchResult[]> {
+    const query = input.query.trim();
+
+    if (!query) {
+      return [];
+    }
+
+    const limit = Math.min(20, Math.max(1, Math.trunc(input.limit ?? 5)));
+    const rows = this.searchMemoryByFts(query, input.sessionId, limit);
+
+    return rows.map((row) => ({
+      id: String(row.id),
+      sessionId: String(row.sessionId),
+      role: String(row.role),
+      content: String(row.content),
+      score: Number(row.score),
+      createdAt: Number(row.createdAt),
+    }));
+  }
+
+  private searchMemoryByFts(
+    query: string,
+    sessionId: string | null | undefined,
+    limit: number,
+  ): MemorySearchResult[] {
+    const ftsQuery = createFtsQuery(query);
+
+    if (!ftsQuery) {
+      return [];
+    }
+
+    const where = sessionId
+      ? and(sql`${messagesFts} match ${ftsQuery}`, eq(messagesFts.sessionId, sessionId))
+      : sql`${messagesFts} match ${ftsQuery}`;
+    const score = sql<number>`bm25(${messagesFts})`;
+
+    return this.db
+      .select({
+        id: messagesFts.messageId,
+        sessionId: messagesFts.sessionId,
+        role: messagesFts.role,
+        content: messagesFts.content,
+        createdAt: messages.createdAt,
+        score,
+      })
+      .from(messagesFts)
+      .innerJoin(messages, eq(messages.id, messagesFts.messageId))
+      .where(where)
+      .orderBy(asc(score), desc(messages.createdAt))
+      .limit(limit)
+      .all();
   }
 
   async listRecentMessages(sessionId: string, limit: number): Promise<ChatMessage[]> {
@@ -394,7 +506,19 @@ export class UserDO extends DurableObject<Env> {
       .where(lt(messages.createdAt, cutoffAt))
       .get();
 
+    const deletedRows = this.db
+      .select({
+        id: messages.id,
+      })
+      .from(messages)
+      .where(lt(messages.createdAt, cutoffAt))
+      .all();
+
     this.db.delete(messages).where(lt(messages.createdAt, cutoffAt)).run();
+
+    for (const row of deletedRows) {
+      this.db.delete(messagesFts).where(eq(messagesFts.messageId, row.id)).run();
+    }
 
     return Number(row?.count ?? 0);
   }

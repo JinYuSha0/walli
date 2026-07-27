@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { MiddlewareHandler } from "hono";
 import type { AppBindings } from "../api/types";
+import { memoryToolRoute } from "./tool-memory";
 import { scheduledTaskToolRoute } from "./tool-scheduled-task";
 import { timestampToolRoute } from "./tool-timestamp";
 
@@ -25,4 +26,5 @@ const requireApiToken: MiddlewareHandler<AppBindings> = async (c, next) => {
 export const toolsRoute = new Hono<AppBindings>()
   .use("/api/tools/*", requireApiToken)
   .route("/", timestampToolRoute)
+  .route("/", memoryToolRoute)
   .route("/", scheduledTaskToolRoute);

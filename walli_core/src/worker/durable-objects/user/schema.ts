@@ -31,6 +31,13 @@ export const messages = sqliteTable(
   ],
 );
 
+export const messagesFts = sqliteTable("messages_fts", {
+  messageId: text("message_id").notNull(),
+  sessionId: text("session_id").notNull(),
+  role: text("role").notNull(),
+  content: text("content").notNull(),
+});
+
 export const scheduledTasks = sqliteTable(
   "scheduled_tasks",
   {
@@ -64,5 +71,6 @@ export const scheduledTasks = sqliteTable(
 export const userDoSchema = {
   sessions,
   messages,
+  messagesFts,
   scheduledTasks,
 };
