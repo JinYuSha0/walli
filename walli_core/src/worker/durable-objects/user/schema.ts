@@ -38,6 +38,7 @@ export const scheduledTasks = sqliteTable(
     userId: text("user_id").notNull(),
     type: text("type").notNull(),
     description: text("description").notNull(),
+    sessionId: text("session_id"),
     payload: text("payload").notNull(),
     systemCreated: integer("system_created").notNull().default(0),
     scheduledAt: integer("scheduled_at").notNull(),

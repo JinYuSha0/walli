@@ -1,5 +1,5 @@
 import { createAiGateway } from "ai-gateway-provider";
-import { unified } from "ai-gateway-provider/providers/unified";
+import { createUnified } from "ai-gateway-provider/providers/unified";
 import type { Context } from "hono";
 import type { AppBindings } from "../api/types";
 
@@ -22,4 +22,6 @@ export const normalizeGatewayModelId = (model: string) => {
   return value;
 };
 
-export { unified };
+export const unified = createUnified({
+  includeUsage: true,
+});

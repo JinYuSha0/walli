@@ -11,6 +11,7 @@ import { adaptBuiltInToolModelInput, adaptBuiltInToolModelOutput } from "../../s
 type ToolRuntime = {
   AI: Ai;
   fetch?: typeof fetch;
+  chatSessionId?: string;
 };
 
 type ToolExecutionOptions = Parameters<NonNullable<ToolSet[string]["execute"]>>[1];
@@ -117,6 +118,32 @@ const createApiInvocationInput = (toolConfig: ToolConfig, input: unknown) => {
   };
 };
 
+const withToolRuntimeContext = (
+  toolConfig: ToolConfig,
+  input: unknown,
+  runtime: ToolRuntime,
+) => {
+  if (
+    toolConfig.name !== "scheduled_task" ||
+    !runtime.chatSessionId ||
+    typeof input !== "object" ||
+    input === null
+  ) {
+    return input;
+  }
+
+  const inputRecord = input as Record<string, unknown>;
+
+  if (inputRecord.action !== "create") {
+    return input;
+  }
+
+  return {
+    ...inputRecord,
+    sessionId: inputRecord.sessionId ?? runtime.chatSessionId,
+  };
+};
+
 const runConfiguredTool = async (
   toolConfig: ToolConfig,
   input: unknown,
@@ -132,7 +159,10 @@ const runConfiguredTool = async (
   }
 
   const url = new URL(toolConfig.invocation.url);
-  const apiInput = createApiInvocationInput(toolConfig, parsedInput);
+  const apiInput = createApiInvocationInput(
+    toolConfig,
+    withToolRuntimeContext(toolConfig, parsedInput, runtime),
+  );
   const headers = Object.fromEntries(
     toolConfig.invocation.headers.map((header) => [header.name, header.defaultValue]),
   );

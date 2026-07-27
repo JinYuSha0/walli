@@ -66,6 +66,7 @@ export type ScheduledTask = {
   userId: string;
   type: string;
   description: string;
+  sessionId: string | null;
   payload: unknown;
   systemCreated: boolean;
   scheduledAt: number;
@@ -89,6 +90,7 @@ export type CreateScheduledTaskInput = {
   userId: string;
   type: string;
   description: string;
+  sessionId?: string | null;
   payload: unknown;
   systemCreated?: boolean;
   scheduledAt?: number;
@@ -163,28 +165,33 @@ const parseTaskPayload = (payload: string) => {
   }
 };
 
-const toScheduledTask = (row: ScheduledTaskRow): ScheduledTask => ({
-  id: row.id,
-  userId: row.userId,
-  type: row.type,
-  description: row.description,
-  payload: parseTaskPayload(row.payload),
-  systemCreated: row.systemCreated === 1,
-  scheduledAt: row.scheduledAt,
-  cron: row.cron,
-  timeZone: row.timeZone,
-  recurrenceEndAt: row.recurrenceEndAt,
-  maxRuns: row.maxRuns,
-  runNumber: row.runNumber,
-  maxRetry: row.maxRetry,
-  retryCount: row.retryCount,
-  status: row.status as ScheduledTaskStatus,
-  createdAt: row.createdAt,
-  updatedAt: row.updatedAt,
-  executedAt: row.executedAt,
-  canceledAt: row.canceledAt,
-  lastError: row.lastError,
-});
+const toScheduledTask = (row: ScheduledTaskRow): ScheduledTask => {
+  const payload = parseTaskPayload(row.payload);
+
+  return {
+    id: row.id,
+    userId: row.userId,
+    type: row.type,
+    description: row.description,
+    sessionId: row.sessionId,
+    payload,
+    systemCreated: row.systemCreated === 1,
+    scheduledAt: row.scheduledAt,
+    cron: row.cron,
+    timeZone: row.timeZone,
+    recurrenceEndAt: row.recurrenceEndAt,
+    maxRuns: row.maxRuns,
+    runNumber: row.runNumber,
+    maxRetry: row.maxRetry,
+    retryCount: row.retryCount,
+    status: row.status as ScheduledTaskStatus,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    executedAt: row.executedAt,
+    canceledAt: row.canceledAt,
+    lastError: row.lastError,
+  };
+};
 
 const serializeError = (error: unknown) => {
   if (error instanceof Error) {
@@ -277,6 +284,23 @@ export class UserDO extends DurableObject<Env> {
       .get();
 
     return toChatSession(row);
+  }
+
+  async getOrCreateSession(input: CreateChatSessionInput): Promise<ChatSession> {
+    if (input.id) {
+      const savedSession = this.db
+        .select()
+        .from(sessions)
+        .where(eq(sessions.id, input.id))
+        .limit(1)
+        .get();
+
+      if (savedSession) {
+        return toChatSession(savedSession);
+      }
+    }
+
+    return this.createSession(input);
   }
 
   async listSessions(limit?: number): Promise<ChatSession[]> {
@@ -440,6 +464,10 @@ export class UserDO extends DurableObject<Env> {
       throw new Error("scheduledAt is required for one-time scheduled tasks");
     }
 
+    if (!input.systemCreated && !input.cron && scheduledAt <= now) {
+      throw new Error("scheduledAt must be in the future for one-time scheduled tasks");
+    }
+
     const row = this.db
       .insert(scheduledTasks)
       .values({
@@ -447,6 +475,7 @@ export class UserDO extends DurableObject<Env> {
         userId: input.userId,
         type: input.type,
         description: input.description,
+        sessionId: input.sessionId ?? null,
         payload: JSON.stringify(input.payload),
         systemCreated: input.systemCreated ? 1 : 0,
         scheduledAt,
@@ -612,6 +641,14 @@ export class UserDO extends DurableObject<Env> {
             notificationChannel,
           })
         : undefined,
+      session: notificationChannel
+        ? {
+            store: this,
+            client: notificationChannel.type,
+            sessionId: toScheduledTask(task).sessionId ?? undefined,
+            summary: task.description,
+          }
+        : undefined,
       excludeToolNames: ["scheduled_task"],
       extraTools: createNotificationTools(this.env, notificationChannel),
     });
@@ -756,6 +793,7 @@ export class UserDO extends DurableObject<Env> {
       userId: task.userId,
       type: task.type,
       description: task.description,
+      sessionId: task.sessionId,
       payload: parseTaskPayload(task.payload),
       scheduledAt: nextScheduledAt,
       cron: task.cron,

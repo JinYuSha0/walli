@@ -5,6 +5,13 @@ import type { AppBindings } from "../api/types";
 import { createUserDoName, type UserDoClientPlatform } from "../durable-objects/user/types";
 import { parseCronSchedule } from "../utils/cron";
 
+class ScheduledTaskValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ScheduledTaskValidationError";
+  }
+}
+
 const isValidTimeZone = (timeZone: string) => {
   try {
     new Intl.DateTimeFormat("en-US", { timeZone }).format(new Date());
@@ -24,6 +31,7 @@ const scheduledTaskActionSchema = z
     status: z.enum(["pending", "completed", "failed", "canceled", "all"]).default("pending"),
     type: z.string().trim().min(1).default("generic"),
     description: z.string().trim().min(1).optional(),
+    sessionId: z.string().trim().min(1).nullable().optional(),
     payload: z.unknown().default({}),
     scheduledAt: z.number().int().min(0).optional(),
     delayMs: z.number().int().min(0).optional(),
@@ -103,6 +111,42 @@ const normalizeUserDoName = (platform: UserDoClientPlatform, userId: string) =>
 const getListTasksLimit = (status: z.output<typeof scheduledTaskActionSchema>["status"]) =>
   status === "pending" ? undefined : 20;
 
+const resolveScheduledAt = (task: z.output<typeof scheduledTaskActionSchema>, now: number) => {
+  if (task.delayMs !== undefined) {
+    return now + task.delayMs;
+  }
+
+  if (task.scheduledAt === undefined) {
+    return undefined;
+  }
+
+  if (task.action === "create" && !task.cron && task.scheduledAt <= now) {
+    throw new ScheduledTaskValidationError(
+      "scheduledAt must be a future Unix timestamp in milliseconds",
+    );
+  }
+
+  return task.scheduledAt;
+};
+
+const createTaskInput = (task: z.output<typeof scheduledTaskActionSchema>) => ({
+  action: task.action,
+  userId: task.userId,
+  clientPlatform: task.clientPlatform,
+  taskId: task.taskId,
+  status: task.status,
+  type: task.type,
+  description: task.description!,
+  sessionId: task.sessionId,
+  payload: task.payload,
+  scheduledAt: task.scheduledAt,
+  cron: task.cron,
+  timeZone: task.timeZone,
+  recurrenceEndAt: task.recurrenceEndAt,
+  maxRuns: task.maxRuns,
+  maxRetry: task.maxRetry,
+});
+
 const serializeError = (error: unknown) => {
   if (error instanceof Error) {
     return error.message;
@@ -126,23 +170,23 @@ export const scheduledTaskToolRoute = new Hono<AppBindings>().post(
       );
     }
 
-    const userDO = c.env.USER_DO.getByName(
-      normalizeUserDoName(result.data.clientPlatform, result.data.userId),
-    );
-
     try {
       if (result.data.action === "create") {
-        const { delayMs, ...taskInput } = result.data;
-        const scheduledAt =
-          taskInput.scheduledAt ?? (delayMs === undefined ? undefined : Date.now() + delayMs);
+        const scheduledAt = resolveScheduledAt(result.data, Date.now());
+        const userDO = c.env.USER_DO.getByName(
+          normalizeUserDoName(result.data.clientPlatform, result.data.userId),
+        );
         const task = await userDO.createTask({
-          ...taskInput,
+          ...createTaskInput(result.data),
           scheduledAt,
-          description: taskInput.description!,
         });
 
         return c.json({ task }, 201);
       }
+
+      const userDO = c.env.USER_DO.getByName(
+        normalizeUserDoName(result.data.clientPlatform, result.data.userId),
+      );
 
       if (result.data.action === "list") {
         const tasks = await userDO.listTasks(
@@ -161,6 +205,16 @@ export const scheduledTaskToolRoute = new Hono<AppBindings>().post(
 
       return c.json({ task });
     } catch (error) {
+      if (error instanceof ScheduledTaskValidationError) {
+        return c.json(
+          {
+            error: "Invalid body",
+            message: error.message,
+          },
+          400,
+        );
+      }
+
       console.error(error);
       return c.json(
         {

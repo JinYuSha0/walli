@@ -15,12 +15,13 @@ import { getSettings } from "./settings";
 import { errorResponseSchema, parseResponse } from "./helper/validation";
 import { requireAdmin } from "./helper/middleware";
 import {
-  createChatRunnerInstructions,
-  createChatRunnerTools,
+  ChatCompletionLimitError,
+  createOutputTokenLimitOptions,
   createChatUserInfo,
+  prepareChatCompletion,
   type ChatUserInfo,
 } from "../lib/chat-runner";
-import { createGateway, normalizeGatewayModelId, unified } from "../lib/llm";
+import { createUserDoName } from "../durable-objects/user/types";
 
 const chatMessageSchema = z
   .object({
@@ -41,17 +42,20 @@ const chatRequestSchema = z
     appId: z.string().optional(),
     userId: z.string().trim().min(1),
     token: z.string().optional(),
+    sessionId: z.string().trim().min(1).optional(),
     messages: z.array(chatMessageSchema).min(1),
   })
   .strict();
 
 const internalChatRequestSchema = z
   .object({
+    sessionId: z.string().trim().min(1).optional(),
     messages: z.array(internalChatMessageSchema).min(1),
   })
   .strict();
 
 type ParsedChatRequest = {
+  sessionId?: string;
   messages: Array<z.infer<typeof internalChatMessageSchema>>;
 };
 
@@ -69,12 +73,6 @@ const serializeError = (error: unknown) => {
 };
 
 const stringifySseData = (data: unknown) => JSON.stringify(data);
-
-const joinInstructions = (...parts: string[]) =>
-  parts
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0)
-    .join("\n\n");
 
 const getUserInfoFromAuthBody = (body: unknown) => {
   if (typeof body !== "object" || body === null) {
@@ -165,22 +163,45 @@ const streamChat = async (
   additionalSystemPrompt = "",
 ) => {
   const settings = await getSettings(c.env.APP_KV);
-  const gateway = createGateway(c);
   const origin = new URL(c.req.url).origin;
-  const tools = createChatRunnerTools(settings, c.env, origin);
+  const userDO = c.env.USER_DO.getByName(
+    createUserDoName(userInfo.clientPlatform, userInfo.userId),
+  );
+  let prepared: Awaited<ReturnType<typeof prepareChatCompletion>>;
+
+  try {
+    prepared = await prepareChatCompletion({
+      env: c.env,
+      origin,
+      userInfo,
+      messages: body.messages as ModelMessage[],
+      settings,
+      session: {
+        store: userDO,
+        client: userInfo.clientPlatform,
+        sessionId: body.sessionId,
+      },
+      extraInstructions: additionalSystemPrompt,
+    });
+  } catch (error) {
+    if (error instanceof ChatCompletionLimitError) {
+      return c.json({ error: error.message, code: error.code }, 429);
+    }
+
+    throw error;
+  }
+
   c.header("X-Accel-Buffering", "no");
 
   return streamSSE(c, async (stream) => {
     try {
       let fullContent = "";
       const result = streamText({
-        model: gateway(unified(normalizeGatewayModelId(settings.primaryModel))),
-        instructions: createChatRunnerInstructions(
-          joinInstructions(settings.globalPrompt, additionalSystemPrompt),
-          userInfo,
-        ),
-        messages: body.messages as ModelMessage[],
-        tools,
+        model: prepared.model,
+        instructions: prepared.instructions,
+        messages: prepared.messages,
+        tools: prepared.tools,
+        ...createOutputTokenLimitOptions(prepared.modelId, prepared.outputTokenLimit),
         toolChoice: "auto",
         stopWhen: isStepCount(5),
         abortSignal: c.req.raw.signal,
@@ -190,6 +211,7 @@ const streamChat = async (
         event: "start",
         data: stringifySseData({
           model: settings.primaryModel,
+          sessionId: prepared.sessionId,
         }),
       });
 
@@ -242,12 +264,25 @@ const streamChat = async (
         }
 
         if (part.type === "finish") {
+          await prepared.persistMessages(
+            [
+              {
+                role: "assistant",
+                content: fullContent,
+              },
+            ],
+            {
+              inputTokens: part.totalUsage.inputTokens,
+              outputTokens: part.totalUsage.outputTokens,
+            },
+          );
           await stream.writeSSE({
             event: "finish",
             data: stringifySseData({
               text: fullContent,
               finishReason: part.finishReason,
-              usage: part.totalUsage,
+              sessionId: prepared.sessionId,
+              // usage: part.totalUsage,
             }),
           });
           continue;

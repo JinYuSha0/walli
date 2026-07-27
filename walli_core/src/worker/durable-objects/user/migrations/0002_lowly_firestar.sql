@@ -1,0 +1,1 @@
+ALTER TABLE `scheduled_tasks` ADD `session_id` text;

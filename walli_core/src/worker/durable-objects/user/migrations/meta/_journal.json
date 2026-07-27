@@ -8,6 +8,13 @@
       "when": 1784781135647,
       "tag": "0000_scheduled_tasks",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1785135133112,
+      "tag": "0002_lowly_firestar",
+      "breakpoints": true
     }
   ]
 }

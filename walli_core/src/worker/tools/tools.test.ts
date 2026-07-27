@@ -1253,6 +1253,40 @@ describe("tools route", () => {
     }
   });
 
+  it.each([60_000, 1_700_000_000_000])(
+    "rejects past scheduledAt value %s for one-time tasks",
+    async (scheduledAt) => {
+      const dateNow = vi.spyOn(Date, "now").mockReturnValue(2_000_000_000_000);
+
+      try {
+        const response = await toolsRoute.request(
+          "/api/tools/scheduled-tasks",
+          {
+            method: "POST",
+            headers: {
+              authorization: "Bearer test-token",
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              action: "create",
+              userId: "user-1",
+              clientPlatform: "telegram",
+              description: "Send a reminder.",
+              scheduledAt,
+            }),
+          },
+          env,
+        );
+        const body = (await response.json()) as Record<string, unknown>;
+
+        expect(response.status).toBe(400);
+        expect(body.message).toBe("scheduledAt must be a future Unix timestamp in milliseconds");
+      } finally {
+        dateNow.mockRestore();
+      }
+    },
+  );
+
   it("lists pending scheduled tasks by default", async () => {
     const listTasks = vi.fn(async () => []);
     const getByName = vi.fn(() => ({

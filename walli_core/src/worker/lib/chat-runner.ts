@@ -1,4 +1,4 @@
-import { generateText, isStepCount, type ToolSet, Output } from "ai";
+import { generateText, isStepCount, type LanguageModel, type ToolSet, Output } from "ai";
 import type { ModelMessage } from "ai";
 import type { ClientPlatform } from "@shared/client";
 import { BUILT_IN_TOOLS, type Settings, type ToolConfig } from "@shared/const";
@@ -32,7 +32,7 @@ export type CreateChatUserInfoInput = {
   attributes?: Record<string, unknown>;
 };
 
-type RunChatOptions = {
+export type RunChatOptions = {
   env: Env;
   messages: ModelMessage[];
   userInfo?: ChatUserInfo;
@@ -58,6 +58,9 @@ type ChatTokenUsage = {
 
 type ChatSessionStore = {
   createSession(input?: { client?: string; summary?: string }): Promise<{ id: string }>;
+  getOrCreateSession(input: { id?: string; client?: string; summary?: string }): Promise<{
+    id: string;
+  }>;
   listRecentMessages(sessionId: string, limit: number): Promise<StoredChatMessage[]>;
   getTodayTokenUsage(): Promise<ChatTokenUsage>;
   addMessages(
@@ -75,6 +78,20 @@ type RunChatSessionOptions = {
   client: ClientPlatform;
   sessionId?: string;
   summary?: string;
+};
+
+type PreparedChatCompletion = {
+  sessionId: string | undefined;
+  model: LanguageModel;
+  modelId: string;
+  instructions: string | undefined;
+  messages: ModelMessage[];
+  tools: ToolSet | undefined;
+  outputTokenLimit: number | undefined;
+  persistMessages: (responseMessages: ModelMessage[], usage: {
+    inputTokens?: number;
+    outputTokens?: number;
+  }) => Promise<void>;
 };
 
 export class ChatCompletionLimitError extends Error {
@@ -278,15 +295,17 @@ export const createChatRunnerTools = (
   env: Env,
   origin: string,
   excludeToolNames: string[] = [],
+  chatSessionId?: string,
 ) =>
   buildChatTools(createToolConfigs(settings, env, origin, excludeToolNames), {
     AI: env.AI,
     fetch: createInternalToolFetch(env, origin),
+    chatSessionId,
   });
 
 export const createChatRunnerInstructions = createChatInstructions;
 
-export const runChatCompletion = async ({
+export const prepareChatCompletion = async ({
   env,
   messages,
   userInfo,
@@ -296,17 +315,20 @@ export const runChatCompletion = async ({
   extraTools,
   extraInstructions,
   toolsEnabled = true,
-  output,
   maxOutputTokens,
   session,
-}: RunChatOptions) => {
+}: Omit<RunChatOptions, "output">): Promise<PreparedChatCompletion> => {
   const resolvedSettings = settings ?? (await getSettings(env.APP_KV));
   const usageLimitSettings = session
     ? await getClientUsageLimit(env.APP_KV, session.client)
     : undefined;
   const chatSession = session
     ? session.sessionId
-      ? { id: session.sessionId }
+      ? await session.store.getOrCreateSession({
+          id: session.sessionId,
+          client: session.client,
+          summary: session.summary,
+        })
       : await session.store.createSession({ client: session.client, summary: session.summary })
     : undefined;
   const shouldCheckUserUsageLimit =
@@ -383,54 +405,76 @@ export const runChatCompletion = async ({
   const gateway = createGatewayFromEnv(env);
 
   const tools = toolsEnabled
-    ? createChatRunnerTools(resolvedSettings, env, origin, excludeToolNames)
+    ? createChatRunnerTools(resolvedSettings, env, origin, excludeToolNames, chatSession?.id)
     : undefined;
 
-  const result = await generateText({
+  return {
+    sessionId: chatSession?.id,
     model: gateway(unified(modelId)),
+    modelId,
     instructions: joinInstructions(
       createChatInstructions(resolvedSettings.globalPrompt, userInfo),
       extraInstructions,
     ),
     messages: limitedMessageResult.messages,
-    output,
-    ...createOutputTokenLimitOptions(modelId, outputTokenLimit),
-    ...(toolsEnabled
+    tools: toolsEnabled
       ? {
-          tools: {
-            ...tools,
-            ...extraTools,
-          },
+          ...tools,
+          ...extraTools,
+        }
+      : undefined,
+    outputTokenLimit,
+    persistMessages: async (responseMessages, usage) => {
+      if (!session || !chatSession) {
+        return;
+      }
+
+      const inputTokens = getTokenCount(usage.inputTokens);
+      const outputTokens = getTokenCount(usage.outputTokens);
+
+      await session.store
+        .addMessages([
+          ...messages.map((inputMessage, index) => ({
+            sessionId: chatSession.id,
+            content: serializeChatMessage(inputMessage),
+            inputToken: index === messages.length - 1 ? inputTokens : 0,
+            outputToken: 0,
+          })),
+          ...responseMessages.map((responseMessage, index) => ({
+            sessionId: chatSession.id,
+            content: serializeChatMessage(responseMessage),
+            inputToken: 0,
+            outputToken: index === responseMessages.length - 1 ? outputTokens : 0,
+          })),
+        ])
+        .catch((error) => {
+          console.error(error);
+        });
+    },
+  };
+};
+
+export const runChatCompletion = async ({ output, ...options }: RunChatOptions) => {
+  const prepared = await prepareChatCompletion(options);
+  const result = await generateText({
+    model: prepared.model,
+    instructions: prepared.instructions,
+    messages: prepared.messages,
+    output,
+    ...createOutputTokenLimitOptions(prepared.modelId, prepared.outputTokenLimit),
+    ...(prepared.tools
+      ? {
+          tools: prepared.tools,
           toolChoice: "auto" as const,
           stopWhen: isStepCount(5),
         }
       : {}),
   });
 
-  if (session && chatSession) {
-    const inputTokens = getTokenCount(result.usage.inputTokens);
-    const outputTokens = getTokenCount(result.usage.outputTokens);
-    const responseMessages = result.responseMessages as ModelMessage[];
-
-    await session.store
-      .addMessages([
-        ...messages.map((inputMessage, index) => ({
-          sessionId: chatSession.id,
-          content: serializeChatMessage(inputMessage),
-          inputToken: index === messages.length - 1 ? inputTokens : 0,
-          outputToken: 0,
-        })),
-        ...responseMessages.map((responseMessage, index) => ({
-          sessionId: chatSession.id,
-          content: serializeChatMessage(responseMessage),
-          inputToken: 0,
-          outputToken: index === responseMessages.length - 1 ? outputTokens : 0,
-        })),
-      ])
-      .catch((error) => {
-        console.error(error);
-      });
-  }
+  await prepared.persistMessages(result.responseMessages as ModelMessage[], {
+    inputTokens: result.usage.inputTokens,
+    outputTokens: result.usage.outputTokens,
+  });
 
   return result;
 };
