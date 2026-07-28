@@ -24,11 +24,7 @@ export const messages = sqliteTable(
   },
   (table) => [
     index("idx_messages_session_created_at").on(table.sessionId, table.createdAt),
-    index("idx_messages_token_usage").on(
-      table.createdAt,
-      table.inputToken,
-      table.outputToken,
-    ),
+    index("idx_messages_token_usage").on(table.createdAt, table.inputToken, table.outputToken),
   ],
 );
 
@@ -64,9 +60,7 @@ export const scheduledTasks = sqliteTable(
     canceledAt: integer("canceled_at"),
     lastError: text("last_error"),
   },
-  (table) => [
-    index("idx_scheduled_tasks_due").on(table.status, table.scheduledAt),
-  ],
+  (table) => [index("idx_scheduled_tasks_due").on(table.status, table.scheduledAt)],
 );
 
 export const memory = sqliteTable(
@@ -74,10 +68,15 @@ export const memory = sqliteTable(
   {
     id: text("id").primaryKey(),
     type: text("type", { enum: ["user", "memory"] }).notNull(),
-    content: text("content").notNull(),
+    startMessageId: text("start_message_id").notNull(),
+    endMessageId: text("end_message_id").notNull(),
+    previousContent: text("previous_content").notNull(),
+    updatedContent: text("updated_content").notNull(),
+    createdAt: integer("created_at").notNull(),
   },
   (table) => [
     check("memory_type_check", sql`${table.type} in ('user', 'memory')`),
+    index("idx_memory_type_created_at").on(table.type, table.createdAt),
   ],
 );
 

@@ -428,9 +428,10 @@ export class UserDO extends DurableObject<Env> {
       return [];
     }
 
-    const where = sessionId
-      ? and(sql`${messagesFts} match ${ftsQuery}`, eq(messagesFts.sessionId, sessionId))
-      : sql`${messagesFts} match ${ftsQuery}`;
+    const where = sql`${messagesFts} match ${ftsQuery}`;
+    // const where = sessionId
+    // ? and(sql`${messagesFts} match ${ftsQuery}`, eq(messagesFts.sessionId, sessionId))
+    // : sql`${messagesFts} match ${ftsQuery}`;
     const score = sql<number>`bm25(${messagesFts})`;
 
     return this.db
