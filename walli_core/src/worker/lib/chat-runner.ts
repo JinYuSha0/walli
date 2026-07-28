@@ -1,5 +1,6 @@
 import { generateText, isStepCount, type LanguageModel, type ToolSet, Output } from "ai";
 import type { ModelMessage } from "ai";
+import type { DurableObject } from "cloudflare:workers";
 import type { ClientPlatform } from "@shared/client";
 import { BUILT_IN_TOOLS, type Settings, type ToolConfig } from "@shared/const";
 import { toolsRoute } from "../tools";
@@ -8,10 +9,22 @@ import { getSettings } from "../api/settings";
 import { createGatewayFromEnv, normalizeGatewayModelId, unified } from "./llm";
 import { buildChatTools } from "./tool-runner";
 import {
+  createMemoryContextInstructions,
+  EMPTY_MEMORY_CONTEXT,
+  summarizeChatMemory,
+} from "./chat-summary";
+import {
   createUserNotificationChannel,
   type UserNotificationChannel,
 } from "../durable-objects/user/types";
+import type { UserDO } from "../durable-objects/user";
 import { limitModelMessagesByTokens, sanitizeModelMessageHistory } from "../utils/llm";
+import {
+  createOutputTokenLimitOptions,
+  runBackgroundTask,
+  type BackgroundExecutionContext,
+} from "../utils/common";
+export { createOutputTokenLimitOptions } from "../utils/common";
 
 export type ChatUserInfo = {
   userId: string;
@@ -34,6 +47,7 @@ export type CreateChatUserInfoInput = {
 
 export type RunChatOptions = {
   env: Env;
+  ctx?: BackgroundExecutionContext;
   messages: ModelMessage[];
   userInfo?: ChatUserInfo;
   origin?: string;
@@ -47,31 +61,9 @@ export type RunChatOptions = {
   session?: RunChatSessionOptions;
 };
 
-type StoredChatMessage = {
-  content: string;
-};
+type ChatSessionStore = PickFunctions<Omit<UserDO, keyof DurableObject>>;
 
-type ChatTokenUsage = {
-  inputToken: number;
-  outputToken: number;
-};
-
-type ChatSessionStore = {
-  createSession(input?: { client?: string; summary?: string }): Promise<{ id: string }>;
-  getOrCreateSession(input: { id?: string; client?: string; summary?: string }): Promise<{
-    id: string;
-  }>;
-  listRecentMessages(sessionId: string, limit: number): Promise<StoredChatMessage[]>;
-  getTodayTokenUsage(): Promise<ChatTokenUsage>;
-  addMessages(
-    inputs: Array<{
-      sessionId: string;
-      content: string;
-      inputToken?: number;
-      outputToken?: number;
-    }>,
-  ): Promise<unknown>;
-};
+type StoredChatMessage = Awaited<ReturnType<ChatSessionStore["listRecentMessages"]>>[number];
 
 type RunChatSessionOptions = {
   store: ChatSessionStore;
@@ -88,10 +80,13 @@ type PreparedChatCompletion = {
   messages: ModelMessage[];
   tools: ToolSet | undefined;
   outputTokenLimit: number | undefined;
-  persistMessages: (responseMessages: ModelMessage[], usage: {
-    inputTokens?: number;
-    outputTokens?: number;
-  }) => Promise<void>;
+  persistMessages: (
+    responseMessages: ModelMessage[],
+    usage: {
+      inputTokens?: number;
+      outputTokens?: number;
+    },
+  ) => void;
 };
 
 export class ChatCompletionLimitError extends Error {
@@ -103,29 +98,6 @@ export class ChatCompletionLimitError extends Error {
     this.name = "ChatCompletionLimitError";
   }
 }
-
-export const createOutputTokenLimitOptions = (
-  modelId: string,
-  maxOutputTokens: number | undefined,
-) => {
-  if (maxOutputTokens === undefined) {
-    return {};
-  }
-
-  if (!/^openai\/(?:gpt-5|o[134](?:-|$))/.test(modelId)) {
-    return {
-      maxOutputTokens,
-    };
-  }
-
-  return {
-    providerOptions: {
-      Unified: {
-        max_completion_tokens: maxOutputTokens,
-      },
-    },
-  };
-};
 
 const normalizeOptionalString = (value: unknown) =>
   typeof value === "string" && value.trim().length > 0 ? value : undefined;
@@ -317,6 +289,7 @@ export const prepareChatCompletion = async ({
   toolsEnabled = true,
   maxOutputTokens,
   session,
+  ctx,
 }: Omit<RunChatOptions, "output">): Promise<PreparedChatCompletion> => {
   const resolvedSettings = settings ?? (await getSettings(env.APP_KV));
   const usageLimitSettings = session
@@ -335,13 +308,24 @@ export const prepareChatCompletion = async ({
     usageLimitSettings !== undefined &&
     (usageLimitSettings.perUserDailyInputLimit > 0 ||
       usageLimitSettings.perUserDailyOutputLimit > 0);
-  const [storedMessages, todayTokenUsage] =
-    session && chatSession && usageLimitSettings
+  const [storedMessages, todayTokenUsage, memoryContext] =
+    session && chatSession
       ? await Promise.all([
-          session.store.listRecentMessages(chatSession.id, usageLimitSettings.historyMessageLimit),
-          shouldCheckUserUsageLimit ? session.store.getTodayTokenUsage() : Promise.resolve(null),
+          usageLimitSettings
+            ? session.store.listRecentMessages(
+                chatSession.id,
+                usageLimitSettings.historyMessageLimit,
+              )
+            : Promise.resolve([]),
+          usageLimitSettings && shouldCheckUserUsageLimit
+            ? session.store.getTodayTokenUsage()
+            : Promise.resolve(null),
+          session.store.getMemoryContext().catch((error) => {
+            console.error(error);
+            return EMPTY_MEMORY_CONTEXT;
+          }),
         ])
-      : [[], null];
+      : [[], null, EMPTY_MEMORY_CONTEXT];
 
   if (
     usageLimitSettings &&
@@ -414,6 +398,7 @@ export const prepareChatCompletion = async ({
     modelId,
     instructions: joinInstructions(
       createChatInstructions(resolvedSettings.globalPrompt, userInfo),
+      createMemoryContextInstructions(memoryContext),
       extraInstructions,
     ),
     messages: limitedMessageResult.messages,
@@ -424,32 +409,90 @@ export const prepareChatCompletion = async ({
         }
       : undefined,
     outputTokenLimit,
-    persistMessages: async (responseMessages, usage) => {
+    persistMessages: (responseMessages, usage) => {
       if (!session || !chatSession) {
         return;
       }
 
-      const inputTokens = getTokenCount(usage.inputTokens);
-      const outputTokens = getTokenCount(usage.outputTokens);
+      const persistChatMessagesTask = async () => {
+        const inputTokens = getTokenCount(usage.inputTokens);
+        const outputTokens = getTokenCount(usage.outputTokens);
+        const historyMessageLimit = usageLimitSettings?.historyMessageLimit ?? 0;
 
-      await session.store
-        .addMessages([
-          ...messages.map((inputMessage, index) => ({
+        const persistedMessages =
+          (await session.store
+            .addMessages([
+              ...messages.map((inputMessage, index) => ({
+                sessionId: chatSession.id,
+                content: serializeChatMessage(inputMessage),
+                inputToken: index === messages.length - 1 ? inputTokens : 0,
+                outputToken: 0,
+              })),
+              ...responseMessages.map((responseMessage, index) => ({
+                sessionId: chatSession.id,
+                content: serializeChatMessage(responseMessage),
+                inputToken: 0,
+                outputToken: index === responseMessages.length - 1 ? outputTokens : 0,
+              })),
+            ])
+            .catch((error) => {
+              console.error(error);
+              return [];
+            })) ?? [];
+
+        if (persistedMessages.length === 0) {
+          return;
+        }
+
+        const latestMessage = persistedMessages[persistedMessages.length - 1];
+
+        if (historyMessageLimit <= 0 || !latestMessage) {
+          return;
+        }
+
+        const summaryWindow = await session.store
+          .listNextMemorySummaryWindow({
             sessionId: chatSession.id,
-            content: serializeChatMessage(inputMessage),
-            inputToken: index === messages.length - 1 ? inputTokens : 0,
-            outputToken: 0,
-          })),
-          ...responseMessages.map((responseMessage, index) => ({
-            sessionId: chatSession.id,
-            content: serializeChatMessage(responseMessage),
-            inputToken: 0,
-            outputToken: index === responseMessages.length - 1 ? outputTokens : 0,
-          })),
-        ])
-        .catch((error) => {
-          console.error(error);
+            currentSeq: latestMessage.seq,
+            limit: historyMessageLimit,
+          })
+          .catch((error) => {
+            console.error(error);
+            return [];
+          });
+
+        if (summaryWindow.length < historyMessageLimit) {
+          return;
+        }
+
+        const summaryMessages = sanitizeModelMessageHistory(
+          summaryWindow
+            .map(parseStoredChatMessage)
+            .filter((storedMessage): storedMessage is ModelMessage => storedMessage !== undefined),
+        );
+
+        if (summaryMessages.length === 0) {
+          return;
+        }
+
+        const summary = await summarizeChatMemory({
+          env,
+          settings: resolvedSettings,
+          previousMemory: memoryContext,
+          messages: summaryMessages,
         });
+
+        if (summary.user || summary.memory) {
+          await session.store.recordMemorySummary({
+            startMessageId: summaryWindow[0].id,
+            endMessageId: summaryWindow[summaryWindow.length - 1].id,
+            user: summary.user,
+            memory: summary.memory,
+          });
+        }
+      };
+
+      runBackgroundTask(ctx, persistChatMessagesTask());
     },
   };
 };
@@ -471,7 +514,7 @@ export const runChatCompletion = async ({ output, ...options }: RunChatOptions) 
       : {}),
   });
 
-  await prepared.persistMessages(result.responseMessages as ModelMessage[], {
+  prepared.persistMessages(result.responseMessages as ModelMessage[], {
     inputTokens: result.usage.inputTokens,
     outputTokens: result.usage.outputTokens,
   });

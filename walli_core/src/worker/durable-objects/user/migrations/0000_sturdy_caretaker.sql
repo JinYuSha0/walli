@@ -11,7 +11,8 @@ CREATE TABLE `memory` (
 --> statement-breakpoint
 CREATE INDEX `idx_memory_type_created_at` ON `memory` (`type`,`created_at`);--> statement-breakpoint
 CREATE TABLE `messages` (
-	`id` text PRIMARY KEY NOT NULL,
+	`seq` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`id` text NOT NULL,
 	`session_id` text NOT NULL,
 	`content` text NOT NULL,
 	`input_token` integer NOT NULL,
@@ -19,7 +20,9 @@ CREATE TABLE `messages` (
 	`created_at` integer NOT NULL
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX `idx_messages_id_unique` ON `messages` (`id`);--> statement-breakpoint
 CREATE INDEX `idx_messages_session_created_at` ON `messages` (`session_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `idx_messages_session_seq` ON `messages` (`session_id`,`seq`);--> statement-breakpoint
 CREATE INDEX `idx_messages_token_usage` ON `messages` (`created_at`,`input_token`,`output_token`);--> statement-breakpoint
 CREATE VIRTUAL TABLE `messages_fts` USING fts5(
 	`message_id` UNINDEXED,

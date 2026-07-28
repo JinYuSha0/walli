@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { and, asc, desc, eq, gte, lt, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, lt, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/durable-sqlite";
 import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import type { ModelMessage } from "ai";
@@ -11,7 +11,7 @@ import { getClientUsageLimit } from "../../api/clients";
 import { getSettings, isMultiSessionClient } from "../../api/settings";
 import { getNextCronScheduledAt } from "../../utils/cron";
 import userDoMigrations from "./migrations/migrations";
-import { messages, messagesFts, scheduledTasks, sessions, userDoSchema } from "./schema";
+import { memory, messages, messagesFts, scheduledTasks, sessions, userDoSchema } from "./schema";
 import { parseUserDoNotificationChannel } from "./types";
 import { sendNotificationText } from "@worker/lib/notification";
 export { createUserDoName, parseUserDoNotificationChannel } from "./types";
@@ -41,6 +41,7 @@ export type ChatMessage = {
   content: string;
   inputToken: number;
   outputToken: number;
+  seq: number;
   createdAt: number;
 };
 
@@ -51,6 +52,26 @@ export type MemorySearchResult = {
   content: string;
   score: number;
   createdAt: number;
+};
+
+export type MemoryType = "user" | "memory";
+
+export type MemoryRecord = {
+  id: string;
+  type: MemoryType;
+  startMessageId: string;
+  endMessageId: string;
+  previousContent: string;
+  updatedContent: string;
+  createdAt: number;
+};
+
+export type RecordMemorySummaryInput = {
+  startMessageId: string;
+  endMessageId: string;
+  user?: string;
+  memory?: string;
+  createdAt?: number;
 };
 
 export type CreateChatMessageInput = {
@@ -115,6 +136,7 @@ export type CreateScheduledTaskInput = {
 type ScheduledTaskRow = typeof scheduledTasks.$inferSelect;
 type ChatSessionRow = typeof sessions.$inferSelect;
 type ChatMessageRow = typeof messages.$inferSelect;
+type MemoryRow = typeof memory.$inferSelect;
 
 const SINGLE_SESSION_ID = "single";
 const SYSTEM_CONVERSATION_CLEANUP_TASK_TYPE = "system:conversation-cleanup";
@@ -163,6 +185,17 @@ const toChatMessage = (row: ChatMessageRow): ChatMessage => ({
   content: row.content,
   inputToken: row.inputToken,
   outputToken: row.outputToken,
+  seq: row.seq,
+  createdAt: row.createdAt,
+});
+
+const toMemoryRecord = (row: MemoryRow): MemoryRecord => ({
+  id: row.id,
+  type: row.type,
+  startMessageId: row.startMessageId,
+  endMessageId: row.endMessageId,
+  previousContent: row.previousContent,
+  updatedContent: row.updatedContent,
   createdAt: row.createdAt,
 });
 
@@ -405,7 +438,7 @@ export class UserDO extends DurableObject<Env> {
     }
 
     const limit = Math.min(20, Math.max(1, Math.trunc(input.limit ?? 5)));
-    const rows = this.searchMemoryByFts(query, input.sessionId, limit);
+    const rows = this.searchMemoryByFts(query, limit);
 
     return rows.map((row) => ({
       id: String(row.id),
@@ -417,21 +450,13 @@ export class UserDO extends DurableObject<Env> {
     }));
   }
 
-  private searchMemoryByFts(
-    query: string,
-    sessionId: string | null | undefined,
-    limit: number,
-  ): MemorySearchResult[] {
+  private searchMemoryByFts(query: string, limit: number): MemorySearchResult[] {
     const ftsQuery = createFtsQuery(query);
 
     if (!ftsQuery) {
       return [];
     }
 
-    const where = sql`${messagesFts} match ${ftsQuery}`;
-    // const where = sessionId
-    // ? and(sql`${messagesFts} match ${ftsQuery}`, eq(messagesFts.sessionId, sessionId))
-    // : sql`${messagesFts} match ${ftsQuery}`;
     const score = sql<number>`bm25(${messagesFts})`;
 
     return this.db
@@ -445,10 +470,104 @@ export class UserDO extends DurableObject<Env> {
       })
       .from(messagesFts)
       .innerJoin(messages, eq(messages.id, messagesFts.messageId))
-      .where(where)
+      .where(sql`${messagesFts} match ${ftsQuery}`)
       .orderBy(asc(score), desc(messages.createdAt))
       .limit(limit)
       .all();
+  }
+
+  async recordMemorySummary(input: RecordMemorySummaryInput): Promise<MemoryRecord[]> {
+    const createdAt = input.createdAt ?? Date.now();
+    const contents = [
+      ["user", input.user?.trim()] as const,
+      ["memory", input.memory?.trim()] as const,
+    ];
+    const updates = contents.filter((entry): entry is [MemoryType, string] => Boolean(entry[1]));
+
+    if (updates.length === 0) {
+      return [];
+    }
+
+    const latestContent = this.getLatestMemoryContent(updates.map(([type]) => type));
+    const values = updates.map(([type, updatedContent]) => ({
+      id: crypto.randomUUID(),
+      type,
+      startMessageId: input.startMessageId,
+      endMessageId: input.endMessageId,
+      previousContent: latestContent[type],
+      updatedContent,
+      createdAt,
+    }));
+
+    return this.db.insert(memory).values(values).returning().all().map(toMemoryRecord);
+  }
+
+  private getLatestMemoryContent(types: MemoryType[]): Record<MemoryType, string> {
+    const latestContent: Record<MemoryType, string> = {
+      user: "",
+      memory: "",
+    };
+
+    for (const type of types) {
+      latestContent[type] =
+        this.db
+          .select({ updatedContent: memory.updatedContent })
+          .from(memory)
+          .where(eq(memory.type, type))
+          .orderBy(desc(memory.createdAt))
+          .limit(1)
+          .get()?.updatedContent ?? "";
+    }
+
+    return latestContent;
+  }
+
+  async getMemoryContext(): Promise<Record<MemoryType, string>> {
+    return this.getLatestMemoryContent(["user", "memory"]);
+  }
+
+  async listNextMemorySummaryWindow(input: {
+    sessionId: string;
+    currentSeq: number;
+    limit: number;
+  }): Promise<ChatMessage[]> {
+    const messageLimit = Math.max(0, Math.trunc(input.limit));
+
+    if (messageLimit === 0) {
+      return [];
+    }
+
+    const currentSeq = Math.trunc(input.currentSeq);
+
+    if (currentSeq <= 0) {
+      return [];
+    }
+
+    const latestSummaryEndMessage = this.db
+      .select({
+        seq: messages.seq,
+      })
+      .from(messages)
+      .innerJoin(memory, eq(memory.endMessageId, messages.id))
+      .where(eq(messages.sessionId, input.sessionId))
+      .orderBy(desc(memory.createdAt))
+      .limit(1)
+      .get();
+
+    return this.db
+      .select()
+      .from(messages)
+      .where(
+        and(
+          eq(messages.sessionId, input.sessionId),
+          latestSummaryEndMessage ? gt(messages.seq, latestSummaryEndMessage.seq) : undefined,
+          lte(messages.seq, currentSeq),
+        ),
+      )
+      .orderBy(asc(messages.seq))
+      .limit(messageLimit)
+      .all()
+      .map(toChatMessage);
   }
 
   async listRecentMessages(sessionId: string, limit: number): Promise<ChatMessage[]> {
@@ -462,7 +581,7 @@ export class UserDO extends DurableObject<Env> {
       .select()
       .from(messages)
       .where(eq(messages.sessionId, sessionId))
-      .orderBy(desc(messages.createdAt))
+      .orderBy(desc(messages.seq))
       .limit(messageLimit)
       .all()
       .map(toChatMessage)

@@ -80,10 +80,17 @@
     "messages": {
       "name": "messages",
       "columns": {
+        "seq": {
+          "name": "seq",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
         "id": {
           "name": "id",
           "type": "text",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
@@ -140,6 +147,21 @@
             "output_token"
           ],
           "isUnique": false
+        },
+        "idx_messages_session_seq": {
+          "name": "idx_messages_session_seq",
+          "columns": [
+            "session_id",
+            "seq"
+          ],
+          "isUnique": false
+        },
+        "idx_messages_id_unique": {
+          "name": "idx_messages_id_unique",
+          "columns": [
+            "id"
+          ],
+          "isUnique": true
         }
       },
       "foreignKeys": {},

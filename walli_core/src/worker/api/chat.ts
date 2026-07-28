@@ -172,6 +172,7 @@ const streamChat = async (
   try {
     prepared = await prepareChatCompletion({
       env: c.env,
+      ctx: c.executionCtx,
       origin,
       userInfo,
       messages: body.messages as ModelMessage[],
@@ -264,7 +265,7 @@ const streamChat = async (
         }
 
         if (part.type === "finish") {
-          await prepared.persistMessages(
+          prepared.persistMessages(
             [
               {
                 role: "assistant",

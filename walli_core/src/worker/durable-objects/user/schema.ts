@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const sessions = sqliteTable(
   "sessions",
@@ -15,7 +15,8 @@ export const sessions = sqliteTable(
 export const messages = sqliteTable(
   "messages",
   {
-    id: text("id").primaryKey(),
+    seq: integer("seq").primaryKey({ autoIncrement: true }),
+    id: text("id").notNull(),
     sessionId: text("session_id").notNull(),
     content: text("content").notNull(),
     inputToken: integer("input_token").notNull(),
@@ -23,7 +24,9 @@ export const messages = sqliteTable(
     createdAt: integer("created_at").notNull(),
   },
   (table) => [
+    uniqueIndex("idx_messages_id_unique").on(table.id),
     index("idx_messages_session_created_at").on(table.sessionId, table.createdAt),
+    index("idx_messages_session_seq").on(table.sessionId, table.seq),
     index("idx_messages_token_usage").on(table.createdAt, table.inputToken, table.outputToken),
   ],
 );

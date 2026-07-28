@@ -33,3 +33,46 @@ export function hasNoPromiseSettledError<const T extends readonly unknown[]>(
 ): results is T & WithoutPromiseSettledError<T> {
   return results.every((result) => !(result instanceof PromiseSettledError));
 }
+
+export type BackgroundExecutionContext = {
+  waitUntil(promise: Promise<unknown>): void;
+};
+
+export const runBackgroundTask = (
+  ctx: BackgroundExecutionContext | undefined,
+  task: Promise<void>,
+) => {
+  const handledTask = task.catch((error) => {
+    console.error(error);
+  });
+
+  if (ctx) {
+    ctx.waitUntil(handledTask);
+    return;
+  }
+
+  void handledTask;
+};
+
+export const createOutputTokenLimitOptions = (
+  modelId: string,
+  maxOutputTokens: number | undefined,
+) => {
+  if (maxOutputTokens === undefined) {
+    return {};
+  }
+
+  if (!/^openai\/(?:gpt-5|o[134](?:-|$))/.test(modelId)) {
+    return {
+      maxOutputTokens,
+    };
+  }
+
+  return {
+    providerOptions: {
+      Unified: {
+        max_completion_tokens: maxOutputTokens,
+      },
+    },
+  };
+};

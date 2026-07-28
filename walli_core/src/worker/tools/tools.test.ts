@@ -327,6 +327,7 @@ describe("chat tools", () => {
     expect(BUILT_IN_TOOLS.map((toolConfig) => toolConfig.name)).toEqual([
       "timestamp",
       "memory_search",
+      "memory_summary",
       "scheduled_task",
       "voice_to_text",
       "text_to_voice",
@@ -473,6 +474,7 @@ describe("chat tools", () => {
     expect(Object.keys(tools)).toEqual([
       "timestamp",
       "memory_search",
+      "memory_summary",
       "scheduled_task",
       "voice_to_text",
       "text_to_voice",
@@ -494,6 +496,7 @@ describe("chat tools", () => {
     expect(Object.keys(tools)).toEqual([
       "timestamp",
       "memory_search",
+      "memory_summary",
       "voice_to_text",
       "text_to_voice",
       "image_to_text",
@@ -523,6 +526,7 @@ describe("chat tools", () => {
     expect(Object.keys(tools)).toEqual([
       "timestamp",
       "memory_search",
+      "memory_summary",
       "voice_to_text",
       "text_to_voice",
       "image_to_text",
@@ -651,6 +655,7 @@ describe("chat tools", () => {
     expect(Object.keys(tools)).toEqual([
       "timestamp",
       "memory_search",
+      "memory_summary",
       "scheduled_task",
       "voice_to_text",
       "text_to_voice",
@@ -1319,6 +1324,153 @@ describe("tools route", () => {
     });
   });
 
+  it("summarizes user profile and long-term memory through the user Durable Object", async () => {
+    const recordMemorySummary = vi.fn(async () => [
+      {
+        id: "memory-1",
+        type: "user",
+        startMessageId: "message-1",
+        endMessageId: "message-20",
+        previousContent: "",
+        updatedContent: "User prefers concise replies.",
+        createdAt: 10,
+      },
+      {
+        id: "memory-2",
+        type: "memory",
+        startMessageId: "message-1",
+        endMessageId: "message-20",
+        previousContent: "",
+        updatedContent: "The user is building Walli memory features.",
+        createdAt: 10,
+      },
+    ]);
+    const getByName = vi.fn(() => ({
+      recordMemorySummary,
+    }));
+    const memoryEnv = {
+      ...env,
+      USER_DO: {
+        getByName,
+      },
+    } as unknown as Env;
+
+    const response = await toolsRoute.request(
+      "/api/tools/memory/summary",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: "user-1",
+          clientPlatform: "telegram",
+          startMessageId: "message-1",
+          endMessageId: "message-20",
+          user: "User prefers concise replies.",
+          memory: "The user is building Walli memory features.",
+        }),
+      },
+      memoryEnv,
+    );
+
+    await expect(response.json()).resolves.toEqual({
+      memories: [
+        {
+          id: "memory-1",
+          type: "user",
+          startMessageId: "message-1",
+          endMessageId: "message-20",
+          previousContent: "",
+          updatedContent: "User prefers concise replies.",
+          createdAt: 10,
+        },
+        {
+          id: "memory-2",
+          type: "memory",
+          startMessageId: "message-1",
+          endMessageId: "message-20",
+          previousContent: "",
+          updatedContent: "The user is building Walli memory features.",
+          createdAt: 10,
+        },
+      ],
+    });
+    expect(response.status).toBe(201);
+    expect(getByName).toHaveBeenCalledWith("telegram:user-1");
+    expect(recordMemorySummary).toHaveBeenCalledWith({
+      startMessageId: "message-1",
+      endMessageId: "message-20",
+      user: "User prefers concise replies.",
+      memory: "The user is building Walli memory features.",
+    });
+  });
+
+  it("allows summarizing only one memory content type", async () => {
+    const recordMemorySummary = vi.fn(async () => [
+      {
+        id: "memory-1",
+        type: "memory",
+        startMessageId: "message-1",
+        endMessageId: "message-20",
+        previousContent: "Previous memory.",
+        updatedContent: "Updated long-term memory.",
+        createdAt: 10,
+      },
+    ]);
+    const getByName = vi.fn(() => ({
+      recordMemorySummary,
+    }));
+    const memoryEnv = {
+      ...env,
+      USER_DO: {
+        getByName,
+      },
+    } as unknown as Env;
+
+    const response = await toolsRoute.request(
+      "/api/tools/memory/summary",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: "user-1",
+          clientPlatform: "telegram",
+          startMessageId: "message-1",
+          endMessageId: "message-20",
+          user: "",
+          memory: "Updated long-term memory.",
+        }),
+      },
+      memoryEnv,
+    );
+
+    await expect(response.json()).resolves.toEqual({
+      memories: [
+        {
+          id: "memory-1",
+          type: "memory",
+          startMessageId: "message-1",
+          endMessageId: "message-20",
+          previousContent: "Previous memory.",
+          updatedContent: "Updated long-term memory.",
+          createdAt: 10,
+        },
+      ],
+    });
+    expect(response.status).toBe(201);
+    expect(recordMemorySummary).toHaveBeenCalledWith({
+      startMessageId: "message-1",
+      endMessageId: "message-20",
+      user: "",
+      memory: "Updated long-term memory.",
+    });
+  });
+
   it.each([60_000, 1_700_000_000_000])(
     "rejects past scheduledAt value %s for one-time tasks",
     async (scheduledAt) => {
@@ -1527,6 +1679,7 @@ describe("settings tool migration", () => {
     expect(settings.builtInTools.map((tool) => tool.name)).toEqual([
       "timestamp",
       "memory_search",
+      "memory_summary",
       "scheduled_task",
       "voice_to_text",
       "text_to_voice",
