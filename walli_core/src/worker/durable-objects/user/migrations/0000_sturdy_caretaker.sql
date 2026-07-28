@@ -3,8 +3,7 @@ CREATE TABLE `memory` (
 	`type` text NOT NULL,
 	`start_message_id` text NOT NULL,
 	`end_message_id` text NOT NULL,
-	`previous_content` text NOT NULL,
-	`updated_content` text NOT NULL,
+	`content` text NOT NULL,
 	`created_at` integer NOT NULL,
 	CONSTRAINT "memory_type_check" CHECK("memory"."type" in ('user', 'memory'))
 );

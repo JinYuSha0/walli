@@ -73,8 +73,7 @@ export const memory = sqliteTable(
     type: text("type", { enum: ["user", "memory"] }).notNull(),
     startMessageId: text("start_message_id").notNull(),
     endMessageId: text("end_message_id").notNull(),
-    previousContent: text("previous_content").notNull(),
-    updatedContent: text("updated_content").notNull(),
+    content: text("content").notNull(),
     createdAt: integer("created_at").notNull(),
   },
   (table) => [

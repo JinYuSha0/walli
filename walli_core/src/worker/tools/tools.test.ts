@@ -1331,8 +1331,7 @@ describe("tools route", () => {
         type: "user",
         startMessageId: "message-1",
         endMessageId: "message-20",
-        previousContent: "",
-        updatedContent: "User prefers concise replies.",
+        content: "User prefers concise replies.",
         createdAt: 10,
       },
       {
@@ -1340,8 +1339,7 @@ describe("tools route", () => {
         type: "memory",
         startMessageId: "message-1",
         endMessageId: "message-20",
-        previousContent: "",
-        updatedContent: "The user is building Walli memory features.",
+        content: "The user is building Walli memory features.",
         createdAt: 10,
       },
     ]);
@@ -1382,8 +1380,7 @@ describe("tools route", () => {
           type: "user",
           startMessageId: "message-1",
           endMessageId: "message-20",
-          previousContent: "",
-          updatedContent: "User prefers concise replies.",
+          content: "User prefers concise replies.",
           createdAt: 10,
         },
         {
@@ -1391,8 +1388,7 @@ describe("tools route", () => {
           type: "memory",
           startMessageId: "message-1",
           endMessageId: "message-20",
-          previousContent: "",
-          updatedContent: "The user is building Walli memory features.",
+          content: "The user is building Walli memory features.",
           createdAt: 10,
         },
       ],
@@ -1414,8 +1410,7 @@ describe("tools route", () => {
         type: "memory",
         startMessageId: "message-1",
         endMessageId: "message-20",
-        previousContent: "Previous memory.",
-        updatedContent: "Updated long-term memory.",
+        content: "Updated long-term memory.",
         createdAt: 10,
       },
     ]);
@@ -1456,8 +1451,7 @@ describe("tools route", () => {
           type: "memory",
           startMessageId: "message-1",
           endMessageId: "message-20",
-          previousContent: "Previous memory.",
-          updatedContent: "Updated long-term memory.",
+          content: "Updated long-term memory.",
           createdAt: 10,
         },
       ],
@@ -1468,6 +1462,68 @@ describe("tools route", () => {
       endMessageId: "message-20",
       user: "",
       memory: "Updated long-term memory.",
+    });
+  });
+
+  it("allows summarizing user profile when long-term memory is empty", async () => {
+    const recordMemorySummary = vi.fn(async () => [
+      {
+        id: "memory-1",
+        type: "user",
+        startMessageId: "message-1",
+        endMessageId: "message-20",
+        content: "User prefers concise replies.",
+        createdAt: 10,
+      },
+    ]);
+    const getByName = vi.fn(() => ({
+      recordMemorySummary,
+    }));
+    const memoryEnv = {
+      ...env,
+      USER_DO: {
+        getByName,
+      },
+    } as unknown as Env;
+
+    const response = await toolsRoute.request(
+      "/api/tools/memory/summary",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: "user-1",
+          clientPlatform: "telegram",
+          startMessageId: "message-1",
+          endMessageId: "message-20",
+          user: "User prefers concise replies.",
+          memory: "",
+        }),
+      },
+      memoryEnv,
+    );
+
+    await expect(response.json()).resolves.toEqual({
+      memories: [
+        {
+          id: "memory-1",
+          type: "user",
+          startMessageId: "message-1",
+          endMessageId: "message-20",
+          content: "User prefers concise replies.",
+          createdAt: 10,
+        },
+      ],
+    });
+    expect(response.status).toBe(201);
+    expect(recordMemorySummary).toHaveBeenCalledWith({
+      startMessageId: "message-1",
+      endMessageId: "message-20",
+      user: "User prefers concise replies.",
+      memory: "",
     });
   });
 

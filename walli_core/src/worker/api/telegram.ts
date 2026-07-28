@@ -47,7 +47,11 @@ import {
   type VoiceToTextContext,
 } from "@worker/tools/tool-media";
 import { createUserDoName } from "@worker/durable-objects/user/types";
-import { allSettledValues, hasNoPromiseSettledError } from "@worker/utils/common";
+import {
+  allSettledValues,
+  hasNoPromiseSettledError,
+  type BackgroundExecutionContext,
+} from "@worker/utils/common";
 
 const telegramChatSchema = z
   .object({
@@ -240,7 +244,11 @@ const getTelegramFilePath = async (token: string, fileId: string) => {
   return filePath;
 };
 
-const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWebhookDeps> => {
+const createTelegramDeps = async (
+  env: Env,
+  origin: string,
+  ctx: BackgroundExecutionContext,
+): Promise<TelegramWebhookDeps> => {
   const token = await getTelegramBotToken(env.APP_KV, env);
 
   if (!token) {
@@ -299,6 +307,7 @@ const createTelegramDeps = async (env: Env, origin: string): Promise<TelegramWeb
       try {
         const result = await runChatCompletion({
           env,
+          ctx,
           origin,
           userInfo: createChatUserInfo({
             userId,
@@ -687,7 +696,7 @@ export const telegramRoute = new Hono<AppBindings>()
     const origin = new URL(c.req.url).origin;
 
     c.executionCtx.waitUntil(
-      createTelegramDeps(c.env, origin)
+      createTelegramDeps(c.env, origin, c.executionCtx)
         .then((deps) => handleTelegramWebhookUpdate(update, deps))
         .catch(() => undefined),
     );

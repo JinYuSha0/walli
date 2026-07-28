@@ -35,15 +35,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "previous_content": {
-          "name": "previous_content",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "updated_content": {
-          "name": "updated_content",
+        "content": {
+          "name": "content",
           "type": "text",
           "primaryKey": false,
           "notNull": true,

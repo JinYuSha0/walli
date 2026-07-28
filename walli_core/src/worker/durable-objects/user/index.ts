@@ -61,8 +61,7 @@ export type MemoryRecord = {
   type: MemoryType;
   startMessageId: string;
   endMessageId: string;
-  previousContent: string;
-  updatedContent: string;
+  content: string;
   createdAt: number;
 };
 
@@ -194,8 +193,7 @@ const toMemoryRecord = (row: MemoryRow): MemoryRecord => ({
   type: row.type,
   startMessageId: row.startMessageId,
   endMessageId: row.endMessageId,
-  previousContent: row.previousContent,
-  updatedContent: row.updatedContent,
+  content: row.content,
   createdAt: row.createdAt,
 });
 
@@ -488,14 +486,12 @@ export class UserDO extends DurableObject<Env> {
       return [];
     }
 
-    const latestContent = this.getLatestMemoryContent(updates.map(([type]) => type));
-    const values = updates.map(([type, updatedContent]) => ({
+    const values = updates.map(([type, content]) => ({
       id: crypto.randomUUID(),
       type,
       startMessageId: input.startMessageId,
       endMessageId: input.endMessageId,
-      previousContent: latestContent[type],
-      updatedContent,
+      content,
       createdAt,
     }));
 
@@ -511,12 +507,12 @@ export class UserDO extends DurableObject<Env> {
     for (const type of types) {
       latestContent[type] =
         this.db
-          .select({ updatedContent: memory.updatedContent })
+          .select({ content: memory.content })
           .from(memory)
           .where(eq(memory.type, type))
           .orderBy(desc(memory.createdAt))
           .limit(1)
-          .get()?.updatedContent ?? "";
+          .get()?.content ?? "";
     }
 
     return latestContent;
@@ -877,6 +873,7 @@ export class UserDO extends DurableObject<Env> {
 
     await runChatCompletion({
       env: this.env,
+      ctx: this.ctx,
       messages: createTaskMessages(task),
       userInfo: notificationChannel
         ? createChatUserInfo({
