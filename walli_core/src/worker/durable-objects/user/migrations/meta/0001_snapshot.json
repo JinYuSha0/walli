@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "dc10dd0b-e386-4ab9-8061-f11ec4917b73",
-  "prevId": "8c7af6d1-1949-4d25-b5d0-2f0090d44ccf",
+  "id": "8c7af6d1-1949-4d25-b5d0-2f0090d44ccf",
+  "prevId": "3685d1a7-7a1f-494c-9e2f-c3eda9d73fc3",
   "tables": {
     "messages": {
       "name": "messages",
@@ -69,44 +69,6 @@
           "isUnique": false
         }
       },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "messages_fts": {
-      "name": "messages_fts",
-      "columns": {
-        "message_id": {
-          "name": "message_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "session_id": {
-          "name": "session_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "role": {
-          "name": "role",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "content": {
-          "name": "content",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},

@@ -1280,7 +1280,7 @@ describe("tools route", () => {
     } as unknown as Env;
 
     const response = await toolsRoute.request(
-      "/api/tools/memory",
+      "/api/tools/memory/search",
       {
         method: "POST",
         headers: {

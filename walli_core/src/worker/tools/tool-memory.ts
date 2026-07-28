@@ -17,27 +17,30 @@ const memorySearchSchema = z
 const normalizeUserDoName = (platform: UserDoClientPlatform, userId: string) =>
   userId.startsWith(`${platform}:`) ? userId : createUserDoName(platform, userId);
 
-export const memoryToolRoute = new Hono<AppBindings>().post("/api/tools/memory", async (c) => {
-  const result = memorySearchSchema.safeParse(await c.req.json().catch(() => null));
+export const memoryToolRoute = new Hono<AppBindings>().post(
+  "/api/tools/memory/search",
+  async (c) => {
+    const result = memorySearchSchema.safeParse(await c.req.json().catch(() => null));
 
-  if (!result.success) {
-    return c.json(
-      {
-        error: "Invalid body",
-        issues: z.treeifyError(result.error),
-      },
-      400,
+    if (!result.success) {
+      return c.json(
+        {
+          error: "Invalid body",
+          issues: z.treeifyError(result.error),
+        },
+        400,
+      );
+    }
+
+    const userDO = c.env.USER_DO.getByName(
+      normalizeUserDoName(result.data.clientPlatform, result.data.userId),
     );
-  }
+    const memories = await userDO.searchMemory({
+      query: result.data.query,
+      sessionId: result.data.sessionId,
+      limit: result.data.limit,
+    });
 
-  const userDO = c.env.USER_DO.getByName(
-    normalizeUserDoName(result.data.clientPlatform, result.data.userId),
-  );
-  const memories = await userDO.searchMemory({
-    query: result.data.query,
-    sessionId: result.data.sessionId,
-    limit: result.data.limit,
-  });
-
-  return c.json({ memories });
-});
+    return c.json({ memories });
+  },
+);

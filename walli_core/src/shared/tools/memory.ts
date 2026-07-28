@@ -8,7 +8,7 @@ export const memoryTool = {
     "Search the user's historical chat messages and long-term memory using FTS5 relevance search. Use this when prior conversation details may help answer the current request.",
   invocation: {
     type: "api",
-    url: "/api/tools/memory",
+    url: "/api/tools/memory/search",
     method: "POST",
     headers: [],
   },
@@ -46,7 +46,8 @@ export const memoryTool = {
       {
         name: "limit",
         type: "number",
-        description: "Maximum number of memory results to return. Defaults to 5 and is capped at 20.",
+        description:
+          "Maximum number of memory results to return. Defaults to 5 and is capped at 20.",
         required: false,
         defaultValue: "5",
       },
