@@ -3,9 +3,9 @@ import type { ToolConfig } from "../const";
 
 export const memoryTool = {
   enabled: true,
-  name: "memory",
+  name: "memory_search",
   description:
-    "Search the user's long-term chat memory using FTS5 relevance search. Use this when prior conversation details may help answer the current request.",
+    "Search the user's historical chat messages and long-term memory using FTS5 relevance search. Use this when prior conversation details may help answer the current request.",
   invocation: {
     type: "api",
     url: "/api/tools/memory",

@@ -1,9 +1,45 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "dc10dd0b-e386-4ab9-8061-f11ec4917b73",
-  "prevId": "8c7af6d1-1949-4d25-b5d0-2f0090d44ccf",
+  "id": "8b084e31-6155-4c2e-9f46-bbf8984a245e",
+  "prevId": "dc10dd0b-e386-4ab9-8061-f11ec4917b73",
   "tables": {
+    "memory": {
+      "name": "memory",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "memory_type_check": {
+          "name": "memory_type_check",
+          "value": "\"memory\".\"type\" in ('user', 'memory')"
+        }
+      }
+    },
     "messages": {
       "name": "messages",
       "columns": {

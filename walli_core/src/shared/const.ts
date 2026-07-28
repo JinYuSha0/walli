@@ -384,10 +384,6 @@ export const DEFAULT_SETTINGS = {
       tags: ["text-generation", "tool-calling"],
     },
     {
-      name: "@cf/zai-org/glm-4.7-flash",
-      tags: ["text-generation", "tool-calling"],
-    },
-    {
       name: "openai/gpt-4o-transcribe",
       tags: ["speech-to-text"],
     },

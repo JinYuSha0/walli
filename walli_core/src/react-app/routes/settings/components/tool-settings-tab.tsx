@@ -461,30 +461,11 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
   return (
     <form className="grid gap-8" onSubmit={form.handleSubmit(onSubmit)}>
       <section className="grid gap-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="grid gap-1">
-            <h2 className="text-sm font-medium">{t("toolSettingsTitle")}</h2>
-            <p className="text-sm text-muted-foreground">
-              {t("toolSettingsDescription")}
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              const formId = createToolFormId();
-
-              append({
-                ...createEmptyTool(),
-                formId,
-              });
-              setEditingToolId(formId);
-            }}
-            disabled={pending}
-          >
-            <Plus />
-            {t("toolSettingsAddTool")}
-          </Button>
+        <div className="grid gap-1">
+          <h2 className="text-sm font-medium">{t("toolSettingsTitle")}</h2>
+          <p className="text-sm text-muted-foreground">
+            {t("toolSettingsDescription")}
+          </p>
         </div>
 
         <div className="grid gap-4">
@@ -1129,6 +1110,27 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
             </div>
           )}
         </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="h-auto w-full justify-center gap-3 border-dashed py-4 text-sm"
+          onClick={() => {
+            const formId = createToolFormId();
+
+            append({
+              ...createEmptyTool(),
+              formId,
+            });
+            setEditingToolId(formId);
+          }}
+          disabled={pending}
+        >
+          <span className="grid size-8 place-items-center rounded-full border border-border bg-muted">
+            <Plus className="size-5" />
+          </span>
+          {t("toolSettingsAddTool")}
+        </Button>
       </section>
 
       <div className="flex justify-end gap-2 border-t border-border pt-8">

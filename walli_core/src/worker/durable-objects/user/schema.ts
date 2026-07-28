@@ -1,4 +1,5 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { check, index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const sessions = sqliteTable(
   "sessions",
@@ -68,9 +69,22 @@ export const scheduledTasks = sqliteTable(
   ],
 );
 
+export const memory = sqliteTable(
+  "memory",
+  {
+    id: text("id").primaryKey(),
+    type: text("type", { enum: ["user", "memory"] }).notNull(),
+    content: text("content").notNull(),
+  },
+  (table) => [
+    check("memory_type_check", sql`${table.type} in ('user', 'memory')`),
+  ],
+);
+
 export const userDoSchema = {
   sessions,
   messages,
   messagesFts,
   scheduledTasks,
+  memory,
 };

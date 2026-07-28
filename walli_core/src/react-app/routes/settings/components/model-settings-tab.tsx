@@ -191,22 +191,11 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
   return (
     <form className="grid gap-8" onSubmit={form.handleSubmit(onSubmit)}>
       <section className="grid gap-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="grid gap-1">
-            <h2 className="text-sm font-medium">{t("modelSettingsTitle")}</h2>
-            <p className="text-sm text-muted-foreground">
-              {t("modelSettingsDescription")}
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => append(createEmptyModel())}
-            disabled={pending}
-          >
-            <Plus />
-            {t("modelSettingsAddModel")}
-          </Button>
+        <div className="grid gap-1">
+          <h2 className="text-sm font-medium">{t("modelSettingsTitle")}</h2>
+          <p className="text-sm text-muted-foreground">
+            {t("modelSettingsDescription")}
+          </p>
         </div>
 
         <div className="grid gap-4">
@@ -378,6 +367,19 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
             </div>
           )}
         </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="h-auto w-full justify-center gap-3 border-dashed py-4 text-sm"
+          onClick={() => append(createEmptyModel())}
+          disabled={pending}
+        >
+          <span className="grid size-8 place-items-center rounded-full border border-border bg-muted">
+            <Plus className="size-5" />
+          </span>
+          {t("modelSettingsAddModel")}
+        </Button>
       </section>
 
       <section className="grid gap-4 border-t border-border pt-8">
