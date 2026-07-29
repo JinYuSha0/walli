@@ -323,6 +323,7 @@ const createTelegramDeps = async (
           session: {
             store: userDO,
             client: "telegram",
+            sessionId: "telegram",
           },
           excludeToolNames: [...BUILT_IN_MEDIA_TOOL_NAMES],
           output: Output.object({

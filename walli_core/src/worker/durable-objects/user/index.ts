@@ -3,6 +3,7 @@ import { and, asc, desc, eq, gt, gte, lt, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/durable-sqlite";
 import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import type { ModelMessage } from "ai";
+import { clientPlatformSchema } from "@shared/client";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
 import { createChatUserInfo, runChatCompletion } from "../../lib/chat-runner";
@@ -330,9 +331,14 @@ export class UserDO extends DurableObject<Env> {
 
   async createSession(input: CreateChatSessionInput = {}): Promise<ChatSession> {
     const notificationChannel = parseUserDoNotificationChannel(this.ctx.id.name);
+    const client = input.client?.trim() || notificationChannel?.type || "unknown";
+    const clientPlatformResult = clientPlatformSchema.safeParse(client);
 
-    if (notificationChannel && !(await isMultiSessionClient(this.env, notificationChannel.type))) {
-      return this.getOrCreateSingleSession(notificationChannel.type, input.summary);
+    if (
+      clientPlatformResult.success &&
+      !(await isMultiSessionClient(this.env, clientPlatformResult.data))
+    ) {
+      return this.getOrCreateSingleSession(clientPlatformResult.data, input.summary);
     }
 
     const now = Date.now();
@@ -340,7 +346,7 @@ export class UserDO extends DurableObject<Env> {
       .insert(sessions)
       .values({
         id: input.id ?? crypto.randomUUID(),
-        client: input.client?.trim() || notificationChannel?.type || "unknown",
+        client,
         summary: input.summary?.trim() ?? "",
         createdAt: now,
       })
