@@ -14,8 +14,9 @@ export const EMPTY_MEMORY_CONTEXT: ChatMemoryContext = {
   memory: "",
 };
 
-const USER_PROFILE_SUMMARY_MAX_LENGTH = 500;
-const LONG_TERM_MEMORY_SUMMARY_MAX_LENGTH = 800;
+const USER_PROFILE_SUMMARY_MAX_LENGTH = 1375;
+const LONG_TERM_MEMORY_SUMMARY_MAX_LENGTH = 2200;
+const MAX_TOKEN_LIMIT = 2300;
 const memorySummaryOutputSchema = z.object({
   user: z.string(),
   memory: z.string(),
@@ -73,6 +74,7 @@ export const summarizeChatMemory = async (input: {
       `The memory field is long-term memory. Keep it within ${LONG_TERM_MEMORY_SUMMARY_MAX_LENGTH} characters. Include only durable facts, decisions, agreements, and unresolved tasks that will remain useful later.`,
       "If one field does not need to be updated, return an empty string for that field.",
       "Do not write a chronological transcript. Do not preserve one-off requests. Do not invent information.",
+      'Return JSON only with this shape: {"user":"...","memory":"..."}.',
     ].join("\n"),
     messages: [
       {
@@ -94,10 +96,7 @@ export const summarizeChatMemory = async (input: {
       name: "memory_summary",
       description: "User profile and long-term memory updates summarized from chat history.",
     }),
-    ...createOutputTokenLimitOptions(
-      modelId,
-      USER_PROFILE_SUMMARY_MAX_LENGTH + LONG_TERM_MEMORY_SUMMARY_MAX_LENGTH,
-    ),
+    ...createOutputTokenLimitOptions(modelId, MAX_TOKEN_LIMIT),
   });
 
   return {
