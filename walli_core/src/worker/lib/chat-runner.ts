@@ -58,7 +58,7 @@ export type RunChatOptions = {
   toolsEnabled?: boolean;
   output?: Output.Output;
   maxOutputTokens?: number;
-  session?: RunChatSessionOptions;
+  session: RunChatSessionOptions;
 };
 
 type ChatSessionStore = PickFunctions<Omit<UserDO, keyof DurableObject>>;
@@ -295,15 +295,13 @@ export const prepareChatCompletion = async ({
   const usageLimitSettings = session
     ? await getClientUsageLimit(env.APP_KV, session.client)
     : undefined;
-  const chatSession = session
-    ? session.sessionId
-      ? await session.store.getOrCreateSession({
-          id: session.sessionId,
-          client: session.client,
-          summary: session.summary,
-        })
-      : await session.store.createSession({ client: session.client, summary: session.summary })
-    : undefined;
+  const chatSession = session?.sessionId
+    ? await session.store.getOrCreateSession({
+        id: session.sessionId,
+        client: session.client,
+        summary: session.summary,
+      })
+    : await session.store.createSession({ client: session.client, summary: session.summary });
   const shouldCheckUserUsageLimit =
     usageLimitSettings !== undefined &&
     (usageLimitSettings.perUserDailyInputLimit > 0 ||

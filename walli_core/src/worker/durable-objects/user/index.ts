@@ -138,7 +138,6 @@ type ChatSessionRow = typeof sessions.$inferSelect;
 type ChatMessageRow = typeof messages.$inferSelect;
 type MemoryRow = typeof memory.$inferSelect;
 
-const SINGLE_SESSION_ID = "single";
 const SYSTEM_CONVERSATION_CLEANUP_TASK_TYPE = "system:conversation-cleanup";
 const getConversationCleanupRetentionDays = (autoDeletePeriod: string) => {
   switch (autoDeletePeriod) {
@@ -329,7 +328,7 @@ export class UserDO extends DurableObject<Env> {
     });
   }
 
-  async createSession(input: CreateChatSessionInput = {}): Promise<ChatSession> {
+  async createSession(input: CreateChatSessionInput): Promise<ChatSession> {
     const notificationChannel = parseUserDoNotificationChannel(this.ctx.id.name);
     const client = input.client?.trim() || notificationChannel?.type || "unknown";
     const clientPlatformResult = clientPlatformSchema.safeParse(client);
@@ -338,7 +337,11 @@ export class UserDO extends DurableObject<Env> {
       clientPlatformResult.success &&
       !(await isMultiSessionClient(this.env, clientPlatformResult.data))
     ) {
-      return this.getOrCreateSingleSession(clientPlatformResult.data, input.summary);
+      return this.getOrCreateSingleSession(
+        input.id ?? crypto.randomUUID(),
+        clientPlatformResult.data,
+        input.summary,
+      );
     }
 
     const now = Date.now();
@@ -673,13 +676,8 @@ export class UserDO extends DurableObject<Env> {
     };
   }
 
-  private getOrCreateSingleSession(client: string, summary?: string): ChatSession {
-    const savedSession = this.db
-      .select()
-      .from(sessions)
-      .where(eq(sessions.id, SINGLE_SESSION_ID))
-      .limit(1)
-      .get();
+  private getOrCreateSingleSession(id: string, client: string, summary?: string): ChatSession {
+    const savedSession = this.db.select().from(sessions).where(eq(sessions.id, id)).limit(1).get();
 
     if (savedSession) {
       return toChatSession(savedSession);
@@ -688,7 +686,7 @@ export class UserDO extends DurableObject<Env> {
     const row = this.db
       .insert(sessions)
       .values({
-        id: SINGLE_SESSION_ID,
+        id,
         client,
         summary: summary?.trim() ?? "",
         createdAt: Date.now(),
@@ -876,26 +874,25 @@ export class UserDO extends DurableObject<Env> {
     }
 
     const notificationChannel = parseUserDoNotificationChannel(this.ctx.id.name);
+    const taskObj = toScheduledTask(task);
+
+    if (!notificationChannel || !taskObj.sessionId) return;
 
     await runChatCompletion({
       env: this.env,
       ctx: this.ctx,
       messages: createTaskMessages(task),
-      userInfo: notificationChannel
-        ? createChatUserInfo({
-            userId: task.userId,
-            clientPlatform: notificationChannel.type,
-            notificationChannel,
-          })
-        : undefined,
-      session: notificationChannel
-        ? {
-            store: this,
-            client: notificationChannel.type,
-            sessionId: toScheduledTask(task).sessionId ?? undefined,
-            summary: task.description,
-          }
-        : undefined,
+      userInfo: createChatUserInfo({
+        userId: task.userId,
+        clientPlatform: notificationChannel.type,
+        notificationChannel,
+      }),
+      session: {
+        store: this,
+        client: notificationChannel.type,
+        sessionId: taskObj.sessionId,
+        summary: task.description,
+      },
       excludeToolNames: ["scheduled_task"],
       extraTools: createNotificationTools(this.env, notificationChannel),
     });
