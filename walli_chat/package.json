@@ -17,6 +17,7 @@
     "@chenglou/pretext": "^0.0.8",
     "@lit-labs/preact-signals": "^1.0.3",
     "@preact/signals-core": "^1.14.4",
-    "lit": "^3.3.3"
+    "lit": "^3.3.3",
+    "marked": "^18.0.7"
   }
 }
