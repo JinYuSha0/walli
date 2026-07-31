@@ -1,5 +1,6 @@
 packages:
   - walli_core
+  - walli_chat
 
 # Pre-approve build scripts for packages used by the Cloudflare stack.
 allowBuilds:

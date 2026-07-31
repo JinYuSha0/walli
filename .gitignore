@@ -79,3 +79,6 @@ coverage/
 
 # Local agent learnings
 .learnings/
+
+# example
+example/

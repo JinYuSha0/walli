@@ -9,6 +9,7 @@
     "check:walli_core": "pnpm --filter walli_core run check",
     "deploy:walli_core": "pnpm --filter walli_core run deploy",
     "dev:walli_core": "pnpm --filter walli_core run dev",
+    "dev:walli_chat": "pnpm --filter walli_chat run dev",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint:walli_core": "pnpm --filter walli_core run lint",
