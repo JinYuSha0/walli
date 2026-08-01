@@ -2,12 +2,15 @@ import { defineConfig } from "vite";
 import type { Plugin } from "vite";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { visualizer } from "rollup-plugin-visualizer";
 import { createGenerator, presetWind3, type PresetWind3Theme } from "unocss";
 import { walliUnoTheme } from "./uno.theme.ts";
 
 const walliChatUnoCssId = "virtual:walli-chat-uno-styles";
 const resolvedWalliChatUnoCssId = `\0${walliChatUnoCssId}`;
-const walliChatElementFile = fileURLToPath(new URL("./src/components/walli-chat.ts", import.meta.url));
+const walliChatElementFile = fileURLToPath(
+  new URL("./src/components/walli-chat.ts", import.meta.url),
+);
 const walliChatStyleSourceFiles = [
   walliChatElementFile,
   fileURLToPath(new URL("./src/components/walli-message.ts", import.meta.url)),
@@ -59,9 +62,18 @@ function walliChatUnoCss(): Plugin {
   };
 }
 
-export default defineConfig({
-  plugins: [walliChatUnoCss()],
+export default defineConfig(({ mode }) => ({
+  plugins: [
+    walliChatUnoCss(),
+    mode === "analyze" &&
+      visualizer({
+        filename: "dist/stats.html",
+        gzipSize: true,
+        brotliSize: true,
+        template: "treemap",
+      }),
+  ],
   server: {
     port: 5174,
   },
-});
+}));

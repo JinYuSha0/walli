@@ -30,21 +30,18 @@ export class WalliChatElement extends SignalWatcher(LitElement) {
   private resizeObserver?: ResizeObserver;
   private scheduledRaf: number | null = null;
   private frame: ConversationFrame | null = null;
-
-  @state()
-  private accessor containerSize: Size = {
+  private viewportElement: HTMLDivElement | null = null;
+  private containerSize: Size = {
     width: this.parentElement?.clientWidth ?? 0,
     height: this.parentElement?.clientHeight ?? 0,
   };
-
-  @state()
-  private accessor viewportScrollTop = 0;
-
-  @state()
-  private accessor contentSize: Size = {
+  private contentSize: Size = {
     width: 0,
     height: 0,
   };
+  private viewportScrollTop = 0;
+  private mountedStart = 0;
+  private mountedEnd = 0;
 
   @state()
   private accessor visibleMessages: VisibleMessage[] = [];
@@ -64,6 +61,8 @@ export class WalliChatElement extends SignalWatcher(LitElement) {
   }
 
   override firstUpdated() {
+    this.viewportElement = this.renderRoot.querySelector<HTMLDivElement>(".chat-viewport");
+
     const container = this.parentElement ?? this;
     this.resizeObserver?.observe(container);
     this.scheduleProjection();
@@ -77,13 +76,19 @@ export class WalliChatElement extends SignalWatcher(LitElement) {
     }
     this.resizeObserver?.disconnect();
     this.resizeObserver = undefined;
+    this.viewportElement = null;
     super.disconnectedCallback();
   }
 
   override createRenderRoot() {
     const renderRoot = super.createRenderRoot();
+    const hostStyle = document.createElement("style");
+    hostStyle.textContent = `
+      :host{display:block;width:100%;height:100%;contain:layout paint style;}
+    `;
     const unoStyle = document.createElement("style");
     unoStyle.textContent = walliChatUnoCss;
+    renderRoot.append(hostStyle);
     renderRoot.append(unoStyle);
     return renderRoot;
   }
@@ -106,7 +111,8 @@ export class WalliChatElement extends SignalWatcher(LitElement) {
   private projectFrame(): void {
     const viewportWidth = this.containerSize.width;
     const viewportHeight = this.containerSize.height;
-    const scrollTop = this.viewportScrollTop;
+    const scrollTop = this.viewportElement?.scrollTop ?? this.viewportScrollTop;
+    this.viewportScrollTop = scrollTop;
     const occlusionBannerHeight = getOcclusionBannerHeight(viewportHeight);
 
     const chatWidth = getMaxChatWidth(viewportWidth);
@@ -127,14 +133,37 @@ export class WalliChatElement extends SignalWatcher(LitElement) {
     );
 
     this.frame = frame;
-    this.contentSize = {
-      width: frame.chatWidth,
-      height: frame.totalHeight,
-    };
-    this.projectVisibleRows(frame, start, end);
+    if (
+      this.contentSize.width !== frame.chatWidth ||
+      this.contentSize.height !== frame.totalHeight
+    ) {
+      this.contentSize = {
+        width: frame.chatWidth,
+        height: frame.totalHeight,
+      };
+      this.updateCanvasSize(frame);
+    }
+    this.projectVisibleRows(frame, start, end, !canReuseFrame);
   }
 
-  private projectVisibleRows(frame: ConversationFrame, start: number, end: number): void {
+  private updateCanvasSize(frame: ConversationFrame): void {
+    const canvas = this.renderRoot.querySelector<HTMLDivElement>(".chat-canvas");
+    if (canvas === null) return;
+
+    canvas.style.width = `${frame.chatWidth}px`;
+    canvas.style.height = `${frame.totalHeight}px`;
+  }
+
+  private projectVisibleRows(
+    frame: ConversationFrame,
+    start: number,
+    end: number,
+    force: boolean,
+  ): void {
+    if (!force && start === this.mountedStart && end === this.mountedEnd) {
+      return;
+    }
+
     const visibleMessages: VisibleMessage[] = [];
     for (let index = start; index < end; index++) {
       visibleMessages.push({
@@ -142,6 +171,9 @@ export class WalliChatElement extends SignalWatcher(LitElement) {
         message: frame.messages[index]!,
       });
     }
+
+    this.mountedStart = start;
+    this.mountedEnd = end;
     this.visibleMessages = visibleMessages;
   }
 
@@ -149,10 +181,7 @@ export class WalliChatElement extends SignalWatcher(LitElement) {
     return html`
       <main class="relative h-full w-full overflow-clip bg-background text-foreground font-sans">
         <div class="chat-viewport absolute inset-0 overflow-auto" @scroll=${this.handleScroll}>
-          <div
-            class="chat-canvas relative mx-auto min-h-full"
-            style=${`width: ${this.contentSize.width}px; height: ${this.contentSize.height}px;`}
-          >
+          <div class="chat-canvas relative mx-auto min-h-full">
             ${this.visibleMessages.map(
               ({ index, message }) =>
                 html`<walli-message .message=${message} data-index=${index}></walli-message>`,

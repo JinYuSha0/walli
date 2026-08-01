@@ -56,6 +56,8 @@ const INLINE_CODE_FONT = `600 12px ${MONO_FAMILY}`;
 const INLINE_CODE_EXTRA_WIDTH = 12;
 const IMAGE_FONT = `700 11px ${SANS_FAMILY}`;
 const IMAGE_EXTRA_WIDTH = 14;
+const IMAGE_BLOCK_WIDTH_RATIO = 0.8;
+const DEFAULT_IMAGE_ASPECT_RATIO = 16 / 9;
 const MARKER_FONT = `600 11px ${MONO_FAMILY}`;
 const BODY_FRAGMENT_CLASS =
   "inline-block whitespace-pre font-sans text-[14px] font-normal leading-none text-foreground align-baseline";
@@ -67,6 +69,8 @@ const INLINE_CODE_FRAGMENT_CLASS =
   "inline-block whitespace-pre rounded-[8px] bg-secondary px-[6px] pt-[2px] pb-[3px] font-mono text-[12px] font-semibold leading-none text-secondary-foreground align-baseline";
 const IMAGE_CHIP_FRAGMENT_CLASS =
   "inline-flex min-h-[18px] translate-y-px items-center rounded-full bg-accent px-[7px] font-sans text-[11px] font-bold leading-none text-accent-foreground align-baseline";
+const IMAGE_FRAGMENT_CLASS =
+  "inline-block h-[18px] w-[48px] translate-y-px rounded-[6px] bg-muted object-cover align-baseline ring-1 ring-border";
 const LINK_FRAGMENT_CLASS = "text-primary underline decoration-1 underline-offset-[0.14em]";
 const MARKER_CLASS =
   "absolute whitespace-pre font-mono text-[11px] font-semibold leading-none text-muted-foreground";
@@ -91,6 +95,8 @@ type InlinePiece = {
   extraWidth: number;
   font: string;
   href: string | null;
+  imageAlt: string | null;
+  imageSrc: string | null;
   text: string;
 };
 
@@ -108,6 +114,8 @@ type PreparedInlineBlock = PreparedBlockBase & {
   classNames: string[];
   flow: PreparedRichInline;
   hrefs: Array<string | null>;
+  imageAlts: Array<string | null>;
+  imageSrcs: Array<string | null>;
   lineHeight: number;
 };
 
@@ -117,12 +125,20 @@ type PreparedCodeBlock = PreparedBlockBase & {
   prepared: PreparedTextWithSegments;
 };
 
+type PreparedImageBlock = PreparedBlockBase & {
+  alt: string;
+  aspectRatio: number;
+  kind: "image";
+  src: string;
+};
+
 type PreparedRuleBlock = PreparedBlockBase & {
   kind: "rule";
   height: number;
 };
 
-type PreparedBlock = PreparedInlineBlock | PreparedCodeBlock | PreparedRuleBlock;
+type PreparedBlock =
+  PreparedInlineBlock | PreparedCodeBlock | PreparedImageBlock | PreparedRuleBlock;
 
 export type PreparedChatMessage = {
   blocks: PreparedBlock[];
@@ -130,9 +146,12 @@ export type PreparedChatMessage = {
 };
 
 export type InlineFragmentLayout = {
+  alt: string | null;
   className: string;
   href: string | null;
+  kind: "image" | "text";
   leadingGap: number;
+  src: string | null;
   text: string;
 };
 
@@ -158,12 +177,17 @@ type CodeBlockFrame = BlockFrameBase & {
   width: number;
 };
 
+type ImageBlockFrame = BlockFrameBase & {
+  kind: "image";
+  width: number;
+};
+
 type RuleBlockFrame = BlockFrameBase & {
   kind: "rule";
   width: number;
 };
 
-type BlockFrame = InlineBlockFrame | CodeBlockFrame | RuleBlockFrame;
+type BlockFrame = InlineBlockFrame | CodeBlockFrame | ImageBlockFrame | RuleBlockFrame;
 
 type InlineBlockLayout = {
   contentLeft: number;
@@ -196,6 +220,20 @@ type CodeBlockLayout = {
   width: number;
 };
 
+type ImageBlockLayout = {
+  alt: string;
+  contentLeft: number;
+  height: number;
+  kind: "image";
+  markerClassName: string | null;
+  markerLeft: number | null;
+  markerText: string | null;
+  quoteRailLefts: number[];
+  src: string;
+  top: number;
+  width: number;
+};
+
 type RuleBlockLayout = {
   contentLeft: number;
   height: number;
@@ -208,7 +246,7 @@ type RuleBlockLayout = {
   width: number;
 };
 
-export type BlockLayout = InlineBlockLayout | CodeBlockLayout | RuleBlockLayout;
+export type BlockLayout = InlineBlockLayout | CodeBlockLayout | ImageBlockLayout | RuleBlockLayout;
 
 export type MessageFrame = {
   blocks: BlockFrame[];
@@ -391,7 +429,12 @@ function parseBlockTokens(tokens: readonly Token[], ctx: ParseContext): Prepared
       }
 
       case "paragraph": {
-        appendBlockGroup(blocks, buildInlineBlocks(token.tokens ?? [], "body", ctx), BLOCK_GAP);
+        const imageBlock = buildImageBlockFromParagraph(token.tokens ?? [], ctx);
+        appendBlockGroup(
+          blocks,
+          imageBlock === null ? buildInlineBlocks(token.tokens ?? [], "body", ctx) : [imageBlock],
+          BLOCK_GAP,
+        );
         continue;
       }
 
@@ -575,6 +618,8 @@ function buildPreparedInlineBlock(
       })),
     ),
     hrefs: pieces.map((piece) => piece.href),
+    imageAlts: pieces.map((piece) => piece.imageAlt),
+    imageSrcs: pieces.map((piece) => piece.imageSrc),
     kind: "inline",
     lineHeight: lineHeightForVariant(variant),
   };
@@ -591,12 +636,46 @@ function buildCodeBlock(text: string, ctx: ParseContext): PreparedCodeBlock {
   };
 }
 
+function buildImageBlockFromParagraph(
+  tokens: readonly Token[],
+  ctx: ParseContext,
+): PreparedImageBlock | null {
+  if (tokens.length !== 1) return null;
+
+  const token = tokens[0]!;
+  if (token.type !== "image") return null;
+
+  const src = parseMarkdownHref(token.href);
+  if (src === null) return null;
+
+  return {
+    ...createBlockBase(ctx),
+    alt: token.text.length > 0 ? token.text : "image",
+    aspectRatio: resolveImageAspectRatio(src),
+    kind: "image",
+    src,
+  };
+}
+
 function buildRuleBlock(ctx: ParseContext): PreparedRuleBlock {
   return {
     ...createBlockBase(ctx),
     height: RULE_HEIGHT,
     kind: "rule",
   };
+}
+
+function resolveImageAspectRatio(src: string): number {
+  const match = src.match(/\/(\d{2,5})\/(\d{2,5})(?:[/?#]|$)/);
+  if (match === null) return DEFAULT_IMAGE_ASPECT_RATIO;
+
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return DEFAULT_IMAGE_ASPECT_RATIO;
+  }
+
+  return width / height;
 }
 
 function createBlockBase(ctx: ParseContext): PreparedBlockBase {
@@ -688,7 +767,7 @@ function collectInlinePieceLines(
         }
 
         case "image": {
-          pushPiece(createImagePiece(token.text.length > 0 ? token.text : token.href));
+          pushPiece(createImagePiece(token.href, token.text));
           continue;
         }
 
@@ -739,6 +818,8 @@ function createTextPiece(
     extraWidth: 0,
     font: resolveTextFont(variant, marks),
     href: marks.href,
+    imageAlt: null,
+    imageSrc: null,
     text,
   };
 }
@@ -752,18 +833,25 @@ function createCodePiece(text: string): InlinePiece | null {
     extraWidth: INLINE_CODE_EXTRA_WIDTH,
     font: INLINE_CODE_FONT,
     href: null,
+    imageAlt: null,
+    imageSrc: null,
     text,
   };
 }
 
-function createImagePiece(text: string): InlinePiece {
+function createImagePiece(src: string | null | undefined, alt: string): InlinePiece {
+  const safeSrc = parseMarkdownHref(src);
+  const label = alt.length > 0 ? alt : "image";
+
   return {
     breakMode: "never",
-    className: IMAGE_CHIP_FRAGMENT_CLASS,
+    className: safeSrc === null ? IMAGE_CHIP_FRAGMENT_CLASS : IMAGE_FRAGMENT_CLASS,
     extraWidth: IMAGE_EXTRA_WIDTH,
     font: IMAGE_FONT,
     href: null,
-    text: text.length > 0 ? text : "image",
+    imageAlt: label,
+    imageSrc: safeSrc,
+    text: "image",
   };
 }
 
@@ -773,7 +861,9 @@ function canMergeInlinePieces(a: InlinePiece, b: InlinePiece): boolean {
     a.className === b.className &&
     a.extraWidth === b.extraWidth &&
     a.font === b.font &&
-    a.href === b.href
+    a.href === b.href &&
+    a.imageAlt === b.imageAlt &&
+    a.imageSrc === b.imageSrc
   );
 }
 
@@ -1003,6 +1093,22 @@ function layoutBlockFrame(block: PreparedBlock, contentWidth: number, top: numbe
       };
     }
 
+    case "image": {
+      const availableWidth = Math.max(1, contentWidth - block.contentLeft);
+      const width = Math.max(1, Math.round(availableWidth * IMAGE_BLOCK_WIDTH_RATIO));
+      return {
+        contentLeft: block.contentLeft,
+        height: Math.max(1, Math.round(width / block.aspectRatio)),
+        kind: "image",
+        markerClassName: block.markerClassName,
+        markerLeft: block.markerLeft,
+        markerText: block.markerText,
+        quoteRailLefts: block.quoteRailLefts,
+        top,
+        width,
+      };
+    }
+
     case "rule": {
       return {
         contentLeft: block.contentLeft,
@@ -1024,6 +1130,8 @@ function getUsedBlockWidth(block: BlockFrame): number {
     case "inline":
       return block.contentLeft + block.usedWidth;
     case "code":
+      return block.contentLeft + block.width;
+    case "image":
       return block.contentLeft + block.width;
     case "rule":
       return block.contentLeft + block.width;
@@ -1050,9 +1158,12 @@ function materializeBlockLayout(
         const line = materializeRichInlineLineRange(block.flow, range);
         lines.push({
           fragments: line.fragments.map((fragment) => ({
+            alt: block.imageAlts[fragment.itemIndex] ?? null,
             className: block.classNames[fragment.itemIndex]!,
             href: block.hrefs[fragment.itemIndex] ?? null,
+            kind: block.imageSrcs[fragment.itemIndex] === null ? "text" : "image",
             leadingGap: fragment.gapBefore,
+            src: block.imageSrcs[fragment.itemIndex] ?? null,
             text: fragment.text,
           })),
           width: line.width,
@@ -1090,6 +1201,23 @@ function materializeBlockLayout(
         quoteRailLefts: frame.quoteRailLefts,
         top: frame.top,
         usedWidth: frame.width,
+        width: frame.width,
+      };
+    }
+
+    case "image": {
+      if (block.kind !== "image") throw new Error("Image block/frame mismatch");
+      return {
+        alt: block.alt,
+        contentLeft: frame.contentLeft,
+        height: frame.height,
+        kind: "image",
+        markerClassName: frame.markerClassName,
+        markerLeft: frame.markerLeft,
+        markerText: frame.markerText,
+        quoteRailLefts: frame.quoteRailLefts,
+        src: block.src,
+        top: frame.top,
         width: frame.width,
       };
     }

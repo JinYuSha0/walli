@@ -6,9 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "analyze": "tsc && vite build --mode analyze",
     "preview": "vite preview"
   },
   "devDependencies": {
+    "rollup-plugin-visualizer": "^7.0.1",
     "typescript": "~6.0.2",
     "unocss": "^66.7.5",
     "vite": "^8.2.0"
