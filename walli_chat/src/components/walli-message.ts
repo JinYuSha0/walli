@@ -1,39 +1,35 @@
+import { html, render, type TemplateResult } from "lit";
 import { customElement } from "lit/decorators.js";
+import { MESSAGE_SIDE_PADDING } from "../core/layout-config";
 import {
+  type BlockLayout,
   materializeMessageBlocks,
-  MESSAGE_SIDE_PADDING,
   type ChatMessageInstance,
   type MessageFrame,
 } from "../markdown-chat.model";
-import { createMessageBlockElement } from "./blocks";
-
-const MESSAGE_ROW_CLASS = "absolute left-0 flex w-full box-border";
-const MESSAGE_BUBBLE_CLASS = "relative max-w-full flex-none";
-const USER_BUBBLE_CLASS = "rounded-2xl bg-secondary text-secondary-foreground shadow-lg";
-const ASSISTANT_BUBBLE_CLASS = "rounded-none text-foreground";
+import { renderMessageBlockTemplate } from "./blocks";
 
 @customElement("walli-message")
 export class WalliMessageElement extends HTMLElement {
-  private bubble: HTMLDivElement | null = null;
+  private currentBlocks: BlockLayout[] = [];
   private currentMessage: ChatMessageInstance | null = null;
-  private currentLayoutSignature = "";
+  private currentKey = "";
 
   set message(message: ChatMessageInstance | null | undefined) {
     if (message === undefined || message === null) {
       return;
     }
 
-    const layoutSignature = this.layoutSignature(message.frame);
+    const key = this.computeKey(message.frame);
     const canReuseContents =
-      this.currentMessage?.prepared === message.prepared &&
-      this.currentLayoutSignature === layoutSignature;
+      this.currentMessage?.prepared === message.prepared && this.currentKey === key;
 
     this.currentMessage = message;
-    this.currentLayoutSignature = layoutSignature;
+    this.currentKey = key;
     if (!canReuseContents) {
-      this.renderMessage(message);
+      this.currentBlocks = materializeMessageBlocks(message);
     }
-    this.project(message.frame, message.top);
+    this.renderMessage(message);
   }
 
   get message(): ChatMessageInstance | null {
@@ -41,44 +37,32 @@ export class WalliMessageElement extends HTMLElement {
   }
 
   private renderMessage(message: ChatMessageInstance): void {
-    const bubble = this.getBubble();
-
-    this.className = `${MESSAGE_ROW_CLASS} ${
-      message.frame.role === "assistant" ? "justify-start" : "justify-end"
-    }`;
-    this.style.paddingInline = `${MESSAGE_SIDE_PADDING}px`;
-    bubble.className = `${MESSAGE_BUBBLE_CLASS} ${
-      message.frame.role === "assistant" ? ASSISTANT_BUBBLE_CLASS : USER_BUBBLE_CLASS
-    }`;
-
-    const blocks = materializeMessageBlocks(message);
-    const fragment = document.createDocumentFragment();
-    for (let index = 0; index < blocks.length; index++) {
-      fragment.append(createMessageBlockElement(blocks[index]!, message.frame.contentInsetX));
-    }
-    bubble.replaceChildren(fragment);
+    render(this.renderLayout(message, this.currentBlocks), this);
   }
 
-  private project(frame: MessageFrame, top: number): void {
-    const bubble = this.getBubble();
-
-    this.style.top = `${top}px`;
-    this.style.height = `${frame.totalHeight}px`;
-    bubble.style.width = `${frame.frameWidth}px`;
-    bubble.style.height = `${frame.bubbleHeight}px`;
+  private renderLayout(message: ChatMessageInstance, blocks: BlockLayout[]): TemplateResult {
+    return html`<div
+      class=${
+        message.frame.role === "assistant"
+          ? "absolute left-0 flex w-full box-border justify-start"
+          : "absolute left-0 flex w-full box-border justify-end"
+      }
+      style=${`top:${message.top}px;height:${message.frame.totalHeight}px;padding-inline:${MESSAGE_SIDE_PADDING}px;`}
+    >
+      <div
+        class=${
+          message.frame.role === "assistant"
+            ? "message-bubble relative max-w-full flex-none rounded-none text-foreground"
+            : "message-bubble relative max-w-full flex-none rounded-2xl bg-secondary text-secondary-foreground shadow-lg"
+        }
+        style=${`width:${message.frame.frameWidth}px;height:${message.frame.bubbleHeight}px;`}
+      >
+        ${blocks.map((block) => renderMessageBlockTemplate(block, message.frame.contentInsetX))}
+      </div>
+    </div>`;
   }
 
-  private layoutSignature(frame: MessageFrame): string {
+  private computeKey(frame: MessageFrame): string {
     return `${frame.frameWidth}:${frame.bubbleHeight}:${frame.totalHeight}:${frame.layoutContentWidth}:${frame.contentInsetX}`;
-  }
-
-  private getBubble(): HTMLDivElement {
-    if (this.bubble === null) {
-      this.bubble = document.createElement("div");
-    }
-    if (this.bubble.parentNode !== this) {
-      this.append(this.bubble);
-    }
-    return this.bubble;
   }
 }

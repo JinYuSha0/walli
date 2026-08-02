@@ -1,40 +1,37 @@
+import { html, type TemplateResult } from "lit";
 import { customElement } from "lit/decorators.js";
 import {
   CODE_BLOCK_PADDING_X,
   CODE_BLOCK_PADDING_Y,
   CODE_LINE_HEIGHT,
-  type BlockLayout,
-} from "../../markdown-chat.model";
-import { createBlockShell } from "./block-shell";
+} from "../../core/layout-config";
+import type { BlockLayout } from "../../markdown-chat.model";
+import { BlockShellElement } from "./block-shell";
 
 type CodeBlockLayout = Extract<BlockLayout, { kind: "code" }>;
 
-const CODE_BOX_CLASS = "absolute top-0 rounded-[10px] bg-secondary ring-1 ring-border shadow-inner";
-const CODE_LINE_CLASS =
-  "absolute whitespace-pre font-mono text-[12px] font-medium leading-[18px] text-secondary-foreground";
-
 @customElement("walli-code-block")
-export class WalliCodeBlockElement extends HTMLElement {
-  set layout(layout: { block: CodeBlockLayout; contentInsetX: number }) {
-    const { block, contentInsetX } = layout;
-    const wrapper = createBlockShell(block, contentInsetX);
-    const codeBox = document.createElement("div");
-    codeBox.className = CODE_BOX_CLASS;
-    codeBox.style.left = `${contentInsetX + block.contentLeft}px`;
-    codeBox.style.width = `${block.width}px`;
-    codeBox.style.height = `${block.height}px`;
+export class WalliCodeBlockElement extends BlockShellElement<CodeBlockLayout> {
+  protected override markerTop(): number {
+    return CODE_BLOCK_PADDING_Y;
+  }
 
-    for (let lineIndex = 0; lineIndex < block.lines.length; lineIndex++) {
-      const line = block.lines[lineIndex]!;
-      const row = document.createElement("div");
-      row.className = CODE_LINE_CLASS;
-      row.style.left = `${CODE_BLOCK_PADDING_X}px`;
-      row.style.top = `${CODE_BLOCK_PADDING_Y + lineIndex * CODE_LINE_HEIGHT}px`;
-      row.textContent = line.text;
-      codeBox.append(row);
-    }
-
-    wrapper.append(codeBox);
-    this.replaceChildren(wrapper);
+  protected override renderContent(
+    block: CodeBlockLayout,
+    contentInsetX: number,
+  ): TemplateResult {
+    return html`<div
+      class="absolute top-0 rounded-[10px] bg-secondary ring-1 ring-border shadow-inner"
+      style=${`left:${contentInsetX + block.contentLeft}px;width:${block.width}px;height:${block.height}px;`}
+    >
+      ${block.lines.map(
+        (line, lineIndex) =>
+          html`<div
+            class="absolute whitespace-pre font-mono text-[12px] font-medium leading-[18px] text-secondary-foreground"
+            style=${`left:${CODE_BLOCK_PADDING_X}px;top:${CODE_BLOCK_PADDING_Y + lineIndex * CODE_LINE_HEIGHT}px;`}
+            .textContent=${line.text}
+          ></div>`,
+      )}
+    </div>`;
   }
 }

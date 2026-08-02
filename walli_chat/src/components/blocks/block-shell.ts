@@ -1,52 +1,67 @@
-import { CODE_BLOCK_PADDING_Y, type BlockLayout } from "../../markdown-chat.model";
+import { html, render as litRender, type TemplateResult } from "lit";
+import type { BlockLayout } from "../../markdown-chat.model";
 
-export const BLOCK_CLASS = "absolute left-0 w-full box-border";
+type ShellBlockLayout = Pick<
+  BlockLayout,
+  "height" | "markerClassName" | "markerLeft" | "markerText" | "quoteRailLefts" | "top"
+>;
 
-const QUOTE_RAIL_CLASS =
-  "absolute top-0 bottom-0 w-[3px] rounded-full bg-muted-foreground opacity-20";
+export type BlockRenderLayout<Block extends BlockLayout = BlockLayout> = {
+  block: Block;
+  contentInsetX: number;
+};
 
-export function createBlockShell(block: BlockLayout, contentInsetX: number): HTMLDivElement {
-  const wrapper = document.createElement("div");
-  wrapper.className = BLOCK_CLASS;
-  wrapper.style.top = `${block.top}px`;
-  wrapper.style.height = `${block.height}px`;
+export abstract class BlockShellElement<Block extends BlockLayout> extends HTMLElement {
+  private currentLayout: BlockRenderLayout<Block> | null = null;
 
-  appendRails(wrapper, block, contentInsetX);
-  appendMarker(wrapper, block, contentInsetX);
-  return wrapper;
-}
-
-function appendRails(wrapper: HTMLDivElement, block: BlockLayout, contentInsetX: number): void {
-  for (let index = 0; index < block.quoteRailLefts.length; index++) {
-    const rail = document.createElement("div");
-    rail.className = QUOTE_RAIL_CLASS;
-    rail.style.left = `${contentInsetX + block.quoteRailLefts[index]!}px`;
-    wrapper.append(rail);
-  }
-}
-
-function appendMarker(wrapper: HTMLDivElement, block: BlockLayout, contentInsetX: number): void {
-  if (block.markerText === null || block.markerLeft === null || block.markerClassName === null) {
-    return;
+  set layout(layout: BlockRenderLayout<Block>) {
+    this.currentLayout = layout;
+    litRender(this.render(), this);
   }
 
-  const marker = document.createElement("span");
-  marker.className = block.markerClassName;
-  marker.style.left = `${contentInsetX + block.markerLeft}px`;
-  marker.style.top = `${markerTop(block)}px`;
-  marker.textContent = block.markerText;
-  wrapper.append(marker);
-}
+  protected render(): TemplateResult | null {
+    if (this.currentLayout === null) return null;
 
-function markerTop(block: BlockLayout): number {
-  switch (block.kind) {
-    case "code":
-      return CODE_BLOCK_PADDING_Y;
-    case "image":
-      return 0;
-    case "inline":
-      return Math.max(0, Math.round((block.lineHeight - 12) / 2));
-    case "rule":
-      return 0;
+    const { block, contentInsetX } = this.currentLayout;
+    return html`<div
+      class="absolute left-0 w-full box-border"
+      style=${`top:${block.top}px;height:${block.height}px;`}
+    >
+      ${this.renderQuoteRails(block, contentInsetX)}${this.renderMarker(
+        block,
+        contentInsetX,
+      )}${this.renderContent(block, contentInsetX)}
+    </div>`;
+  }
+
+  protected markerTop(_block: Block): number {
+    return 0;
+  }
+
+  protected abstract renderContent(
+    block: Block,
+    contentInsetX: number,
+  ): TemplateResult | TemplateResult[];
+
+  private renderQuoteRails(block: ShellBlockLayout, contentInsetX: number): TemplateResult[] {
+    return block.quoteRailLefts.map(
+      (left) =>
+        html`<div
+          class="absolute top-0 bottom-0 w-[3px] rounded-full bg-muted-foreground opacity-20"
+          style=${`left:${contentInsetX + left}px;`}
+        ></div>`,
+    );
+  }
+
+  private renderMarker(block: Block, contentInsetX: number): TemplateResult | null {
+    if (block.markerText === null || block.markerLeft === null || block.markerClassName === null) {
+      return null;
+    }
+
+    return html`<span
+      class=${block.markerClassName}
+      style=${`left:${contentInsetX + block.markerLeft}px;top:${this.markerTop(block)}px;`}
+      .textContent=${block.markerText}
+    ></span>`;
   }
 }

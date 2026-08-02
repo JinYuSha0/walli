@@ -1,37 +1,22 @@
+import { html, type TemplateResult } from "lit";
 import type { BlockLayout } from "../../markdown-chat.model";
 import "./code-block";
 import "./image-block";
 import "./inline-block";
 import "./rule-block";
-import type { WalliCodeBlockElement } from "./code-block";
-import type { WalliImageBlockElement } from "./image-block";
-import type { WalliInlineBlockElement } from "./inline-block";
-import type { WalliRuleBlockElement } from "./rule-block";
 
-export function createMessageBlockElement(
+export function renderMessageBlockTemplate(
   block: BlockLayout,
   contentInsetX: number,
-): HTMLElement {
+): TemplateResult {
   switch (block.kind) {
-    case "inline": {
-      const element = document.createElement("walli-inline-block") as WalliInlineBlockElement;
-      element.layout = { block, contentInsetX };
-      return element;
-    }
-    case "code": {
-      const element = document.createElement("walli-code-block") as WalliCodeBlockElement;
-      element.layout = { block, contentInsetX };
-      return element;
-    }
-    case "image": {
-      const element = document.createElement("walli-image-block") as WalliImageBlockElement;
-      element.layout = { block, contentInsetX };
-      return element;
-    }
-    case "rule": {
-      const element = document.createElement("walli-rule-block") as WalliRuleBlockElement;
-      element.layout = { block, contentInsetX };
-      return element;
-    }
+    case "inline":
+      return html`<walli-inline-block .layout=${{ block, contentInsetX }}></walli-inline-block>`;
+    case "code":
+      return html`<walli-code-block .layout=${{ block, contentInsetX }}></walli-code-block>`;
+    case "image":
+      return html`<walli-image-block .layout=${{ block, contentInsetX }}></walli-image-block>`;
+    case "rule":
+      return html`<walli-rule-block .layout=${{ block, contentInsetX }}></walli-rule-block>`;
   }
 }

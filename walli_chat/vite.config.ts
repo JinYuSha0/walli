@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import type { Plugin } from "vite";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
+import { extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { visualizer } from "rollup-plugin-visualizer";
 import { createGenerator, presetWind3, type PresetWind3Theme } from "unocss";
@@ -8,14 +9,24 @@ import { walliUnoTheme } from "./uno.theme.ts";
 
 const walliChatUnoCssId = "virtual:walli-chat-uno-styles";
 const resolvedWalliChatUnoCssId = `\0${walliChatUnoCssId}`;
-const walliChatElementFile = fileURLToPath(
-  new URL("./src/components/walli-chat.ts", import.meta.url),
-);
-const walliChatStyleSourceFiles = [
-  walliChatElementFile,
-  fileURLToPath(new URL("./src/components/walli-message.ts", import.meta.url)),
-  fileURLToPath(new URL("./src/markdown-chat.model.ts", import.meta.url)),
-];
+const sourceRoot = fileURLToPath(new URL("./src", import.meta.url));
+const styleSourceExtensions = new Set([".ts", ".tsx", ".js", ".jsx"]);
+
+async function collectStyleSourceFiles(directory: string): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    const path = `${directory}/${entry.name}`;
+    if (entry.isDirectory()) {
+      files.push(...(await collectStyleSourceFiles(path)));
+    } else if (entry.isFile() && styleSourceExtensions.has(extname(entry.name))) {
+      files.push(path);
+    }
+  }
+
+  return files;
+}
 
 function walliChatUnoCss(): Plugin {
   return {
@@ -31,6 +42,8 @@ function walliChatUnoCss(): Plugin {
       if (id !== resolvedWalliChatUnoCssId) {
         return undefined;
       }
+
+      const walliChatStyleSourceFiles = await collectStyleSourceFiles(sourceRoot);
 
       for (const file of walliChatStyleSourceFiles) {
         this.addWatchFile(file);

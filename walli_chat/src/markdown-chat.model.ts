@@ -15,89 +15,68 @@ import {
   walkRichInlineLineRanges,
   type PreparedRichInline,
 } from "@chenglou/pretext/rich-inline";
+import {
+  BLOCK_GAP,
+  BLOCKQUOTE_INDENT,
+  BUBBLE_MAX_RATIO,
+  BUBBLE_PADDING_X,
+  BUBBLE_PADDING_Y,
+  CHAT_BOTTOM_PADDING_OFFSET,
+  CHAT_TOP_PADDING_OFFSET,
+  CODE_BLOCK_PADDING_X,
+  CODE_BLOCK_PADDING_Y,
+  CODE_LINE_HEIGHT,
+  COMPACT_OCCLUSION_BANNER_HEIGHT,
+  COMPACT_OCCLUSION_VIEWPORT_HEIGHT,
+  DEFAULT_IMAGE_ASPECT_RATIO,
+  HARD_BREAK_GAP,
+  IMAGE_BLOCK_WIDTH_RATIO,
+  LIST_ITEM_GAP,
+  LIST_MARKER_GAP,
+  LIST_NESTING_INDENT,
+  MARKER_CLASS,
+  MARKER_FONT,
+  MAX_CHAT_WIDTH,
+  MESSAGE_GAP,
+  MESSAGE_SIDE_PADDING,
+  MONO_FAMILY,
+  OCCLUSION_BANNER_HEIGHT,
+  PAGE_MARGIN,
+  RAIL_OFFSET,
+  RICH_BLOCK_GAP,
+  RULE_HEIGHT,
+  TOTAL_MESSAGE_COUNT,
+} from "./core/layout-config";
+export {
+  BUBBLE_PADDING_X,
+  CHAT_VIEWPORT_HEIGHT,
+  CODE_BLOCK_PADDING_X,
+  CODE_BLOCK_PADDING_Y,
+  CODE_LINE_HEIGHT,
+  DEFAULT_CHAT_WIDTH,
+  MAX_CHAT_WIDTH,
+  MESSAGE_SIDE_PADDING,
+  MIN_CHAT_WIDTH,
+  OCCLUSION_BANNER_HEIGHT,
+  PAGE_MARGIN,
+  TOTAL_MESSAGE_COUNT,
+} from "./core/layout-config";
+import {
+  collectInlinePieceLines,
+  createTextPiece,
+  EMPTY_MARK_STATE,
+  fallbackTextForToken,
+  headingVariant,
+  type InlinePiece,
+  type InlineVariant,
+  lineHeightForVariant,
+} from "./core/inline-pieces";
+import { parseMarkdownHref } from "./core/markdown-url";
 import { BASE_MESSAGE_SPECS } from "./mock/markdown-chat.data";
-
-export const MIN_CHAT_WIDTH = 360;
-export const DEFAULT_CHAT_WIDTH = 640;
-export const MAX_CHAT_WIDTH = 860;
-export const TOTAL_MESSAGE_COUNT = 10_000;
-export const CHAT_VIEWPORT_HEIGHT = 560;
-export const OCCLUSION_BANNER_HEIGHT = 61;
-export const PAGE_MARGIN = 28;
-export const MESSAGE_SIDE_PADDING = 22;
-
-const COMPACT_OCCLUSION_BANNER_HEIGHT = 43;
-const COMPACT_OCCLUSION_VIEWPORT_HEIGHT = 460;
-const CHAT_TOP_PADDING_OFFSET = 14;
-const CHAT_BOTTOM_PADDING_OFFSET = 10;
-const MESSAGE_GAP = 12;
-const BUBBLE_MAX_RATIO = 0.78;
-export const BUBBLE_PADDING_X = 16;
-const BUBBLE_PADDING_Y = 10;
-const BODY_LINE_HEIGHT = 22;
-const HEADING_ONE_LINE_HEIGHT = 28;
-const HEADING_TWO_LINE_HEIGHT = 25;
-const HARD_BREAK_GAP = 4;
-const BLOCK_GAP = 12;
-const RICH_BLOCK_GAP = 2;
-const LIST_ITEM_GAP = 4;
-const LIST_NESTING_INDENT = 18;
-const BLOCKQUOTE_INDENT = 18;
-const LIST_MARKER_GAP = 10;
-export const CODE_LINE_HEIGHT = 18;
-export const CODE_BLOCK_PADDING_X = 12;
-export const CODE_BLOCK_PADDING_Y = 8;
-const RULE_HEIGHT = 18;
-const RAIL_OFFSET = 5;
-const SANS_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-const SERIF_FAMILY = '"Iowan Old Style", Georgia, "Times New Roman", serif';
-const MONO_FAMILY = '"SF Mono", ui-monospace, Menlo, Monaco, monospace';
-const INLINE_CODE_FONT = `600 12px ${MONO_FAMILY}`;
-const INLINE_CODE_EXTRA_WIDTH = 12;
-const IMAGE_FONT = `700 11px ${SANS_FAMILY}`;
-const IMAGE_EXTRA_WIDTH = 14;
-const IMAGE_BLOCK_WIDTH_RATIO = 0.8;
-const DEFAULT_IMAGE_ASPECT_RATIO = 16 / 9;
-const MARKER_FONT = `600 11px ${MONO_FAMILY}`;
-const BODY_FRAGMENT_CLASS =
-  "inline-block whitespace-pre font-sans text-[14px] font-normal leading-none text-foreground align-baseline";
-const HEADING_ONE_FRAGMENT_CLASS =
-  "inline-block whitespace-pre font-serif text-[20px] font-bold leading-none text-foreground align-baseline";
-const HEADING_TWO_FRAGMENT_CLASS =
-  "inline-block whitespace-pre font-serif text-[17px] font-bold leading-none text-foreground align-baseline";
-const INLINE_CODE_FRAGMENT_CLASS =
-  "inline-block whitespace-pre rounded-[8px] bg-secondary px-[6px] pt-[2px] pb-[3px] font-mono text-[12px] font-semibold leading-none text-secondary-foreground align-baseline";
-const IMAGE_CHIP_FRAGMENT_CLASS =
-  "inline-flex min-h-[18px] translate-y-px items-center rounded-full bg-accent px-[7px] font-sans text-[11px] font-bold leading-none text-accent-foreground align-baseline";
-const IMAGE_FRAGMENT_CLASS =
-  "inline-block h-[18px] w-[48px] translate-y-px rounded-[6px] bg-muted object-cover align-baseline ring-1 ring-border";
-const LINK_FRAGMENT_CLASS = "text-primary underline decoration-1 underline-offset-[0.14em]";
-const MARKER_CLASS =
-  "absolute whitespace-pre font-mono text-[11px] font-semibold leading-none text-muted-foreground";
-
-type InlineVariant = "body" | "heading-1" | "heading-2";
-
-type MarkState = {
-  bold: boolean;
-  italic: boolean;
-  strike: boolean;
-  href: string | null;
-};
 
 type ParseContext = {
   listDepth: number;
   quoteDepth: number;
-};
-
-type InlinePiece = {
-  breakMode: "normal" | "never";
-  className: string;
-  extraWidth: number;
-  font: string;
-  href: string | null;
-  imageAlt: string | null;
-  imageSrc: string | null;
-  text: string;
 };
 
 type PreparedBlockBase = {
@@ -271,23 +250,6 @@ export type ConversationFrame = {
   occlusionBannerHeight: number;
   totalHeight: number;
 };
-
-const EMPTY_MARK_STATE: MarkState = {
-  bold: false,
-  italic: false,
-  strike: false,
-  href: null,
-};
-
-function parseMarkdownHref(href: string | null | undefined): string | null {
-  if (href === undefined || href === null) return null;
-  try {
-    const url = new URL(href);
-    return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
-  } catch {
-    return null;
-  }
-}
 
 const markerWidthCache = new Map<string, number>();
 
@@ -697,236 +659,6 @@ function createBlockBase(ctx: ParseContext): PreparedBlockBase {
   };
 }
 
-function collectInlinePieceLines(
-  tokens: readonly Token[],
-  variant: InlineVariant,
-): InlinePiece[][] {
-  const lines: InlinePiece[][] = [[]];
-
-  function currentLine(): InlinePiece[] {
-    return lines[lines.length - 1]!;
-  }
-
-  function pushLineBreak(): void {
-    lines.push([]);
-  }
-
-  function pushPiece(piece: InlinePiece | null): void {
-    if (piece === null) return;
-    const line = currentLine();
-    const previous = line[line.length - 1];
-    if (previous !== undefined && canMergeInlinePieces(previous, piece)) {
-      previous.text += piece.text;
-      return;
-    }
-    line.push(piece);
-  }
-
-  function walk(tokenList: readonly Token[], marks: MarkState): void {
-    for (let index = 0; index < tokenList.length; index++) {
-      const token = tokenList[index]!;
-
-      switch (token.type) {
-        case "text": {
-          if (Array.isArray(token.tokens) && token.tokens.length > 0) {
-            walk(token.tokens, marks);
-          } else {
-            pushPiece(createTextPiece(token.text, marks, variant));
-          }
-          continue;
-        }
-
-        case "escape": {
-          pushPiece(createTextPiece(token.text, marks, variant));
-          continue;
-        }
-
-        case "strong": {
-          walk(token.tokens ?? [], { ...marks, bold: true });
-          continue;
-        }
-
-        case "em": {
-          walk(token.tokens ?? [], { ...marks, italic: true });
-          continue;
-        }
-
-        case "del": {
-          walk(token.tokens ?? [], { ...marks, strike: true });
-          continue;
-        }
-
-        case "codespan": {
-          pushPiece(createCodePiece(token.text));
-          continue;
-        }
-
-        case "link": {
-          walk(token.tokens ?? [], { ...marks, href: parseMarkdownHref(token.href) });
-          continue;
-        }
-
-        case "image": {
-          pushPiece(createImagePiece(token.href, token.text));
-          continue;
-        }
-
-        case "br": {
-          pushLineBreak();
-          continue;
-        }
-
-        case "checkbox": {
-          pushPiece(createTextPiece(token.checked ? "[x] " : "[ ] ", marks, variant));
-          continue;
-        }
-
-        case "html": {
-          pushPiece(createTextPiece(token.text, marks, variant));
-          continue;
-        }
-
-        default: {
-          const fallback = fallbackTextForToken(token);
-          if (fallback.length > 0) {
-            pushPiece(createTextPiece(fallback, marks, variant));
-          }
-        }
-      }
-    }
-  }
-
-  walk(tokens, EMPTY_MARK_STATE);
-
-  while (lines.length > 0 && lines[lines.length - 1]!.length === 0) {
-    lines.pop();
-  }
-
-  return lines;
-}
-
-function createTextPiece(
-  text: string,
-  marks: MarkState,
-  variant: InlineVariant,
-): InlinePiece | null {
-  if (text.length === 0) return null;
-
-  return {
-    breakMode: "normal",
-    className: resolveTextClassName(variant, marks),
-    extraWidth: 0,
-    font: resolveTextFont(variant, marks),
-    href: marks.href,
-    imageAlt: null,
-    imageSrc: null,
-    text,
-  };
-}
-
-function createCodePiece(text: string): InlinePiece | null {
-  if (text.length === 0) return null;
-
-  return {
-    breakMode: "normal",
-    className: INLINE_CODE_FRAGMENT_CLASS,
-    extraWidth: INLINE_CODE_EXTRA_WIDTH,
-    font: INLINE_CODE_FONT,
-    href: null,
-    imageAlt: null,
-    imageSrc: null,
-    text,
-  };
-}
-
-function createImagePiece(src: string | null | undefined, alt: string): InlinePiece {
-  const safeSrc = parseMarkdownHref(src);
-  const label = alt.length > 0 ? alt : "image";
-
-  return {
-    breakMode: "never",
-    className: safeSrc === null ? IMAGE_CHIP_FRAGMENT_CLASS : IMAGE_FRAGMENT_CLASS,
-    extraWidth: IMAGE_EXTRA_WIDTH,
-    font: IMAGE_FONT,
-    href: null,
-    imageAlt: label,
-    imageSrc: safeSrc,
-    text: "image",
-  };
-}
-
-function canMergeInlinePieces(a: InlinePiece, b: InlinePiece): boolean {
-  return (
-    a.breakMode === b.breakMode &&
-    a.className === b.className &&
-    a.extraWidth === b.extraWidth &&
-    a.font === b.font &&
-    a.href === b.href &&
-    a.imageAlt === b.imageAlt &&
-    a.imageSrc === b.imageSrc
-  );
-}
-
-function resolveTextFont(variant: InlineVariant, marks: MarkState): string {
-  const italicPrefix = marks.italic ? "italic " : "";
-
-  switch (variant) {
-    case "heading-1": {
-      const weight = marks.bold ? 800 : 700;
-      return `${italicPrefix}${weight} 20px ${SERIF_FAMILY}`;
-    }
-
-    case "heading-2": {
-      const weight = marks.bold ? 800 : 700;
-      return `${italicPrefix}${weight} 17px ${SERIF_FAMILY}`;
-    }
-
-    case "body": {
-      const weight = marks.bold ? 700 : marks.href === null ? 400 : 500;
-      return `${italicPrefix}${weight} 14px ${SANS_FAMILY}`;
-    }
-  }
-}
-
-function resolveTextClassName(variant: InlineVariant, marks: MarkState): string {
-  let className = "";
-
-  switch (variant) {
-    case "heading-1":
-      className = HEADING_ONE_FRAGMENT_CLASS;
-      break;
-    case "heading-2":
-      className = HEADING_TWO_FRAGMENT_CLASS;
-      break;
-    case "body":
-      className = BODY_FRAGMENT_CLASS;
-      break;
-  }
-
-  if (marks.href !== null) className += ` ${LINK_FRAGMENT_CLASS}`;
-  if (marks.bold) className += " font-bold";
-  if (marks.italic) className += " italic";
-  if (marks.strike) className += " line-through decoration-1";
-  return className;
-}
-
-function headingVariant(depth: number): InlineVariant {
-  if (depth <= 1) return "heading-1";
-  if (depth === 2) return "heading-2";
-  return "body";
-}
-
-function lineHeightForVariant(variant: InlineVariant): number {
-  switch (variant) {
-    case "heading-1":
-      return HEADING_ONE_LINE_HEIGHT;
-    case "heading-2":
-      return HEADING_TWO_LINE_HEIGHT;
-    case "body":
-      return BODY_LINE_HEIGHT;
-  }
-}
-
 function appendBlockGroup(
   target: PreparedBlock[],
   group: PreparedBlock[],
@@ -971,11 +703,6 @@ function measureMarkerWidth(text: string): number {
   const width = measureNaturalWidth(prepareWithSegments(text, MARKER_FONT));
   markerWidthCache.set(text, width);
   return width;
-}
-
-function fallbackTextForToken(token: Token): string {
-  if ("text" in token && typeof token.text === "string") return token.text;
-  return token.raw ?? "";
 }
 
 function formatTable(token: Tokens.Table): string {
