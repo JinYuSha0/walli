@@ -5,9 +5,11 @@ import { parseMarkdownHref } from "../helper";
 import { computed } from "@preact/signals-core";
 
 const fontFamilyMap = {
-  "font-sans": 'ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif',
+  "font-sans":
+    'ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif',
   "font-serif": 'ui-serif,Georgia,Cambria,"Times New Roman",Times,serif',
-  "font-mono": 'ui-monospace,"SFMono-Regular","SF Mono",Menlo,Monaco,Consolas,"Liberation Mono",monospace',
+  "font-mono":
+    'ui-monospace,"SFMono-Regular","SF Mono",Menlo,Monaco,Consolas,"Liberation Mono",monospace',
 };
 
 function getFont(

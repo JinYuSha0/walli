@@ -3,7 +3,6 @@ import {
   measureRichInlineStats,
   walkRichInlineLineRanges,
 } from "@chenglou/pretext/rich-inline";
-import { BASE_MESSAGE_SPECS } from "../mock/markdown-chat.data";
 import { parseMarkdownBlocks } from "./md-parse";
 import type {
   BlockFrame,
@@ -19,17 +18,13 @@ import { layoutWithLines, measureLineStats } from "@chenglou/pretext";
 import { getCommonStyle } from "./styles";
 import { getCodeBlockStyle } from "./blocks/code-block";
 import { getImageBlockStyle } from "./blocks/image-block";
+import { messages } from "../store";
 
 export function createPreparedChatMessages(): PreparedChatMessage[] {
-  const messages = new Array<PreparedChatMessage>(10_000);
-  for (let index = 0; index < messages.length; index++) {
-    const seed = BASE_MESSAGE_SPECS[index % BASE_MESSAGE_SPECS.length]!;
-    messages[index] = {
-      blocks: parseMarkdownBlocks(seed.markdown),
-      role: seed.role,
-    };
-  }
-  return messages;
+  return messages.value.map((seed) => ({
+    blocks: parseMarkdownBlocks(seed.markdown),
+    role: seed.role,
+  }));
 }
 
 export function getMaxChatWidth(viewportWidth: number): number {
