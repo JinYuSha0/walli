@@ -1,3 +1,4 @@
+import "./walli-message";
 import { html, LitElement } from "lit";
 import { SignalWatcher } from "@lit-labs/preact-signals";
 import { customElement, eventOptions, state } from "lit/decorators.js";
@@ -5,14 +6,11 @@ import walliChatUnoCss from "virtual:walli-chat-uno-styles";
 import {
   buildConversationFrame,
   createPreparedChatMessages,
-  findVisibleRange,
   getMaxChatWidth,
-  getOcclusionBannerHeight,
-  type ChatMessageInstance,
-  type ConversationFrame,
-  type PreparedChatMessage,
-} from "../markdown-chat.model";
-import "./walli-message";
+  findVisibleRange,
+} from "../core/index";
+import type { ChatMessageInstance, ConversationFrame, PreparedChatMessage } from "../core/type";
+import { getCommonStyle } from "../core/styles";
 
 type Size = {
   width: number;
@@ -113,7 +111,7 @@ export class WalliChatElement extends SignalWatcher(LitElement) {
     const viewportHeight = this.containerSize.height;
     const scrollTop = this.viewportElement?.scrollTop ?? this.viewportScrollTop;
     this.viewportScrollTop = scrollTop;
-    const occlusionBannerHeight = getOcclusionBannerHeight(viewportHeight);
+    const occlusionBannerHeight = getCommonStyle("occlusionBannerHeight");
 
     const chatWidth = getMaxChatWidth(viewportWidth);
     const previousFrame = this.frame;

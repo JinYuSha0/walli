@@ -1,0 +1,198 @@
+import type { PreparedRichInline } from "@chenglou/pretext/rich-inline";
+
+export type ParseContext = {
+  listDepth: number;
+  quoteDepth: number;
+};
+
+export type PreparedBlockBase = {
+  contentLeft: number;
+  marginTop: number;
+  markerClassName: string | null;
+  markerLeft: number | null;
+  markerText: string | null;
+  quoteRailLefts: number[];
+};
+
+export type PreparedInlineBlock = PreparedBlockBase & {
+  kind: "inline";
+  classNames: string[];
+  flow: PreparedRichInline;
+  hrefs: Array<string | null>;
+  imageAlts: Array<string | null>;
+  imageSrcs: Array<string | null>;
+  lineHeight: number;
+};
+
+export type PreparedCodeBlock = PreparedBlockBase & {
+  kind: "code";
+  lineHeight: number;
+  prepared: PreparedTextWithSegments;
+};
+
+export type PreparedImageBlock = PreparedBlockBase & {
+  alt: string;
+  aspectRatio: number;
+  kind: "image";
+  src: string;
+};
+
+export type PreparedRuleBlock = PreparedBlockBase & {
+  kind: "rule";
+  height: number;
+};
+
+export type PreparedBlock =
+  PreparedInlineBlock | PreparedCodeBlock | PreparedImageBlock | PreparedRuleBlock;
+
+export type PreparedChatMessage = {
+  blocks: PreparedBlock[];
+  role: "assistant" | "user";
+};
+
+export type InlineVariant = "body" | "h1" | "h2";
+
+export type InlinePiece = {
+  breakMode: "normal" | "never";
+  className: string;
+  font: string;
+  text: string;
+  extraWidth?: number;
+  href?: string;
+  imageAlt?: string;
+  imageSrc?: string;
+};
+
+export type MarkState = {
+  bold: boolean;
+  italic: boolean;
+  strike: boolean;
+  href?: string;
+};
+
+export type MessageFrame = {
+  blocks: BlockFrame[];
+  bubbleHeight: number;
+  contentInsetX: number;
+  frameWidth: number;
+  layoutContentWidth: number;
+  role: "assistant" | "user";
+  totalHeight: number;
+};
+
+export type ChatMessageInstance = {
+  bottom: number;
+  prepared: PreparedChatMessage;
+  frame: MessageFrame;
+  top: number;
+};
+
+export type ConversationFrame = {
+  chatWidth: number;
+  messages: ChatMessageInstance[];
+  occlusionBannerHeight: number;
+  totalHeight: number;
+};
+
+export type InlineFragmentLayout = {
+  alt: string | null;
+  className: string;
+  href: string | null;
+  kind: "image" | "text";
+  leadingGap: number;
+  src: string | null;
+  text: string;
+};
+
+export type InlineBlockLayout = {
+  contentLeft: number;
+  height: number;
+  kind: "inline";
+  lineHeight: number;
+  lines: Array<{
+    fragments: InlineFragmentLayout[];
+    width: number;
+  }>;
+  markerClassName: string | null;
+  markerLeft: number | null;
+  markerText: string | null;
+  quoteRailLefts: number[];
+  top: number;
+  usedWidth: number;
+};
+
+export type CodeBlockLayout = {
+  contentLeft: number;
+  height: number;
+  kind: "code";
+  lines: LayoutLine[];
+  markerClassName: string | null;
+  markerLeft: number | null;
+  markerText: string | null;
+  quoteRailLefts: number[];
+  top: number;
+  usedWidth: number;
+  width: number;
+};
+
+export type ImageBlockLayout = {
+  alt: string;
+  contentLeft: number;
+  height: number;
+  kind: "image";
+  markerClassName: string | null;
+  markerLeft: number | null;
+  markerText: string | null;
+  quoteRailLefts: number[];
+  src: string;
+  top: number;
+  width: number;
+};
+
+export type RuleBlockLayout = {
+  contentLeft: number;
+  height: number;
+  kind: "rule";
+  markerClassName: string | null;
+  markerLeft: number | null;
+  markerText: string | null;
+  quoteRailLefts: number[];
+  top: number;
+  width: number;
+};
+
+export type BlockLayout = InlineBlockLayout | CodeBlockLayout | ImageBlockLayout | RuleBlockLayout;
+
+export type BlockFrameBase = {
+  contentLeft: number;
+  height: number;
+  markerClassName: string | null;
+  markerLeft: number | null;
+  markerText: string | null;
+  quoteRailLefts: number[];
+  top: number;
+};
+
+export type InlineBlockFrame = BlockFrameBase & {
+  kind: "inline";
+  lineHeight: number;
+  usedWidth: number;
+};
+
+export type CodeBlockFrame = BlockFrameBase & {
+  kind: "code";
+  lineHeight: number;
+  width: number;
+};
+
+export type ImageBlockFrame = BlockFrameBase & {
+  kind: "image";
+  width: number;
+};
+
+export type RuleBlockFrame = BlockFrameBase & {
+  kind: "rule";
+  width: number;
+};
+
+export type BlockFrame = InlineBlockFrame | CodeBlockFrame | ImageBlockFrame | RuleBlockFrame;

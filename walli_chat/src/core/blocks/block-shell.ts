@@ -1,5 +1,5 @@
 import { html, render as litRender, type TemplateResult } from "lit";
-import type { BlockLayout } from "../../markdown-chat.model";
+import type { BlockLayout } from "../type";
 
 type ShellBlockLayout = Pick<
   BlockLayout,
@@ -53,14 +53,14 @@ export abstract class BlockShellElement<Block extends BlockLayout> extends HTMLE
     );
   }
 
-  private renderMarker(block: Block, contentInsetX: number): TemplateResult | null {
+  private renderMarker(block: ShellBlockLayout, contentInsetX: number): TemplateResult | null {
     if (block.markerText === null || block.markerLeft === null || block.markerClassName === null) {
       return null;
     }
 
     return html`<span
       class=${block.markerClassName}
-      style=${`left:${contentInsetX + block.markerLeft}px;top:${this.markerTop(block)}px;`}
+      style=${`left:${contentInsetX + block.markerLeft}px; top:${this.markerTop(block as Block)}px;`}
       .textContent=${block.markerText}
     ></span>`;
   }

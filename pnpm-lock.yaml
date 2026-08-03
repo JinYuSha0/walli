@@ -23,6 +23,9 @@ importers:
       '@preact/signals-core':
         specifier: ^1.14.4
         version: 1.14.4
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
       lit:
         specifier: ^3.3.3
         version: 3.3.3

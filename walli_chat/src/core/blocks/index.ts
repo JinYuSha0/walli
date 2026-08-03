@@ -1,9 +1,13 @@
 import { html, type TemplateResult } from "lit";
-import type { BlockLayout } from "../../markdown-chat.model";
-import "./code-block";
-import "./image-block";
-import "./inline-block";
-import "./rule-block";
+import type { BlockLayout } from "../type";
+
+export { buildInlineBlocks, WalliInlineBlockElement } from "./inline-block";
+export { buildCodeBlock, WalliCodeBlockElement } from "./code-block";
+export { buildRuleBlock, WalliRuleBlockElement } from "./rule-block";
+export { buildImageBlock, WalliImageBlockElement } from "./image-block";
+export { buildPlainTextBlocks } from "./plain-text-block";
+export { buildListBlocks } from "./list-block";
+export { buildTableBlock } from "./table-block";
 
 export function renderMessageBlockTemplate(
   block: BlockLayout,

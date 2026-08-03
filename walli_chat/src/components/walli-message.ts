@@ -1,13 +1,9 @@
 import { html, render, type TemplateResult } from "lit";
 import { customElement } from "lit/decorators.js";
-import { MESSAGE_SIDE_PADDING } from "../core/layout-config";
-import {
-  type BlockLayout,
-  materializeMessageBlocks,
-  type ChatMessageInstance,
-  type MessageFrame,
-} from "../markdown-chat.model";
-import { renderMessageBlockTemplate } from "./blocks";
+import { materializeMessageBlocks } from "../core";
+import type { BlockLayout, ChatMessageInstance, MessageFrame } from "../core/type";
+import { renderMessageBlockTemplate } from "../core/blocks";
+import { getCommonStyle } from "../core/styles";
 
 @customElement("walli-message")
 export class WalliMessageElement extends HTMLElement {
@@ -47,7 +43,7 @@ export class WalliMessageElement extends HTMLElement {
           ? "absolute left-0 flex w-full box-border justify-start"
           : "absolute left-0 flex w-full box-border justify-end"
       }
-      style=${`top:${message.top}px;height:${message.frame.totalHeight}px;padding-inline:${MESSAGE_SIDE_PADDING}px;`}
+      style=${`top:${message.top}px; height:${message.frame.totalHeight}px; padding-inline:${getCommonStyle("messageSidePadding")}px;`}
     >
       <div
         class=${
