@@ -14,7 +14,6 @@ export const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
   message(
     "user",
     "Can we treat the rich-text inline flow helper (`rich-inline`) as a real primitive, or is it only good for one tiny demo?",
-    "",
     "I mostly care about:",
     "- exact bubble heights",
     "- virtualization without DOM reads",
@@ -23,6 +22,8 @@ export const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
   message(
     "assistant",
     "Short answer: **yes, inside a bounded corridor**.",
+    "",
+    "---",
     "",
     "It already handles rich-text inline flow, `code`, and links like [Pretext](https://github.com/chenglou/pretext), while keeping pills and badges atomic. The real pressure starts once a chat bubble stops being one paragraph.",
   ),

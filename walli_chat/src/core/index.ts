@@ -112,7 +112,7 @@ function layoutMessageFrame(
   maxContentWidth: number,
   contentInsetX: number,
 ): MessageFrame {
-  let y = 10;
+  let y = getCommonStyle("bubblePaddingY");
   const blocks: BlockFrame[] = [];
   let usedContentWidth = 0;
 
@@ -125,7 +125,7 @@ function layoutMessageFrame(
     usedContentWidth = Math.max(usedContentWidth, getUsedBlockWidth(blockFrame));
   }
 
-  const bubbleHeight = y + 10;
+  const bubbleHeight = y + getCommonStyle("bubblePaddingY");
   const frameWidth =
     preparedMessage.role === "assistant"
       ? maxFrameWidth
@@ -263,7 +263,7 @@ function materializeBlockLayout(
     case "code": {
       if (block.kind !== "code") throw new Error("Code block/frame mismatch");
       const boxWidth = Math.max(1, contentWidth - frame.contentLeft);
-      const innerWidth = Math.max(1, boxWidth - getCodeBlockStyle("paddingY") * 2);
+      const innerWidth = Math.max(1, boxWidth - getCodeBlockStyle("paddingX") * 2);
       const layout = layoutWithLines(block.prepared, innerWidth, frame.lineHeight);
       return {
         contentLeft: frame.contentLeft,

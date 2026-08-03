@@ -50,7 +50,7 @@ export class WalliCodeBlockElement extends BlockShellElement<CodeBlockLayout> {
       ${block.lines.map(
         (line, lineIndex) =>
           html`<div
-            class="absolute whitespace-pre font-mono text-[12px] font-medium leading-[18px] text-secondary-foreground"
+            class="absolute whitespace-pre font-mono text-sm font-medium leading-5 text-secondary-foreground"
             style=${`left:${getCodeBlockStyle("paddingX")}px; top:${getCodeBlockStyle("paddingY") + lineIndex * getCodeBlockStyle("lineHeight")}px;`}
             .textContent=${line.text}
           ></div>`,

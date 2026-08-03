@@ -10,30 +10,14 @@ const fontSizeMap = computed(() => ({
   "text-base": BASE_TEXT_SIGNAL.value, // 16px
   "text-lg": 1.125 * BASE_TEXT_SIGNAL.value, // 18px
   "text-xl": 1.25 * BASE_TEXT_SIGNAL.value, // 20px
-  //   "text-2xl": 1.5 * BASE_TEXT_SIGNAL.value, // 24px
-  //   "text-3xl": 1.875 * BASE_TEXT_SIGNAL.value, // 30px
-  //   "text-4xl": 2.25 * BASE_TEXT_SIGNAL.value, // 36px
-  //   "text-5xl": 3 * BASE_TEXT_SIGNAL.value, // 48px
-  //   "text-6xl": 3.75 * BASE_TEXT_SIGNAL.value, // 60px
-  //   "text-7xl": 4.5 * BASE_TEXT_SIGNAL.value, // 72px
-  //   "text-8xl": 6 * BASE_TEXT_SIGNAL.value, // 96px
-  //   "text-9xl": 8 * BASE_TEXT_SIGNAL.value, // 128px
 }));
 
 const lineHeightMap = computed(() => ({
-  "text-xs": 1.125 * BASE_TEXT_SIGNAL.value, // 18px
+  "text-xs": BASE_TEXT_SIGNAL.value, // 16px
   "text-sm": 1.25 * BASE_TEXT_SIGNAL.value, // 20px
-  "text-base": 1.375 * BASE_TEXT_SIGNAL.value, // 22px
-  "text-lg": 1.5625 * BASE_TEXT_SIGNAL.value, // 25px
-  "text-xl": 1.75 * BASE_TEXT_SIGNAL.value, // 28px
-  //   "text-2xl": 2 * BASE_TEXT_SIGNAL.value, // 32px
-  //   "text-3xl": 2.375 * BASE_TEXT_SIGNAL.value, // 38px
-  //   "text-4xl": 2.75 * BASE_TEXT_SIGNAL.value, // 44px
-  //   "text-5xl": 3.5 * BASE_TEXT_SIGNAL.value, // 56px
-  //   "text-6xl": 4.25 * BASE_TEXT_SIGNAL.value, // 68px
-  //   "text-7xl": 5 * BASE_TEXT_SIGNAL.value, // 80px
-  //   "text-8xl": 6.5 * BASE_TEXT_SIGNAL.value, // 104px
-  //   "text-9xl": 8.5 * BASE_TEXT_SIGNAL.value, // 136px
+  "text-base": 1.625 * BASE_TEXT_SIGNAL.value, // 26px
+  "text-lg": 1.75 * BASE_TEXT_SIGNAL.value, // 28px
+  "text-xl": 1.875 * BASE_TEXT_SIGNAL.value, // 30px
 }));
 
 export function getFontSize(size: keyof typeof fontSizeMap.value) {

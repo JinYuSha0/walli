@@ -5,9 +5,9 @@ import { parseMarkdownHref } from "../helper";
 import { computed } from "@preact/signals-core";
 
 const fontFamilyMap = {
-  "font-sans": '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-  "font-serif": '"Iowan Old Style", Georgia, "Times New Roman", serif',
-  "font-mono": '"SF Mono", ui-monospace, Menlo, Monaco, monospace',
+  "font-sans": 'ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif',
+  "font-serif": 'ui-serif,Georgia,Cambria,"Times New Roman",Times,serif',
+  "font-mono": 'ui-monospace,"SFMono-Regular","SF Mono",Menlo,Monaco,Consolas,"Liberation Mono",monospace',
 };
 
 function getFont(
@@ -21,7 +21,7 @@ function getFont(
 
   if (!fontWeight) {
     if (variant === "h1" || variant === "h2") {
-      weight = marks?.bold ? 800 : 700;
+      weight = marks?.bold ? 700 : 600;
     } else if (variant === "body") {
       if (marks?.bold) {
         weight = 700;
@@ -55,10 +55,10 @@ function h1(text: string, marks: MarkState): InlinePiece {
   return {
     breakMode: "normal",
     className: processInlineTextClass(
-      "inline-block whitespace-pre font-serif text-xl font-bold leading-none text-foreground align-baseline",
+      "inline-block whitespace-pre font-sans text-xl font-semibold leading-none text-foreground align-baseline",
       marks,
     ),
-    font: getFont("h1", marks, "text-xl", "font-serif"),
+    font: getFont("h1", marks, "text-xl", "font-sans"),
     text,
     href: marks.href,
   };
@@ -68,10 +68,10 @@ function h2(text: string, marks: MarkState): InlinePiece {
   return {
     breakMode: "normal",
     className: processInlineTextClass(
-      "inline-block whitespace-pre font-serif text-lg font-bold leading-none text-foreground align-baseline",
+      "inline-block whitespace-pre font-sans text-lg font-semibold leading-none text-foreground align-baseline",
       marks,
     ),
-    font: getFont("h2", marks, "text-lg", "font-serif"),
+    font: getFont("h2", marks, "text-lg", "font-sans"),
     text,
     href: marks.href,
   };
@@ -109,12 +109,12 @@ function image(src: string | null | undefined, alt: string): InlinePiece {
   return {
     breakMode: "never",
     className: !safeSrc
-      ? "inline-flex min-h-[18px] translate-y-px items-center rounded-full bg-accent px-[7px] font-sans text-[11px] font-bold leading-none text-accent-foreground align-baseline"
+      ? "inline-flex min-h-[18px] translate-y-px items-center rounded-full bg-accent px-[7px] font-sans text-xs font-bold leading-none text-accent-foreground align-baseline"
       : "inline-block h-[18px] w-[48px] translate-y-px rounded-[6px] bg-muted object-cover align-baseline ring-1 ring-border",
     imageAlt: label,
     imageSrc: safeSrc,
     text: "image",
-    font: getFont("body", null, "text-sm", "font-sans"),
+    font: getFont("body", null, "text-xs", "font-sans", 700),
     extraWidth: 14,
   };
 }
@@ -139,20 +139,20 @@ export const inlinePiece = {
 } as const;
 
 const CommonStyle = computed(() => ({
-  blockGap: getSpace(3),
-  richBlockGap: getSpace(1),
-  headingGap: getSpace(4),
-  listNestingIndent: getSpace(4),
-  blockQuoteIndent: getSpace(4),
-  railOffset: getSpace(1),
+  blockGap: getSpace(4),
+  richBlockGap: getSpace(2),
+  headingGap: getSpace(5),
+  listNestingIndent: getSpace(5),
+  blockQuoteIndent: getSpace(4.5),
+  railOffset: getSpace(1.25),
   bubbleMaxRatio: 0.78,
   bubblePaddingX: getSpace(4),
   bubblePaddingY: getSpace(2.5),
-  messageSidePadding: getSpace(2.5),
-  messageGap: getSpace(3),
+  messageSidePadding: getSpace(5.5),
+  messageGap: getSpace(4),
   occlusionBannerHeight: getSpace(15),
-  chatTopPadding: getSpace(3.5),
-  chatBottomPadding: getSpace(2.5),
+  chatTopPadding: getSpace(4),
+  chatBottomPadding: getSpace(3),
   maxChatWidth: getSpace(215),
   pageMargin: getSpace(7),
 }));
