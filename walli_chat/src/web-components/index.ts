@@ -2,7 +2,11 @@ import { WalliChatElement } from "./walli-chat";
 import { WalliMessageElement } from "./walli-message";
 
 export { WalliChatElement, WalliMessageElement };
-export type { WalliChatMessage } from "../types";
+export type {
+  WalliChatMessage,
+  WalliChatScrollPosition,
+  WalliChatScrollToIndexOptions,
+} from "../types";
 
 declare global {
   interface HTMLElementTagNameMap {

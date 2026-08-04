@@ -62,4 +62,11 @@ export class WalliMessageElement extends HTMLElement {
   private computeKey(frame: MessageFrame): string {
     return `${frame.frameWidth}:${frame.bubbleHeight}:${frame.totalHeight}:${frame.layoutContentWidth}:${frame.contentInsetX}`;
   }
+
+  disconnectedCallback(): void {
+    this.currentBlocks = [];
+    this.currentMessage = null;
+    this.currentKey = "";
+    render(null, this);
+  }
 }

@@ -188,7 +188,7 @@ const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
   ),
   message(
     "assistant",
-    "It can. Something like ![diagram](https://example.com/mock-wireframe.png) behaves more like an inline chip than a splittable word, which is exactly the right stress case.",
+    "It can. Something like behaves more like an inline chip than a splittable word, which is exactly the right stress case.",
   ),
   message(
     "user",

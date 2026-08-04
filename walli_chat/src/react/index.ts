@@ -1,7 +1,15 @@
 import "../web-components";
-import { createElement, useEffect, useRef, type CSSProperties, type ReactElement } from "react";
+import {
+  createElement,
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  type CSSProperties,
+  type ReactElement,
+} from "react";
 import type { WalliChatElement } from "../web-components";
-import type { WalliChatMessage } from "../types";
+import type { WalliChatMessage, WalliChatScrollToIndexOptions } from "../types";
 
 export type WalliChatProps = {
   className?: string;
@@ -9,20 +17,41 @@ export type WalliChatProps = {
   style?: CSSProperties;
 };
 
-export function WalliChat({ className, messages, style }: WalliChatProps): ReactElement {
-  const ref = useRef<WalliChatElement>(null);
+export type WalliChatRef = {
+  readonly element: WalliChatElement | null;
+  scrollToIndex: (options?: WalliChatScrollToIndexOptions) => void;
+};
+
+export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function WalliChat(
+  { className, messages, style },
+  forwardedRef,
+): ReactElement {
+  const elementRef = useRef<WalliChatElement>(null);
 
   useEffect(() => {
-    if (ref.current) {
-      ref.current.messages = messages;
+    if (elementRef.current) {
+      elementRef.current.messages = messages;
     }
   }, [messages]);
 
+  useImperativeHandle(
+    forwardedRef,
+    () => ({
+      get element() {
+        return elementRef.current;
+      },
+      scrollToIndex(options) {
+        elementRef.current?.scrollToIndex(options);
+      },
+    }),
+    [],
+  );
+
   return createElement("walli-chat", {
     className,
-    ref,
+    ref: elementRef,
     style,
   });
-}
+});
 
-export type { WalliChatMessage };
+export type { WalliChatMessage, WalliChatScrollToIndexOptions };
