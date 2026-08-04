@@ -24,8 +24,6 @@ type PendingScrollRequest = {
   position: "top" | "bottom";
 };
 
-const MAX_CACHED_MESSAGE_ELEMENTS = 120;
-
 @customElement("walli-chat")
 export class WalliChatElement extends LitElement {
   private preparedMessages: PreparedChatMessage[] = [];
@@ -52,6 +50,15 @@ export class WalliChatElement extends LitElement {
 
   @property({ attribute: false })
   accessor messages: readonly WalliChatMessage[] = [];
+
+  @property({
+    attribute: "default-scroll-to-bottom",
+    converter: {
+      fromAttribute: (value) => value !== "false",
+      toAttribute: (value: boolean) => (value ? "" : "false"),
+    },
+  })
+  accessor defaultScrollToBottom = true;
 
   scrollToIndex(options: WalliChatScrollToIndexOptions = {}): void {
     this.pendingScrollRequest = {
@@ -114,7 +121,7 @@ export class WalliChatElement extends LitElement {
   protected override willUpdate(changedProperties: PropertyValues<this>): void {
     if (changedProperties.has("messages")) {
       this.preparedMessages = createPreparedChatMessages(this.messages);
-      if (!this.hasAppliedDefaultScroll) {
+      if (this.defaultScrollToBottom && !this.hasAppliedDefaultScroll) {
         this.pendingScrollRequest = {
           animated: false,
           position: "bottom",
@@ -222,7 +229,9 @@ export class WalliChatElement extends LitElement {
 
     this.projectVisibleRows(frame, start, end, true);
     this.pendingScrollRequest = null;
-    this.hasAppliedDefaultScroll = true;
+    if (pendingScrollRequest.index === undefined && pendingScrollRequest.position === "bottom") {
+      this.hasAppliedDefaultScroll = true;
+    }
     void this.updateComplete.then(() => {
       this.scrollViewportTo(targetScrollTop, pendingScrollRequest.animated);
     });
@@ -299,47 +308,39 @@ export class WalliChatElement extends LitElement {
     const canvas = this.canvasElement;
     if (canvas === null) return;
 
-    const fragment = document.createDocumentFragment();
-    for (let index = start; index < end; index++) {
-      let element = this.mountedMessageElements.get(index);
-      if (element === undefined) {
-        element = document.createElement("walli-message") as WalliMessageElement;
-        element.dataset.index = String(index);
-        this.mountedMessageElements.set(index, element);
-      }
-
-      element.message = frame.messages[index]!;
-      fragment.append(element);
-    }
-
-    for (const [index, element] of this.mountedMessageElements) {
+    for (let index = this.mountedStart; index < this.mountedEnd; index++) {
       if (index < start || index >= end) {
-        element.remove();
+        const element = this.mountedMessageElements.get(index);
+        if (element !== undefined) {
+          element.remove();
+          this.mountedMessageElements.delete(index);
+        }
       }
     }
 
-    canvas.append(fragment);
-    this.pruneCachedMessageElements(start, end);
+    const appendFragment = document.createDocumentFragment();
+    for (let index = Math.max(this.mountedEnd, start); index < end; index++) {
+      appendFragment.append(this.createMessageElement(frame, index));
+    }
+    canvas.append(appendFragment);
+
+    let beforeNode = canvas.firstChild;
+    for (let index = Math.min(this.mountedStart, end) - 1; index >= start; index--) {
+      const element = this.createMessageElement(frame, index);
+      canvas.insertBefore(element, beforeNode);
+      beforeNode = element;
+    }
+
     this.mountedStart = start;
     this.mountedEnd = end;
   }
 
-  private pruneCachedMessageElements(start: number, end: number): void {
-    const overflow = this.mountedMessageElements.size - MAX_CACHED_MESSAGE_ELEMENTS;
-    if (overflow <= 0) return;
-
-    const viewportCenter = (start + end - 1) / 2;
-    const candidates = Array.from(this.mountedMessageElements.entries())
-      .filter(([index, element]) => (index < start || index >= end) && element.parentNode === null)
-      .sort(([leftIndex], [rightIndex]) => {
-        return Math.abs(rightIndex - viewportCenter) - Math.abs(leftIndex - viewportCenter);
-      });
-
-    for (let index = 0; index < Math.min(overflow, candidates.length); index++) {
-      const [messageIndex, element] = candidates[index]!;
-      element.remove();
-      this.mountedMessageElements.delete(messageIndex);
-    }
+  private createMessageElement(frame: ConversationFrame, index: number): WalliMessageElement {
+    const element = document.createElement("walli-message") as WalliMessageElement;
+    element.dataset.index = String(index);
+    element.message = frame.messages[index]!;
+    this.mountedMessageElements.set(index, element);
+    return element;
   }
 
   override render() {

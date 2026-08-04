@@ -13,6 +13,7 @@ import type { WalliChatMessage, WalliChatScrollToIndexOptions } from "../types";
 
 export type WalliChatProps = {
   className?: string;
+  defaultScrollToBottom?: boolean;
   messages: readonly WalliChatMessage[];
   style?: CSSProperties;
 };
@@ -23,7 +24,7 @@ export type WalliChatRef = {
 };
 
 export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function WalliChat(
-  { className, messages, style },
+  { className, defaultScrollToBottom = true, messages, style },
   forwardedRef,
 ): ReactElement {
   const elementRef = useRef<WalliChatElement>(null);
@@ -33,6 +34,12 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
       elementRef.current.messages = messages;
     }
   }, [messages]);
+
+  useEffect(() => {
+    if (elementRef.current) {
+      elementRef.current.defaultScrollToBottom = defaultScrollToBottom;
+    }
+  }, [defaultScrollToBottom]);
 
   useImperativeHandle(
     forwardedRef,

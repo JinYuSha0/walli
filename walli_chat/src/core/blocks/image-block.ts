@@ -109,8 +109,9 @@ export class WalliImageBlockElement extends BlockShellElement<ImageBlockLayout> 
       class="absolute top-0 block cursor-zoom-in rounded-[10px] bg-muted object-cover ring-1 ring-border"
       src=${block.src}
       alt=${block.alt}
-      loading="eager"
-      decoding="sync"
+      loading="lazy"
+      decoding="async"
+      fetchpriority="low"
       role="button"
       tabindex="0"
       style=${`left:${contentInsetX + block.contentLeft}px; max-width:${block.width}px; height:${block.height}px; width:auto; transform:translateZ(0); backface-visibility:hidden;`}
