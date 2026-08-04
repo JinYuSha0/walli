@@ -1,6 +1,8 @@
 import type { Token } from "marked";
 import { createBlockBase, parseMarkdownHref } from "../helper";
 import type { BlockLayout, ParseContext, PreparedImageBlock } from "../type";
+import PhotoSwipe from "photoswipe";
+import "photoswipe/style.css";
 import { computed } from "@preact/signals-core";
 import { customElement } from "lit/decorators.js";
 import { BlockShellElement } from "./block-shell";
@@ -89,17 +91,98 @@ function readDimension(source: string, pattern: RegExp): number | undefined {
 }
 
 type ImageBlockLayout = Extract<BlockLayout, { kind: "image" }>;
+type ImagePreviewSize = {
+  height: number;
+  width: number;
+};
+
+const imagePreviewSizeCache = new Map<string, Promise<ImagePreviewSize | null>>();
 
 @customElement("walli-image-block")
 export class WalliImageBlockElement extends BlockShellElement<ImageBlockLayout> {
   protected override renderContent(block: ImageBlockLayout, contentInsetX: number): TemplateResult {
     return html`<img
-      class="absolute top-0 block rounded-[10px] bg-muted object-cover ring-1 ring-border"
+      class="absolute top-0 block cursor-zoom-in rounded-[10px] bg-muted object-cover ring-1 ring-border"
       src=${block.src}
       alt=${block.alt}
       loading="lazy"
       decoding="async"
+      role="button"
+      tabindex="0"
       style=${`left:${contentInsetX + block.contentLeft}px; max-width:${block.width}px; height:${block.height}px; width:auto;`}
+      @click=${(event: MouseEvent) => void this.previewImage(event, block)}
+      @keydown=${(event: KeyboardEvent) => this.previewImageFromKeyboard(event, block)}
     />`;
   }
+
+  private async previewImage(event: Event, block: ImageBlockLayout): Promise<void> {
+    const previewSize = await resolvePreviewSize(event.currentTarget, block);
+
+    new PhotoSwipe({
+      bgClickAction: "close",
+      dataSource: [
+        {
+          alt: block.alt,
+          height: previewSize.height,
+          src: block.src,
+          width: previewSize.width,
+        },
+      ],
+      index: 0,
+      maxZoomLevel: 4,
+      secondaryZoomLevel: 2,
+      wheelToZoom: true,
+    }).init();
+  }
+
+  private previewImageFromKeyboard(event: KeyboardEvent, block: ImageBlockLayout): void {
+    if (event.key !== "Enter" && event.key !== " ") return;
+
+    event.preventDefault();
+    void this.previewImage(event, block);
+  }
+}
+
+async function resolvePreviewSize(
+  trigger: EventTarget | null,
+  block: ImageBlockLayout,
+): Promise<ImagePreviewSize> {
+  if (
+    trigger instanceof HTMLImageElement &&
+    trigger.naturalWidth > 0 &&
+    trigger.naturalHeight > 0
+  ) {
+    return {
+      height: trigger.naturalHeight,
+      width: trigger.naturalWidth,
+    };
+  }
+
+  return (
+    (await loadImagePreviewSize(block.src)) ?? {
+      height: block.height,
+      width: block.width,
+    }
+  );
+}
+
+function loadImagePreviewSize(src: string): Promise<ImagePreviewSize | null> {
+  const cached = imagePreviewSizeCache.get(src);
+  if (cached) return cached;
+
+  const pending = new Promise<ImagePreviewSize | null>((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      resolve(
+        image.naturalWidth > 0 && image.naturalHeight > 0
+          ? { height: image.naturalHeight, width: image.naturalWidth }
+          : null,
+      );
+    };
+    image.onerror = () => resolve(null);
+    image.src = src;
+  });
+
+  imagePreviewSizeCache.set(src, pending);
+  return pending;
 }
