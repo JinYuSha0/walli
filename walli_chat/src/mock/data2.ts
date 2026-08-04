@@ -54,6 +54,7 @@ export const BASE_MESSAGE_SPECS2: MarkdownChatSeed[] = [
     "| inline | marks, links, code spans | width drift |",
     "| blocks | quote, list, table, hr | vertical overlap |",
     "| scripts | English, 日本語, العربية | line breaking |",
+    "| media | [docs link](https://example.com/docs) and ![chart](https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Fronalpstock_big.jpg/120px-Fronalpstock_big.jpg) | atomic sizing |",
     "",
     "```ts",
     "type NestedCase = {",

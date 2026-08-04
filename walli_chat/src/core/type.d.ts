@@ -42,8 +42,28 @@ export type PreparedRuleBlock = PreparedBlockBase & {
   height: number;
 };
 
+export type PreparedTableBlock = PreparedBlockBase & {
+  kind: "table";
+  lineHeight: number;
+  header: PreparedTableCell[];
+  rows: PreparedTableCell[][];
+};
+
+export type PreparedTableCell = {
+  align: "left" | "center" | "right" | null;
+  classNames: string[];
+  flow: PreparedRichInline;
+  hrefs: Array<string | null>;
+  imageAlts: Array<string | null>;
+  imageSrcs: Array<string | null>;
+};
+
 export type PreparedBlock =
-  PreparedInlineBlock | PreparedCodeBlock | PreparedImageBlock | PreparedRuleBlock;
+  | PreparedInlineBlock
+  | PreparedCodeBlock
+  | PreparedImageBlock
+  | PreparedRuleBlock
+  | PreparedTableBlock;
 
 export type PreparedChatMessage = {
   blocks: PreparedBlock[];
@@ -161,7 +181,40 @@ export type RuleBlockLayout = {
   width: number;
 };
 
-export type BlockLayout = InlineBlockLayout | CodeBlockLayout | ImageBlockLayout | RuleBlockLayout;
+export type TableCellLayout = {
+  align: "left" | "center" | "right" | null;
+  height: number;
+  lines: Array<{
+    fragments: InlineFragmentLayout[];
+    width: number;
+  }>;
+  paddingInlineEnd: number;
+  paddingInlineStart: number;
+  width: number;
+  x: number;
+  y: number;
+};
+
+export type TableBlockLayout = {
+  cells: TableCellLayout[];
+  columnWidths: number[];
+  contentLeft: number;
+  height: number;
+  kind: "table";
+  markerClassName: string | null;
+  markerLeft: number | null;
+  markerText: string | null;
+  quoteRailLefts: number[];
+  top: number;
+  width: number;
+};
+
+export type BlockLayout =
+  | InlineBlockLayout
+  | CodeBlockLayout
+  | ImageBlockLayout
+  | RuleBlockLayout
+  | TableBlockLayout;
 
 export type BlockFrameBase = {
   contentLeft: number;
@@ -195,4 +248,11 @@ export type RuleBlockFrame = BlockFrameBase & {
   width: number;
 };
 
-export type BlockFrame = InlineBlockFrame | CodeBlockFrame | ImageBlockFrame | RuleBlockFrame;
+export type TableBlockFrame = BlockFrameBase & {
+  kind: "table";
+  lineHeight: number;
+  width: number;
+};
+
+export type BlockFrame =
+  InlineBlockFrame | CodeBlockFrame | ImageBlockFrame | RuleBlockFrame | TableBlockFrame;

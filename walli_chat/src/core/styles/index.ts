@@ -12,7 +12,7 @@ const fontFamilyMap = {
     'ui-monospace,"SFMono-Regular","SF Mono",Menlo,Monaco,Consolas,"Liberation Mono",monospace',
 };
 
-function getFont(
+export function getFont(
   variant: InlineVariant,
   marks: MarkState | null,
   size: Parameters<typeof getFontSize>[0],

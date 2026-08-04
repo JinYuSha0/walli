@@ -18,6 +18,7 @@ import { layoutWithLines, measureLineStats } from "@chenglou/pretext";
 import { getCommonStyle } from "./styles";
 import { getCodeBlockStyle } from "./blocks/code-block";
 import { getImageBlockStyle } from "./blocks/image-block";
+import { materializeTableCells, measureTableBlock } from "./blocks/table-block";
 import { messages } from "../store";
 
 export function createPreparedChatMessages(): PreparedChatMessage[] {
@@ -97,6 +98,8 @@ function getUsedBlockWidth(block: BlockFrame): number {
     case "image":
       return block.contentLeft + block.width;
     case "rule":
+      return block.contentLeft + block.width;
+    case "table":
       return block.contentLeft + block.width;
   }
 }
@@ -205,6 +208,22 @@ function layoutBlockFrame(block: PreparedBlock, contentWidth: number, top: numbe
         width: Math.max(1, contentWidth - block.contentLeft),
       };
     }
+
+    case "table": {
+      const metrics = measureTableBlock(block, Math.max(1, contentWidth - block.contentLeft));
+      return {
+        contentLeft: block.contentLeft,
+        height: metrics.height,
+        kind: "table",
+        lineHeight: block.lineHeight,
+        markerClassName: block.markerClassName,
+        markerLeft: block.markerLeft,
+        markerText: block.markerText,
+        quoteRailLefts: block.quoteRailLefts,
+        top,
+        width: metrics.width,
+      };
+    }
   }
 }
 
@@ -298,6 +317,24 @@ function materializeBlockLayout(
         contentLeft: frame.contentLeft,
         height: frame.height,
         kind: "rule",
+        markerClassName: frame.markerClassName,
+        markerLeft: frame.markerLeft,
+        markerText: frame.markerText,
+        quoteRailLefts: frame.quoteRailLefts,
+        top: frame.top,
+        width: frame.width,
+      };
+    }
+
+    case "table": {
+      if (block.kind !== "table") throw new Error("Table block/frame mismatch");
+      const metrics = measureTableBlock(block, Math.max(1, contentWidth - frame.contentLeft));
+      return {
+        cells: materializeTableCells(block, metrics),
+        columnWidths: metrics.columnWidths,
+        contentLeft: frame.contentLeft,
+        height: frame.height,
+        kind: "table",
         markerClassName: frame.markerClassName,
         markerLeft: frame.markerLeft,
         markerText: frame.markerText,

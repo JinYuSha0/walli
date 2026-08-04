@@ -35,7 +35,7 @@ export function buildInlineBlocks(
   return buildPreparedInlineBlocks(lines, variant, ctx);
 }
 
-function collectInlinePieceLines(
+export function collectInlinePieceLines(
   tokens: readonly Token[],
   variant: InlineVariant,
 ): InlinePiece[][] {
