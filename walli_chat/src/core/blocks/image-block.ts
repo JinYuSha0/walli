@@ -148,8 +148,10 @@ export class WalliImageBlockElement extends BlockShellElement<ImageBlockLayout> 
         },
       ],
       index: 0,
+      imageClickAction: "close",
       maxZoomLevel: 4,
       secondaryZoomLevel: 2,
+      tapAction: "close",
       wheelToZoom: true,
     }).init();
   }

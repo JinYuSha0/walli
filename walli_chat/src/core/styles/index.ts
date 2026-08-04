@@ -1,6 +1,6 @@
 import clsx from "clsx";
 import type { InlineVariant, MarkState, InlinePiece } from "../type";
-import { getFontSize, getSpace } from "./config";
+import { getFontSize, getResponsiveValue, getSpace } from "./config";
 import { parseMarkdownHref } from "../helper";
 import { computed } from "@preact/signals-core";
 
@@ -147,16 +147,16 @@ const CommonStyle = computed(() => ({
   listNestingIndent: getSpace(5),
   blockQuoteIndent: getSpace(4.5),
   railOffset: getSpace(1.25),
-  bubbleMaxRatio: 0.78,
-  bubblePaddingX: getSpace(4),
+  bubbleMaxRatio: getResponsiveValue({ base: 0.92, xl: 0.78 }),
+  bubblePaddingX: getSpace(getResponsiveValue({ base: 2, xl: 4 })),
   bubblePaddingY: getSpace(2.5),
-  messageSidePadding: getSpace(5.5),
+  messageSidePadding: getSpace(getResponsiveValue({ base: 2, xl: 5.5 })),
   messageGap: getSpace(4),
   occlusionBannerHeight: getSpace(15),
   chatTopPadding: getSpace(4),
   chatBottomPadding: getSpace(3),
   maxChatWidth: getSpace(215),
-  pageMargin: getSpace(7),
+  pageMargin: getSpace(getResponsiveValue({ base: 2, xl: 7 })),
 }));
 
 export function getCommonStyle(key: keyof typeof CommonStyle.value) {
