@@ -126,8 +126,8 @@ export class WalliChatElement extends SignalWatcher(LitElement) {
       frame,
       scrollTop,
       viewportHeight,
-      occlusionBannerHeight,
-      occlusionBannerHeight,
+      0,
+      0,
     );
 
     this.frame = frame;

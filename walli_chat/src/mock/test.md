@@ -10,6 +10,12 @@ This message intentionally mixes **bold**, _italic_, _**nested emphasis**_, ~~de
 > 1. quoted ordered child
 > 2. quoted ordered child with **strong text**
 >
+> > - 1
+> > - 2
+>
+> > - 1.1
+> > - 2.2
+>
 > > Nested quote level two should keep its rail and indentation stable.
 
 ## Checklist with children
@@ -33,6 +39,7 @@ This message intentionally mixes **bold**, _italic_, _**nested emphasis**_, ~~de
 | inline  | marks, links, code spans | width drift      |
 | blocks  | quote, list, table, hr   | vertical overlap |
 | scripts | English, 日本語, العربية | line breaking    |
+| media   | [docs link](https://example.com/docs) and ![chart](https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Fronalpstock_big.jpg/120px-Fronalpstock_big.jpg) | atomic sizing |
 
 ```ts
 type NestedCase = {

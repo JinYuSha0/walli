@@ -178,13 +178,14 @@ function layoutBlockFrame(block: PreparedBlock, contentWidth: number, top: numbe
 
     case "image": {
       const availableWidth = Math.max(1, contentWidth - block.contentLeft);
-      const width = Math.max(
-        1,
-        Math.round(availableWidth * getImageBlockStyle("imageBlockWidthRatio")),
-      );
+      const preferredWidth = block.targetWidth ?? availableWidth;
+      const width = Math.max(1, Math.round(Math.min(availableWidth, preferredWidth)));
       return {
         contentLeft: block.contentLeft,
-        height: Math.max(1, Math.round(width / block.aspectRatio)),
+        height: Math.max(
+          1,
+          Math.round(block.targetHeight ?? getImageBlockStyle("imageBlockHeight")),
+        ),
         kind: "image",
         markerClassName: block.markerClassName,
         markerLeft: block.markerLeft,

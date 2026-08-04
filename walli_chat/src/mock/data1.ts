@@ -1,3 +1,5 @@
+import readmeZhCn from "../../../README.zh-CN.md?raw";
+
 export type MarkdownChatSeed = {
   role: "assistant" | "user";
   markdown: string;
@@ -10,7 +12,78 @@ function message(role: "assistant" | "user", ...lines: string[]): MarkdownChatSe
   };
 }
 
-export const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
+const TOTAL_MESSAGE_LENGTH = 10_000;
+
+const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
+  message(
+    "assistant",
+    '![image](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRZYXcjQI4KQpTXByeK6dpmd6GJY5LPVE6NL3Rd-CbZ7s2UsphrHs1djE8&s=10){width="365" height="547"}',
+  ),
+  message(
+    "assistant",
+    "![image](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRZYXcjQI4KQpTXByeK6dpmd6GJY5LPVE6NL3Rd-CbZ7s2UsphrHs1djE8&s=10)",
+  ),
+  message(
+    "assistant",
+    "![image](https://img.redocn.com/sheji/20250805/jilongpochengshijianzhuriluoquanjing_13631705.jpg.400.jpg)",
+  ),
+  message("assistant", readmeZhCn),
+  message("user", "Add one deliberately complex nested markdown sample to the test loop."),
+  message(
+    "assistant",
+    "# Nested markdown stress sample",
+    "",
+    "This message intentionally mixes **bold**, *italic*, ***nested emphasis***, ~~deleted text~~, `inline code`, [a safe link](https://example.com/spec), CJK 字符, العربية, and emoji ✅ to exercise inline flow inside richer block structure.",
+    "",
+    "> Outer quote with regular prose and `inline code`.",
+    ">",
+    "> - quoted bullet one",
+    "> - quoted bullet two with a nested list",
+    ">   1. quoted ordered child",
+    ">   2. quoted ordered child with **strong text**",
+    ">",
+    "> > - 1",
+    "> > - 2",
+    ">",
+    "> > 1. 1",
+    "> > 2. 2",
+    ">",
+    "> > Nested quote level two should keep its rail and indentation stable.",
+    "",
+    "## Checklist with children",
+    "",
+    "- [x] Parse top-level task item",
+    "- [ ] Keep nested task spacing predictable",
+    "  - [x] nested task one",
+    "  - [ ] nested task two with a long sentence that should wrap without colliding with the marker gutter or quote rails",
+    "- [ ] Render normal children below task items",
+    "  1. ordered child inside unordered item",
+    "  2. second ordered child",
+    "     - third-level bullet",
+    "     - another third-level bullet with `code` and [link](https://example.com/deep)",
+    "",
+    "---",
+    "",
+    "| Area | Expected behavior | Risk |",
+    "| --- | --- | --- |",
+    "| inline | marks, links, code spans | width drift |",
+    "| blocks | quote, list, table, hr | vertical overlap |",
+    "| scripts | English, 日本語, العربية | line breaking |",
+    "| media | [docs link](https://example.com/docs) and ![chart](https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Fronalpstock_big.jpg/120px-Fronalpstock_big.jpg) | atomic sizing |",
+    "",
+    "```ts",
+    "type NestedCase = {",
+    "  id: string;",
+    "  depth: number;",
+    "  done: boolean;",
+    "};",
+    "",
+    'const sample: NestedCase = { id: "markdown-stress", depth: 3, done: false };',
+    "```",
+    "",
+    "Final paragraph after code should return to normal body rhythm.",
+  ),
+  message("user", "md"),
   message(
     "user",
     "Can we treat the rich-text inline flow helper (`rich-inline`) as a real primitive, or is it only good for one tiny demo?",
@@ -230,8 +303,8 @@ export const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
     "",
     "- top-level bullets should feel close to body text",
     "- nested bullets can indent, but only when they truly nest",
-    "  - this second level should not explode the width math",
-    "  - the marker still needs a clean left gutter",
+    "- this second level should not explode the width math",
+    "- the marker still needs a clean left gutter",
     "- quotes and code fences should tuck closer to the lead-in paragraph",
   ),
   message("user", "Can we include a very plain human message too? Real threads have those."),
@@ -250,3 +323,11 @@ export const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
     "The good version of this alpha API is not “we solved rich text.” It is “we found a low-level paragraph leaf that keeps the hypothesis space open for a richer block model above it.”",
   ),
 ];
+
+export function getMessages() {
+  const message: MarkdownChatSeed[] = [];
+  for (let i = 0; i < TOTAL_MESSAGE_LENGTH; i++) {
+    message.push(BASE_MESSAGE_SPECS[i % BASE_MESSAGE_SPECS.length]!);
+  }
+  return message;
+}

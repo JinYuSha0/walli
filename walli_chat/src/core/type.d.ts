@@ -32,9 +32,10 @@ export type PreparedCodeBlock = PreparedBlockBase & {
 
 export type PreparedImageBlock = PreparedBlockBase & {
   alt: string;
-  aspectRatio: number;
   kind: "image";
   src: string;
+  targetHeight: number | null;
+  targetWidth: number | null;
 };
 
 export type PreparedRuleBlock = PreparedBlockBase & {

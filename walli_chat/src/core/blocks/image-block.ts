@@ -7,9 +7,11 @@ import { BlockShellElement } from "./block-shell";
 import { html, type TemplateResult } from "lit";
 
 const ImageBlockStyle = computed(() => ({
-  imageAspectRatio: 16 / 9,
-  imageBlockWidthRatio: 0.8,
+  imageBlockHeight: 240,
 }));
+
+const WIDTH_ATTRIBUTE_RE = /\bwidth=["']?(\d+(?:\.\d+)?)(?:px)?["']?/;
+const HEIGHT_ATTRIBUTE_RE = /\bheight=["']?(\d+(?:\.\d+)?)(?:px)?["']?/;
 
 export function getImageBlockStyle(key: keyof (typeof ImageBlockStyle)["value"]) {
   return ImageBlockStyle.value[key];
@@ -19,35 +21,71 @@ export function buildImageBlock(
   tokens: readonly Token[] | undefined,
   ctx: ParseContext,
 ): PreparedImageBlock | null {
-  if (!tokens || tokens.length !== 1) return null;
+  if (!tokens || (tokens.length !== 1 && tokens.length !== 2)) return null;
 
   const token = tokens[0]!;
   if (token.type !== "image") return null;
+  const dimensions = parseImageDimensions(tokens[1]);
+  if (tokens.length === 2 && dimensions === null) return null;
 
   const src = parseMarkdownHref(token.href);
   if (!src) return null;
 
+  return createImageBlock({
+    alt: token.text.length > 0 ? token.text : "image",
+    ctx,
+    dimensions,
+    src,
+  });
+}
+
+type ImageDimensions = {
+  height?: number;
+  width?: number;
+};
+
+function createImageBlock({
+  alt,
+  ctx,
+  dimensions,
+  src,
+}: {
+  alt: string;
+  ctx: ParseContext;
+  dimensions: ImageDimensions | null;
+  src: string;
+}): PreparedImageBlock {
   return {
     ...createBlockBase(ctx),
-    alt: token.text.length > 0 ? token.text : "image",
-    aspectRatio: resolveImageAspectRatio(src),
+    alt,
     kind: "image",
     src,
+    targetHeight: dimensions?.height ?? null,
+    targetWidth: dimensions?.width ?? null,
   };
 }
 
-// fixme
-function resolveImageAspectRatio(src: string): number {
-  const match = src.match(/\/(\d{2,5})\/(\d{2,5})(?:[/?#]|$)/);
-  if (match === null) return getImageBlockStyle("imageAspectRatio");
+function parseImageDimensions(token: Token | undefined): ImageDimensions | null {
+  if (token === undefined) return null;
+  if (token.type !== "text") return null;
 
-  const width = Number(match[1]);
-  const height = Number(match[2]);
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
-    return getImageBlockStyle("imageAspectRatio");
-  }
+  const source = token.text.trim();
+  if (!source.startsWith("{") || !source.endsWith("}")) return null;
 
-  return width / height;
+  const attributes = source.slice(1, -1);
+  const width = readDimension(attributes, WIDTH_ATTRIBUTE_RE);
+  const height = readDimension(attributes, HEIGHT_ATTRIBUTE_RE);
+
+  if (width === undefined && height === undefined) return null;
+
+  return { height, width };
+}
+
+function readDimension(source: string, pattern: RegExp): number | undefined {
+  const value = Number(pattern.exec(source)?.[1]);
+  if (!Number.isFinite(value) || value <= 0) return undefined;
+
+  return value;
 }
 
 type ImageBlockLayout = Extract<BlockLayout, { kind: "image" }>;
@@ -56,14 +94,12 @@ type ImageBlockLayout = Extract<BlockLayout, { kind: "image" }>;
 export class WalliImageBlockElement extends BlockShellElement<ImageBlockLayout> {
   protected override renderContent(block: ImageBlockLayout, contentInsetX: number): TemplateResult {
     return html`<img
-      class="absolute top-0 block max-w-full rounded-[10px] bg-muted object-contain ring-1 ring-border"
+      class="absolute top-0 block rounded-[10px] bg-muted object-cover ring-1 ring-border"
       src=${block.src}
       alt=${block.alt}
       loading="lazy"
       decoding="async"
-      width=${Math.round(block.width)}
-      height=${Math.round(block.height)}
-      style=${`left:${contentInsetX + block.contentLeft}px; width:${block.width}px; height:auto;`}
+      style=${`left:${contentInsetX + block.contentLeft}px; max-width:${block.width}px; height:${block.height}px; width:auto;`}
     />`;
   }
 }
