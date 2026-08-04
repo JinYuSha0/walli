@@ -100,20 +100,38 @@ const imagePreviewSizeCache = new Map<string, Promise<ImagePreviewSize | null>>(
 
 @customElement("walli-image-block")
 export class WalliImageBlockElement extends BlockShellElement<ImageBlockLayout> {
+  private renderedBlock: ImageBlockLayout | null = null;
+
   protected override renderContent(block: ImageBlockLayout, contentInsetX: number): TemplateResult {
+    this.renderedBlock = block;
+
     return html`<img
       class="absolute top-0 block cursor-zoom-in rounded-[10px] bg-muted object-cover ring-1 ring-border"
       src=${block.src}
       alt=${block.alt}
-      loading="lazy"
-      decoding="async"
+      loading="eager"
+      decoding="sync"
       role="button"
       tabindex="0"
-      style=${`left:${contentInsetX + block.contentLeft}px; max-width:${block.width}px; height:${block.height}px; width:auto;`}
-      @click=${(event: MouseEvent) => void this.previewImage(event, block)}
-      @keydown=${(event: KeyboardEvent) => this.previewImageFromKeyboard(event, block)}
+      style=${`left:${contentInsetX + block.contentLeft}px; max-width:${block.width}px; height:${block.height}px; width:auto; transform:translateZ(0); backface-visibility:hidden;`}
+      @click=${this.handlePreviewClick}
+      @keydown=${this.handlePreviewKeydown}
     />`;
   }
+
+  private readonly handlePreviewClick = (event: MouseEvent): void => {
+    if (this.renderedBlock === null) return;
+
+    void this.previewImage(event, this.renderedBlock);
+  };
+
+  private readonly handlePreviewKeydown = (event: KeyboardEvent): void => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    if (this.renderedBlock === null) return;
+
+    event.preventDefault();
+    void this.previewImage(event, this.renderedBlock);
+  };
 
   private async previewImage(event: Event, block: ImageBlockLayout): Promise<void> {
     const previewSize = await resolvePreviewSize(event.currentTarget, block);
@@ -133,13 +151,6 @@ export class WalliImageBlockElement extends BlockShellElement<ImageBlockLayout> 
       secondaryZoomLevel: 2,
       wheelToZoom: true,
     }).init();
-  }
-
-  private previewImageFromKeyboard(event: KeyboardEvent, block: ImageBlockLayout): void {
-    if (event.key !== "Enter" && event.key !== " ") return;
-
-    event.preventDefault();
-    void this.previewImage(event, block);
   }
 }
 

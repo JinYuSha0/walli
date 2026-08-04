@@ -1,6 +1,6 @@
 import "./walli-message";
 import { html, LitElement, type PropertyValues } from "lit";
-import { customElement, eventOptions, property, state } from "lit/decorators.js";
+import { customElement, eventOptions, property } from "lit/decorators.js";
 import walliChatUnoCss from "virtual:walli-chat-uno-styles";
 import {
   buildConversationFrame,
@@ -8,18 +8,14 @@ import {
   getMaxChatWidth,
   findVisibleRange,
 } from "../core/index";
-import type { ChatMessageInstance, ConversationFrame, PreparedChatMessage } from "../core/type";
+import type { ConversationFrame, PreparedChatMessage } from "../core/type";
 import { getCommonStyle } from "../core/styles";
 import type { WalliChatMessage, WalliChatScrollToIndexOptions } from "../types";
+import type { WalliMessageElement } from "./walli-message";
 
 type Size = {
   width: number;
   height: number;
-};
-
-type VisibleMessage = {
-  index: number;
-  message: ChatMessageInstance;
 };
 
 type PendingScrollRequest = {
@@ -27,6 +23,8 @@ type PendingScrollRequest = {
   index?: number;
   position: "top" | "bottom";
 };
+
+const MAX_CACHED_MESSAGE_ELEMENTS = 120;
 
 @customElement("walli-chat")
 export class WalliChatElement extends LitElement {
@@ -37,7 +35,9 @@ export class WalliChatElement extends LitElement {
   private scheduledRaf: number | null = null;
   private scheduledScrollRaf: number | null = null;
   private frame: ConversationFrame | null = null;
+  private canvasElement: HTMLDivElement | null = null;
   private viewportElement: HTMLDivElement | null = null;
+  private mountedMessageElements = new Map<number, WalliMessageElement>();
   private containerSize: Size = {
     width: this.parentElement?.clientWidth ?? 0,
     height: this.parentElement?.clientHeight ?? 0,
@@ -49,9 +49,6 @@ export class WalliChatElement extends LitElement {
   private viewportScrollTop = 0;
   private mountedStart = 0;
   private mountedEnd = 0;
-
-  @state()
-  private accessor visibleMessages: VisibleMessage[] = [];
 
   @property({ attribute: false })
   accessor messages: readonly WalliChatMessage[] = [];
@@ -84,6 +81,7 @@ export class WalliChatElement extends LitElement {
 
   override firstUpdated() {
     this.viewportElement = this.renderRoot.querySelector<HTMLDivElement>(".chat-viewport");
+    this.canvasElement = this.renderRoot.querySelector<HTMLDivElement>(".chat-canvas");
 
     const container = this.parentElement ?? this;
     this.resizeObserver?.observe(container);
@@ -91,7 +89,9 @@ export class WalliChatElement extends LitElement {
     if (this.pendingScrollRequest !== null) {
       this.scheduleScrollRequest();
     }
-    void document.fonts.ready.then(() => this.scheduleProjection());
+    void document.fonts.ready.then(() => {
+      if (this.isConnected) this.scheduleProjection();
+    });
   }
 
   override disconnectedCallback() {
@@ -105,6 +105,8 @@ export class WalliChatElement extends LitElement {
     }
     this.resizeObserver?.disconnect();
     this.resizeObserver = undefined;
+    this.mountedMessageElements.clear();
+    this.canvasElement = null;
     this.viewportElement = null;
     super.disconnectedCallback();
   }
@@ -131,6 +133,8 @@ export class WalliChatElement extends LitElement {
     };
     this.mountedStart = 0;
     this.mountedEnd = 0;
+    this.mountedMessageElements.clear();
+    this.canvasElement?.replaceChildren();
     this.scheduleProjection();
   }
 
@@ -175,12 +179,15 @@ export class WalliChatElement extends LitElement {
       previousFrame !== null &&
       previousFrame.chatWidth === chatWidth &&
       previousFrame.occlusionBannerHeight === occlusionBannerHeight;
-    const frame = canReuseFrame
-      ? previousFrame
-      : buildConversationFrame(this.preparedMessages, chatWidth, occlusionBannerHeight);
+
+    if (!canReuseFrame) {
+      this.frame = buildConversationFrame(this.preparedMessages, chatWidth, occlusionBannerHeight);
+    }
+
+    const frame = this.frame!;
+
     const { start, end } = findVisibleRange(frame, scrollTop, viewportHeight, 0, 0);
 
-    this.frame = frame;
     if (
       this.contentSize.width !== frame.chatWidth ||
       this.contentSize.height !== frame.totalHeight
@@ -289,29 +296,57 @@ export class WalliChatElement extends LitElement {
       return;
     }
 
-    const visibleMessages: VisibleMessage[] = [];
+    const canvas = this.canvasElement;
+    if (canvas === null) return;
+
+    const fragment = document.createDocumentFragment();
     for (let index = start; index < end; index++) {
-      visibleMessages.push({
-        index,
-        message: frame.messages[index]!,
-      });
+      let element = this.mountedMessageElements.get(index);
+      if (element === undefined) {
+        element = document.createElement("walli-message") as WalliMessageElement;
+        element.dataset.index = String(index);
+        this.mountedMessageElements.set(index, element);
+      }
+
+      element.message = frame.messages[index]!;
+      fragment.append(element);
     }
 
+    for (const [index, element] of this.mountedMessageElements) {
+      if (index < start || index >= end) {
+        element.remove();
+      }
+    }
+
+    canvas.append(fragment);
+    this.pruneCachedMessageElements(start, end);
     this.mountedStart = start;
     this.mountedEnd = end;
-    this.visibleMessages = visibleMessages;
+  }
+
+  private pruneCachedMessageElements(start: number, end: number): void {
+    const overflow = this.mountedMessageElements.size - MAX_CACHED_MESSAGE_ELEMENTS;
+    if (overflow <= 0) return;
+
+    const viewportCenter = (start + end - 1) / 2;
+    const candidates = Array.from(this.mountedMessageElements.entries())
+      .filter(([index, element]) => (index < start || index >= end) && element.parentNode === null)
+      .sort(([leftIndex], [rightIndex]) => {
+        return Math.abs(rightIndex - viewportCenter) - Math.abs(leftIndex - viewportCenter);
+      });
+
+    for (let index = 0; index < Math.min(overflow, candidates.length); index++) {
+      const [messageIndex, element] = candidates[index]!;
+      element.remove();
+      this.mountedMessageElements.delete(messageIndex);
+    }
   }
 
   override render() {
     return html`
       <main class="relative h-full w-full overflow-clip bg-background text-foreground font-sans">
         <div class="chat-viewport absolute inset-0 overflow-auto" @scroll=${this.handleScroll}>
-          <div class="chat-canvas relative mx-auto min-h-full">
-            ${this.visibleMessages.map(
-              ({ index, message }) =>
-                html`<walli-message .message=${message} data-index=${index}></walli-message>`,
-            )}
-          </div>
+          <div class="chat-canvas relative mx-auto min-h-full"></div>
         </div>
       </main>
     `;
