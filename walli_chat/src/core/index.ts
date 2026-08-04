@@ -223,8 +223,9 @@ function layoutBlockFrame(block: PreparedBlock, contentWidth: number, top: numbe
         markerLeft: block.markerLeft,
         markerText: block.markerText,
         quoteRailLefts: block.quoteRailLefts,
+        tableWidth: metrics.width,
         top,
-        width: metrics.width,
+        width: metrics.viewportWidth,
       };
     }
   }
@@ -342,8 +343,9 @@ function materializeBlockLayout(
         markerLeft: frame.markerLeft,
         markerText: frame.markerText,
         quoteRailLefts: frame.quoteRailLefts,
+        viewportWidth: frame.width,
         top: frame.top,
-        width: frame.width,
+        width: metrics.width,
       };
     }
   }

@@ -59,29 +59,84 @@ export type TableMetrics = {
   height: number;
   rowHeights: number[];
   shouldWrap: boolean;
+  viewportWidth: number;
   width: number;
 };
 
-export function measureTableBlock(block: PreparedTableBlock, availableWidth: number): TableMetrics {
-  const rows = [block.header, ...block.rows];
-  const columnCount = Math.max(0, ...rows.map((row) => row.length));
-  const naturalColumnWidths = measureNaturalColumnWidths(rows, columnCount);
+type NaturalTableMetrics = {
+  columnCount: number;
+  naturalColumnWidths: number[];
+  naturalWidth: number;
+  rows: PreparedTableCell[][];
+};
 
-  const naturalWidth = naturalColumnWidths.reduce((sum, width) => sum + width, 0);
+const naturalMetricsCache = new WeakMap<PreparedTableBlock, NaturalTableMetrics>();
+const tableMetricsCache = new WeakMap<PreparedTableBlock, Map<string, TableMetrics>>();
+
+export function measureTableBlock(block: PreparedTableBlock, availableWidth: number): TableMetrics {
+  const cacheKey = createTableMetricsCacheKey(availableWidth);
+  const cached = tableMetricsCache.get(block)?.get(cacheKey);
+  if (cached !== undefined) return cached;
+
+  const { columnCount, naturalColumnWidths, naturalWidth, rows } = getNaturalTableMetrics(block);
   const shouldWrap = naturalWidth > availableWidth;
-  const columnWidths = shouldWrap
-    ? distributeEvenly(availableWidth, columnCount)
-    : distributeSlack(naturalColumnWidths, availableWidth - naturalWidth);
-  const rowHeights = rows.map((row) => measureTableRowHeight(row, columnWidths, columnCount));
+  const columnWidths =
+    naturalWidth > availableWidth
+      ? naturalColumnWidths.map((columnWidth) => Math.max(1, Math.ceil(columnWidth)))
+      : distributeSlack(naturalColumnWidths, availableWidth - naturalWidth);
+  const tableWidth = columnWidths.reduce((sum, columnWidth) => sum + columnWidth, 0);
+  const rowHeights = rows.map((row, rowIndex) =>
+    measureTableRowHeight(row, columnWidths, columnCount, rowIndex),
+  );
   const contentHeight = rowHeights.reduce((sum, rowHeight) => sum + rowHeight, 0);
 
-  return {
+  const metrics = {
     columnWidths,
     height: getTableBlockStyle("paddingTop") + contentHeight + getTableBlockStyle("paddingBottom"),
     rowHeights,
     shouldWrap,
-    width: availableWidth,
+    viewportWidth: availableWidth,
+    width: Math.max(availableWidth, tableWidth),
   };
+  let blockCache = tableMetricsCache.get(block);
+  if (blockCache === undefined) {
+    blockCache = new Map();
+    tableMetricsCache.set(block, blockCache);
+  }
+  blockCache.set(cacheKey, metrics);
+
+  return metrics;
+}
+
+function createTableMetricsCacheKey(availableWidth: number): string {
+  return [
+    availableWidth,
+    getTableBlockStyle("cellPaddingY"),
+    getTableBlockStyle("lineHeight"),
+    getTableBlockStyle("paddingBottom"),
+    getTableBlockStyle("paddingInlineEnd"),
+    getTableBlockStyle("paddingInlineStart"),
+    getTableBlockStyle("paddingTop"),
+  ].join(":");
+}
+
+function getNaturalTableMetrics(block: PreparedTableBlock): NaturalTableMetrics {
+  const cached = naturalMetricsCache.get(block);
+  if (cached !== undefined) return cached;
+
+  const rows = [block.header, ...block.rows];
+  const columnCount = Math.max(0, ...rows.map((row) => row.length));
+  const naturalColumnWidths = measureNaturalColumnWidths(rows, columnCount);
+  const naturalWidth = naturalColumnWidths.reduce((sum, width) => sum + width, 0);
+  const metrics = {
+    columnCount,
+    naturalColumnWidths,
+    naturalWidth,
+    rows,
+  };
+  naturalMetricsCache.set(block, metrics);
+
+  return metrics;
 }
 
 export function materializeTableCells(
@@ -127,18 +182,6 @@ function measureNaturalColumnWidths(rows: PreparedTableCell[][], columnCount: nu
   return widths;
 }
 
-function distributeEvenly(width: number, columnCount: number): number[] {
-  if (columnCount === 0) return [];
-
-  const baseWidth = Math.floor(width / columnCount);
-  let remainder = Math.max(0, Math.round(width - baseWidth * columnCount));
-  return Array.from({ length: columnCount }, () => {
-    const extra = remainder > 0 ? 1 : 0;
-    remainder -= extra;
-    return Math.max(1, baseWidth + extra);
-  });
-}
-
 function distributeSlack(naturalColumnWidths: number[], slack: number): number[] {
   if (naturalColumnWidths.length === 0) return [];
   if (slack <= 0) return naturalColumnWidths.map((width) => Math.max(1, Math.round(width)));
@@ -156,16 +199,16 @@ function measureTableRowHeight(
   row: PreparedTableCell[],
   columnWidths: number[],
   columnCount: number,
+  rowIndex: number,
 ): number {
   let height = getTableBlockStyle("lineHeight") + getTableBlockStyle("cellPaddingY") * 2;
   for (let columnIndex = 0; columnIndex < columnCount; columnIndex++) {
     const cell = row[columnIndex];
     if (cell === undefined) continue;
-    const lineWidth = getTableCellContentWidth(
-      columnWidths[columnIndex]!,
-      columnIndex,
-      columnCount,
-    );
+    const lineWidth =
+      rowIndex === 0
+        ? Number.MAX_SAFE_INTEGER
+        : getTableCellContentWidth(columnWidths[columnIndex]!, columnIndex, columnCount);
     const { lineCount } = measureRichInlineStats(cell.flow, lineWidth);
     height = Math.max(
       height,
@@ -186,9 +229,10 @@ function materializeTableCell(
 ): TableCellLayout {
   const paddingStart = getTableCellPaddingStart(columnIndex);
   const paddingEnd = getTableCellPaddingEnd(columnIndex, metrics.columnWidths.length);
-  const lineWidth = metrics.shouldWrap
-    ? Math.max(1, width - paddingStart - paddingEnd)
-    : Number.MAX_SAFE_INTEGER;
+  const lineWidth =
+    rowIndex === 0 || !metrics.shouldWrap
+      ? Number.MAX_SAFE_INTEGER
+      : Math.max(1, width - paddingStart - paddingEnd);
 
   return {
     align: cell.align,
@@ -302,10 +346,12 @@ type TableBlockLayout = Extract<BlockLayout, { kind: "table" }>;
 export class WalliTableBlockElement extends BlockShellElement<TableBlockLayout> {
   protected override renderContent(block: TableBlockLayout, contentInsetX: number): TemplateResult {
     return html`<div
-      class="absolute top-0 overflow-hidden rounded-[6px] bg-background ring-1 ring-border"
-      style=${`left:${contentInsetX + block.contentLeft}px; width:${block.width}px; height:${block.height}px;`}
+      class="absolute top-0 overflow-x-auto overflow-y-hidden rounded-[6px] bg-background ring-1 ring-border"
+      style=${`left:${contentInsetX + block.contentLeft}px; width:${block.viewportWidth}px; height:${block.height}px;`}
     >
-      ${block.cells.map((cell) => renderTableCell(cell))} ${renderTableSeparators(block)}
+      <div class="relative" style=${`width:${block.width}px; height:${block.height}px;`}>
+        ${block.cells.map((cell) => renderTableCell(cell))} ${renderTableSeparators(block)}
+      </div>
     </div>`;
   }
 }

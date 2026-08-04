@@ -319,6 +319,26 @@ const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
     "assistant",
     "The good version of this alpha API is not “we solved rich text.” It is “we found a low-level paragraph leaf that keeps the hypothesis space open for a richer block model above it.”",
   ),
+  message("user", "Add one large table so we can test table rendering performance."),
+  message(
+    "assistant",
+    "## Large table performance sample",
+    "",
+    "| Area | Owner | Status | Priority | Latest update | Risk | Next step | Notes |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    "| Markdown parser | Ava | Done | P1 | Token routing covers paragraphs, lists, quotes, tables, code, rules, and image-only paragraphs. | Some extension tokens still fall back to plain text. | Add explicit fixtures for unsupported markdown. | Includes mixed inline marks like **bold**, *italic*, and `code`. |",
+    "| Virtual scroller | Ben | Watching | P0 | Frame reuse keeps scroll projection cheap when width is stable. | Upward scroll can still reveal expensive media blocks. | Keep range changes incremental and avoid full remounts. | Needs mobile smoke testing on low-memory devices. |",
+    "| Table layout | Chen | Profiling | P0 | Column widths, row heights, and wrapping are measured before render. | Large tables repeat rich-inline measurement if cache misses. | Compare cold and warm table metrics paths. | This row intentionally includes longer text to force wrapping on mobile widths. |",
+    "| Image preview | Dana | Active | P1 | PhotoSwipe opens from block images and reads natural image size when available. | Mobile tap behavior differs from desktop click behavior. | Verify tap-to-close and background close. | Uses lazy loading and async decoding for scroll stability. |",
+    "| Responsive spacing | Eli | Done | P2 | Spacing uses Tailwind-like breakpoint prefixes through `getResponsiveValue`. | Server-side default must remain deterministic. | Keep base values mobile-first. | Example: `{ base: 2, xl: 7 }`. |",
+    "| Code block | Faye | Backlog | P2 | Pre-wrap preserves indentation and line breaks. | No syntax highlighting yet. | Add language-aware rendering behind a small API. | Long code should wrap without forcing horizontal scroll. |",
+    "| Links | Gia | Done | P2 | Safe http and https links are passed through inline fragments. | Reference links are not fully resolved. | Add reference-style link support later. | Dense citation rows should still wrap predictably. |",
+    "| Lists | Hugo | Done | P1 | Ordered, unordered, nested, and task lists share block parsing. | Deep nesting can consume too much horizontal space on small screens. | Tune mobile list indentation. | Task markers currently render as text glyphs. |",
+    "| Quotes | Iris | Done | P2 | Quote depth maps to vertical rails and content offset. | Very deep quotes may crowd content. | Cap or compress rails at high depth. | Nested lists inside quotes are included in stress samples. |",
+    "| Release QA | Jin | Pending | P0 | Build and type checks pass locally after layout changes. | Performance regressions are easiest to miss without fixture-heavy demos. | Add repeatable scroll benchmarks. | This table is part of that fixture set. |",
+    "| Accessibility | Kai | Backlog | P1 | Images have alt text and preview trigger roles. | Keyboard paths need broader test coverage. | Audit focus handling in preview and scroll container. | Tables may need semantic alternatives later. |",
+    "| Packaging | Lina | Done | P2 | Web component and React wrapper build separately. | Public options should stay minimal. | Document `defaultScrollToBottom`. | Keep demo-only styles out of library runtime. |",
+  ),
 ];
 
 export function getMessages() {

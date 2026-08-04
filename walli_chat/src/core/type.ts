@@ -208,6 +208,7 @@ export type TableBlockLayout = {
   markerText: string | null;
   quoteRailLefts: number[];
   top: number;
+  viewportWidth: number;
   width: number;
 };
 
@@ -253,6 +254,7 @@ export type RuleBlockFrame = BlockFrameBase & {
 export type TableBlockFrame = BlockFrameBase & {
   kind: "table";
   lineHeight: number;
+  tableWidth: number;
   width: number;
 };
 
