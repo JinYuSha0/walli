@@ -1,9 +1,7 @@
 import readmeZhCn from "../../../README.zh-CN.md?raw";
+import type { WalliChatMessage } from "../types";
 
-export type MarkdownChatSeed = {
-  role: "assistant" | "user";
-  markdown: string;
-};
+export type MarkdownChatSeed = WalliChatMessage;
 
 function message(role: "assistant" | "user", ...lines: string[]): MarkdownChatSeed {
   return {

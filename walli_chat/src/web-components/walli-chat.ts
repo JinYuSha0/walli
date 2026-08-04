@@ -1,7 +1,6 @@
 import "./walli-message";
-import { html, LitElement } from "lit";
-import { SignalWatcher } from "@lit-labs/preact-signals";
-import { customElement, eventOptions, state } from "lit/decorators.js";
+import { html, LitElement, type PropertyValues } from "lit";
+import { customElement, eventOptions, property, state } from "lit/decorators.js";
 import walliChatUnoCss from "virtual:walli-chat-uno-styles";
 import {
   buildConversationFrame,
@@ -11,6 +10,7 @@ import {
 } from "../core/index";
 import type { ChatMessageInstance, ConversationFrame, PreparedChatMessage } from "../core/type";
 import { getCommonStyle } from "../core/styles";
+import type { WalliChatMessage } from "../types";
 
 type Size = {
   width: number;
@@ -23,8 +23,8 @@ type VisibleMessage = {
 };
 
 @customElement("walli-chat")
-export class WalliChatElement extends SignalWatcher(LitElement) {
-  private readonly preparedMessages: PreparedChatMessage[] = createPreparedChatMessages();
+export class WalliChatElement extends LitElement {
+  private preparedMessages: PreparedChatMessage[] = [];
   private resizeObserver?: ResizeObserver;
   private scheduledRaf: number | null = null;
   private frame: ConversationFrame | null = null;
@@ -43,6 +43,9 @@ export class WalliChatElement extends SignalWatcher(LitElement) {
 
   @state()
   private accessor visibleMessages: VisibleMessage[] = [];
+
+  @property({ attribute: false })
+  accessor messages: readonly WalliChatMessage[] = [];
 
   override connectedCallback() {
     super.connectedCallback();
@@ -76,6 +79,24 @@ export class WalliChatElement extends SignalWatcher(LitElement) {
     this.resizeObserver = undefined;
     this.viewportElement = null;
     super.disconnectedCallback();
+  }
+
+  protected override willUpdate(changedProperties: PropertyValues<this>): void {
+    if (changedProperties.has("messages")) {
+      this.preparedMessages = createPreparedChatMessages(this.messages);
+      this.invalidateFrame();
+    }
+  }
+
+  private invalidateFrame(): void {
+    this.frame = null;
+    this.contentSize = {
+      width: 0,
+      height: 0,
+    };
+    this.mountedStart = 0;
+    this.mountedEnd = 0;
+    this.scheduleProjection();
   }
 
   override createRenderRoot() {

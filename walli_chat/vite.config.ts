@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import type { Plugin } from "vite";
 import { readdir, readFile } from "node:fs/promises";
-import { extname } from "node:path";
+import { extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { visualizer } from "rollup-plugin-visualizer";
 import { createGenerator, presetWind3, type PresetWind3Theme } from "unocss";
@@ -9,6 +9,7 @@ import { walliUnoTheme } from "./uno.theme.ts";
 
 const walliChatUnoCssId = "virtual:walli-chat-uno-styles";
 const resolvedWalliChatUnoCssId = `\0${walliChatUnoCssId}`;
+const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 const sourceRoot = fileURLToPath(new URL("./src", import.meta.url));
 const styleSourceExtensions = new Set([".ts", ".tsx", ".js", ".jsx"]);
 
@@ -76,6 +77,7 @@ function walliChatUnoCss(): Plugin {
 }
 
 export default defineConfig(({ mode }) => ({
+  publicDir: false,
   plugins: [
     walliChatUnoCss(),
     mode === "analyze" &&
@@ -88,5 +90,24 @@ export default defineConfig(({ mode }) => ({
   ],
   server: {
     port: 5174,
+  },
+  build: {
+    cssCodeSplit: false,
+    lib: {
+      cssFileName: "walli-chat",
+      entry: {
+        index: resolve(projectRoot, "src/index.ts"),
+        react: resolve(projectRoot, "src/react/index.ts"),
+        theme: resolve(projectRoot, "src/theme-entry.ts"),
+      },
+      formats: ["es"],
+    },
+    rollupOptions: {
+      external: ["react"],
+      output: {
+        assetFileNames: "walli-chat[extname]",
+        entryFileNames: "[name].js",
+      },
+    },
   },
 }));

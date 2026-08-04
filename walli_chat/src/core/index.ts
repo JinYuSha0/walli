@@ -19,10 +19,12 @@ import { getCommonStyle } from "./styles";
 import { getCodeBlockStyle } from "./blocks/code-block";
 import { getImageBlockStyle } from "./blocks/image-block";
 import { materializeTableCells, measureTableBlock } from "./blocks/table-block";
-import { messages } from "../store";
+import type { WalliChatMessage } from "../types";
 
-export function createPreparedChatMessages(): PreparedChatMessage[] {
-  return messages.value.map((seed) => ({
+export function createPreparedChatMessages(
+  messages: readonly WalliChatMessage[],
+): PreparedChatMessage[] {
+  return messages.map((seed) => ({
     blocks: parseMarkdownBlocks(seed.markdown),
     role: seed.role,
   }));

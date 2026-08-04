@@ -3,13 +3,34 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/types/react/index.d.ts",
+      "import": "./dist/react.js"
+    },
+    "./theme.css": "./dist/walli-chat.css"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
-    "analyze": "tsc && vite build --mode analyze",
+    "build": "vite build && pnpm run build:types",
+    "build:types": "tsc -p tsconfig.build.json",
+    "analyze": "vite build --mode analyze && pnpm run build:types",
     "preview": "vite preview"
   },
+  "peerDependencies": {
+    "react": ">=18"
+  },
   "devDependencies": {
+    "@preact/signals-core": "^1.14.4",
+    "@types/react": "^19.2.18",
     "rollup-plugin-visualizer": "^7.0.1",
     "typescript": "~6.0.2",
     "unocss": "^66.7.5",
@@ -17,8 +38,6 @@
   },
   "dependencies": {
     "@chenglou/pretext": "^0.0.8",
-    "@lit-labs/preact-signals": "^1.0.3",
-    "@preact/signals-core": "^1.14.4",
     "clsx": "^2.1.1",
     "lit": "^3.3.3",
     "marked": "^18.0.7",

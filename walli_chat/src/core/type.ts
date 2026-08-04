@@ -1,3 +1,4 @@
+import type { LayoutLine, PreparedTextWithSegments } from "@chenglou/pretext";
 import type { PreparedRichInline } from "@chenglou/pretext/rich-inline";
 
 export type ParseContext = {
