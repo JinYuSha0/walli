@@ -64,9 +64,4 @@ export abstract class BlockShellElement<Block extends BlockLayout> extends HTMLE
       .textContent=${block.markerText}
     ></span>`;
   }
-
-  disconnectedCallback(): void {
-    this.currentLayout = null;
-    litRender(null, this);
-  }
 }
