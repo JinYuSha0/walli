@@ -9,7 +9,12 @@ import {
   type ReactElement,
 } from "react";
 import type { WalliChatElement } from "../web-components";
-import type { WalliChatMessage, WalliChatScrollToIndexOptions } from "../types";
+import type {
+  WalliChatMessage,
+  WalliChatScrollTarget,
+  WalliChatScrollToIndexOptions,
+  WalliChatScrollToOptions,
+} from "../types";
 
 export type WalliChatProps = {
   className?: string;
@@ -20,7 +25,10 @@ export type WalliChatProps = {
 
 export type WalliChatRef = {
   readonly element: WalliChatElement | null;
-  scrollToIndex: (options?: WalliChatScrollToIndexOptions) => void;
+  insertMessagesAtBottom: (messages: readonly WalliChatMessage[]) => void;
+  insertMessagesAtTop: (messages: readonly WalliChatMessage[]) => void;
+  scrollTo: (options: WalliChatScrollToOptions) => void;
+  scrollToIndex: (options: WalliChatScrollToIndexOptions) => void;
 };
 
 export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function WalliChat(
@@ -47,6 +55,15 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
       get element() {
         return elementRef.current;
       },
+      insertMessagesAtBottom(nextMessages) {
+        elementRef.current?.insertMessagesAtBottom(nextMessages);
+      },
+      insertMessagesAtTop(nextMessages) {
+        elementRef.current?.insertMessagesAtTop(nextMessages);
+      },
+      scrollTo(options) {
+        elementRef.current?.scrollTo(options);
+      },
       scrollToIndex(options) {
         elementRef.current?.scrollToIndex(options);
       },
@@ -61,4 +78,9 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
   });
 });
 
-export type { WalliChatMessage, WalliChatScrollToIndexOptions };
+export type {
+  WalliChatMessage,
+  WalliChatScrollTarget,
+  WalliChatScrollToIndexOptions,
+  WalliChatScrollToOptions,
+};

@@ -3,10 +3,15 @@ export type WalliChatMessage = {
   markdown: string;
 };
 
-export type WalliChatScrollPosition = "top" | "bottom";
+export type WalliChatScrollTarget = "top" | "bottom";
+
+export type WalliChatScrollToOptions = {
+  animated?: boolean;
+  target?: WalliChatScrollTarget;
+  top?: number;
+};
 
 export type WalliChatScrollToIndexOptions = {
   animated?: boolean;
-  index?: number;
-  position?: WalliChatScrollPosition;
+  index: number;
 };
