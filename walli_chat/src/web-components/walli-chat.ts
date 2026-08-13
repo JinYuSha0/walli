@@ -2,6 +2,7 @@ import "./walli-message";
 import { html, LitElement } from "lit";
 import { customElement, eventOptions, property } from "lit/decorators.js";
 import walliChatUnoCss from "virtual:walli-chat-uno-styles";
+import prismThemeCss from "prismjs/themes/prism.css?inline";
 import {
   buildConversationFrame,
   createPreparedChatMessages,
@@ -360,8 +361,11 @@ export class WalliChatElement extends LitElement {
     `;
     const unoStyle = document.createElement("style");
     unoStyle.textContent = walliChatUnoCss;
+    const prismStyle = document.createElement("style");
+    prismStyle.textContent = prismThemeCss;
     renderRoot.append(hostStyle);
     renderRoot.append(unoStyle);
+    renderRoot.append(prismStyle);
     return renderRoot;
   }
 

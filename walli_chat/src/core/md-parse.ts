@@ -93,7 +93,11 @@ export function parseBlockTokens(
       }
 
       case "code": {
-        appendBlockGroup(blocks, [buildCodeBlock(token.text, ctx)], getCommonStyle("richBlockGap"));
+        appendBlockGroup(
+          blocks,
+          [buildCodeBlock(token.text, ctx, token.lang)],
+          getCommonStyle("richBlockGap"),
+        );
         continue;
       }
 
@@ -136,7 +140,11 @@ export function parseBlockTokens(
         const htmlText = token.text.trim().length > 0 ? token.text : token.raw;
         const isPre = "pre" in token && token.pre === true;
         if (token.block || isPre) {
-          appendBlockGroup(blocks, [buildCodeBlock(htmlText, ctx)], getCommonStyle("richBlockGap"));
+          appendBlockGroup(
+            blocks,
+            [buildCodeBlock(htmlText, ctx, "markup")],
+            getCommonStyle("richBlockGap"),
+          );
         } else {
           appendBlockGroup(
             blocks,

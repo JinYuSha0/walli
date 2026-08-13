@@ -27,8 +27,10 @@ export type PreparedInlineBlock = PreparedBlockBase & {
 
 export type PreparedCodeBlock = PreparedBlockBase & {
   kind: "code";
+  language: string | null;
   lineHeight: number;
   prepared: PreparedTextWithSegments;
+  text: string;
 };
 
 export type PreparedImageBlock = PreparedBlockBase & {
@@ -149,12 +151,14 @@ export type CodeBlockLayout = {
   contentLeft: number;
   height: number;
   kind: "code";
+  language: string | null;
   lines: LayoutLine[];
   markerClassName: string | null;
   markerLeft: number | null;
   markerText: string | null;
   quoteRailLefts: number[];
   top: number;
+  text: string;
   usedWidth: number;
   width: number;
 };

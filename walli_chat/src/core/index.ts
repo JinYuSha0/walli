@@ -167,11 +167,20 @@ function layoutBlockFrame(block: PreparedBlock, contentWidth: number, top: numbe
 
     case "code": {
       const boxWidth = Math.max(1, contentWidth - block.contentLeft);
-      const innerWidth = Math.max(1, boxWidth - getCodeBlockStyle("paddingX") * 2);
-      const { lineCount, maxLineWidth } = measureLineStats(block.prepared, innerWidth);
+      const innerWidth = Math.max(
+        1,
+        boxWidth -
+          getCodeBlockStyle("paddingLeft") -
+          getCodeBlockStyle("paddingRight") -
+          getCodeBlockStyle("actionWidth"),
+      );
+      const { lineCount } = measureLineStats(block.prepared, innerWidth);
       return {
         contentLeft: block.contentLeft,
-        height: lineCount * block.lineHeight + getCodeBlockStyle("paddingY") * 2,
+        height:
+          lineCount * block.lineHeight +
+          getCodeBlockStyle("paddingTop") +
+          getCodeBlockStyle("paddingBottom"),
         kind: "code",
         lineHeight: block.lineHeight,
         markerClassName: block.markerClassName,
@@ -179,7 +188,7 @@ function layoutBlockFrame(block: PreparedBlock, contentWidth: number, top: numbe
         markerText: block.markerText,
         quoteRailLefts: block.quoteRailLefts,
         top,
-        width: maxLineWidth + getCodeBlockStyle("paddingX") * 2,
+        width: boxWidth,
       };
     }
 
@@ -286,17 +295,25 @@ function materializeBlockLayout(
     case "code": {
       if (block.kind !== "code") throw new Error("Code block/frame mismatch");
       const boxWidth = Math.max(1, contentWidth - frame.contentLeft);
-      const innerWidth = Math.max(1, boxWidth - getCodeBlockStyle("paddingX") * 2);
+      const innerWidth = Math.max(
+        1,
+        boxWidth -
+          getCodeBlockStyle("paddingLeft") -
+          getCodeBlockStyle("paddingRight") -
+          getCodeBlockStyle("actionWidth"),
+      );
       const layout = layoutWithLines(block.prepared, innerWidth, frame.lineHeight);
       return {
         contentLeft: frame.contentLeft,
         height: frame.height,
         kind: "code",
+        language: block.language,
         lines: layout.lines,
         markerClassName: frame.markerClassName,
         markerLeft: frame.markerLeft,
         markerText: frame.markerText,
         quoteRailLefts: frame.quoteRailLefts,
+        text: block.text,
         top: frame.top,
         usedWidth: frame.width,
         width: frame.width,
