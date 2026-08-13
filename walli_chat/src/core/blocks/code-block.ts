@@ -8,6 +8,7 @@ import { BlockShellElement, type BlockRenderLayout } from "./block-shell";
 import { html, type TemplateResult } from "lit";
 import { computed } from "@preact/signals-core";
 import Prism from "prismjs";
+import "../components/action-button";
 
 const languageLoaders: Record<string, () => Promise<unknown>> = {
   bash: () => import("prismjs/components/prism-bash"),
@@ -145,10 +146,6 @@ export class WalliCodeBlockElement extends BlockShellElement<CodeBlockLayout> {
     }
   }
 
-  private async copyCode(text: string): Promise<void> {
-    await navigator.clipboard.writeText(text);
-  }
-
   protected override markerTop(): number {
     return getCodeBlockStyle("paddingTop");
   }
@@ -171,18 +168,13 @@ export class WalliCodeBlockElement extends BlockShellElement<CodeBlockLayout> {
         class=${`absolute right-0 top-0 bottom-0 flex justify-center border-l border-border bg-secondary ${block.lines.length === 1 ? "items-center" : "items-start pt-2"}`}
         style=${`width:${getCodeBlockStyle("actionWidth")}px;`}
       >
-        <button
-          class="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border-0 bg-transparent text-muted-foreground hover:bg-background hover:text-foreground"
-          type="button"
-          title="Copy code"
-          aria-label="Copy code"
-          @click=${() => void this.copyCode(block.text)}
-        >
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <rect x="9" y="9" width="13" height="13" rx="2"></rect>
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-          </svg>
-        </button>
+        <walli-action-button
+          .action=${{
+            kind: "copy",
+            label: "Copy code",
+            text: block.lines.map((line) => line.text).join("\n"),
+          }}
+        ></walli-action-button>
       </div>
     </div>`;
   }

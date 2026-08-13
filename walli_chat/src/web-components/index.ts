@@ -4,6 +4,9 @@ import { WalliMessageElement } from "./walli-message";
 export { WalliChatElement, WalliMessageElement };
 export type {
   WalliChatMessage,
+  WalliChatFeedback,
+  WalliChatFeedbackCallback,
+  WalliChatMessageCallback,
   WalliChatScrollTarget,
   WalliChatScrollToIndexOptions,
   WalliChatScrollToOptions,

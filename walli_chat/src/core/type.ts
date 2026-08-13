@@ -71,6 +71,8 @@ export type PreparedBlock =
 
 export type PreparedChatMessage = {
   blocks: PreparedBlock[];
+  markdown: string;
+  id: string;
   role: "assistant" | "user";
 };
 
@@ -95,6 +97,7 @@ export type MarkState = {
 };
 
 export type MessageFrame = {
+  actionHeight: number;
   blocks: BlockFrame[];
   bubbleHeight: number;
   contentInsetX: number;

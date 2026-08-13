@@ -14,6 +14,8 @@ import { StreamingMarkdownParser } from "../core/md-parse";
 import { getCommonStyle } from "../core/styles";
 import type {
   WalliChatMessage,
+  WalliChatFeedbackCallback,
+  WalliChatMessageCallback,
   WalliChatScrollToIndexOptions,
   WalliChatScrollToOptions,
   WalliChatStreamingHandle,
@@ -33,6 +35,9 @@ type PendingScrollRequest = {
 
 @customElement("walli-chat")
 export class WalliChatElement extends LitElement {
+  @property({ attribute: false }) accessor onFeedback: WalliChatFeedbackCallback | undefined;
+  @property({ attribute: false }) accessor onReply: WalliChatMessageCallback | undefined;
+  @property({ attribute: false }) accessor onShare: WalliChatMessageCallback | undefined;
   private _messages: readonly WalliChatMessage[] = [];
   private preparedMessages: PreparedChatMessage[] = [];
   private pendingScrollRequest: PendingScrollRequest | null = null;
@@ -177,11 +182,15 @@ export class WalliChatElement extends LitElement {
 
   insertStreamingMessageAtBottom(
     stream: WalliChatTextStream,
-    options: WalliChatStreamingOptions = {},
+    options: WalliChatStreamingOptions,
   ): WalliChatStreamingHandle {
     const abortController = new AbortController();
     const reader = stream.getReader();
-    const message: WalliChatMessage = { role: "assistant", markdown: "" };
+    const message: WalliChatMessage = {
+      id: options.messageId,
+      role: "assistant",
+      markdown: "",
+    };
     const parser = new StreamingMarkdownParser();
     this.insertMessagesAtBottom([message]);
     if (options.stickToBottom === true) {
@@ -285,6 +294,8 @@ export class WalliChatElement extends LitElement {
     message.markdown = markdown;
     this.preparedMessages[index] = {
       blocks: parser.parse(markdown),
+      markdown,
+      id: message.id,
       role: "assistant",
     };
     this.invalidateFrame({ keepMountedRows: true });
@@ -338,6 +349,26 @@ export class WalliChatElement extends LitElement {
     super.disconnectedCallback();
   }
 
+  override updated(): void {
+    this.toggleAttribute("feedback-enabled", this.onFeedback !== undefined);
+    this.toggleAttribute("reply-enabled", this.onReply !== undefined);
+    this.toggleAttribute("share-enabled", this.onShare !== undefined);
+  }
+
+  private handleFeedback(
+    event: CustomEvent<{ id: string; markdown: string; feedback: "like" | "dislike" }>,
+  ): void {
+    this.onFeedback?.(event.detail.id, event.detail.markdown, event.detail.feedback);
+  }
+
+  private handleReply(event: CustomEvent<{ id: string; markdown: string }>): void {
+    this.onReply?.(event.detail.id, event.detail.markdown);
+  }
+
+  private handleShare(event: CustomEvent<{ id: string; markdown: string }>): void {
+    this.onShare?.(event.detail.id, event.detail.markdown);
+  }
+
   private invalidateFrame(options: { keepMountedRows?: boolean } = {}): void {
     this.frame = null;
     this.contentSize = {
@@ -358,6 +389,9 @@ export class WalliChatElement extends LitElement {
     const hostStyle = document.createElement("style");
     hostStyle.textContent = `
       :host{display:block;width:100%;height:100%;contain:layout paint style;}
+      :host(:not([feedback-enabled])) .feedback-action{display:none;}
+      :host(:not([reply-enabled])) .reply-action{display:none;}
+      :host(:not([share-enabled])) .share-action{display:none;}
     `;
     const unoStyle = document.createElement("style");
     unoStyle.textContent = walliChatUnoCss;
@@ -633,7 +667,12 @@ export class WalliChatElement extends LitElement {
 
   override render() {
     return html`
-      <main class="relative h-full w-full overflow-clip bg-background text-foreground font-sans">
+      <main
+        class="relative h-full w-full overflow-clip bg-background text-foreground font-sans"
+        @walli-feedback=${this.handleFeedback}
+        @walli-reply=${this.handleReply}
+        @walli-share=${this.handleShare}
+      >
         <div class="chat-viewport absolute inset-0 overflow-auto" @scroll=${this.handleScroll}>
           <div class="chat-canvas relative mx-auto min-h-full"></div>
         </div>

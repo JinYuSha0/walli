@@ -8,6 +8,12 @@ const chat = document.querySelector<WalliChatElement>("walli-chat");
 
 if (chat) {
   chat.messages = getDemoMessages();
+  chat.onFeedback = (id, markdown, feedback) => {
+    console.log("feedback", { id, markdown, feedback });
+  };
+  chat.onShare = (id, markdown) => {
+    console.log("share", { id, markdown });
+  };
 }
 
 const controls = document.createElement("div");
@@ -62,6 +68,7 @@ streamButton.addEventListener("click", async () => {
 
   try {
     const handle = chat.insertStreamingMessageAtBottom(createMarkdownDemoStream(), {
+      messageId: `demo-stream-${Date.now()}`,
       stickToBottom: true,
     });
     activeStreamingHandle = handle;
@@ -198,6 +205,7 @@ function createTopInsertionBatch(): WalliChatMessage[] {
   const batch = ++insertionSequence;
   return [
     {
+      id: `top-${batch}-assistant-1`,
       role: "assistant",
       markdown: [
         `### 历史消息批次 #${batch}`,
@@ -206,10 +214,12 @@ function createTopInsertionBatch(): WalliChatMessage[] {
       ].join("\n"),
     },
     {
+      id: `top-${batch}-user-1`,
       role: "user",
       markdown: `收到，继续回放更早的上下文（batch ${batch}）。`,
     },
     {
+      id: `top-${batch}-assistant-2`,
       role: "assistant",
       markdown: [
         "- 目标：保持当前可见范围",
@@ -224,6 +234,7 @@ function createBottomInsertionBatch(): WalliChatMessage[] {
   const batch = ++insertionSequence;
   return [
     {
+      id: `bottom-${batch}-assistant-1`,
       role: "assistant",
       markdown: [
         `### 新消息批次 #${batch}`,
@@ -232,10 +243,12 @@ function createBottomInsertionBatch(): WalliChatMessage[] {
       ].join("\n"),
     },
     {
+      id: `bottom-${batch}-user-1`,
       role: "user",
       markdown: `好的，我还在看前面的内容；这条是 batch ${batch} 的跟进。`,
     },
     {
+      id: `bottom-${batch}-assistant-2`,
       role: "assistant",
       markdown: [
         "```json",

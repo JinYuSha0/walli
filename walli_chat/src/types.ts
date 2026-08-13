@@ -1,11 +1,21 @@
 export type WalliChatMessage = {
+  id: string;
   role: "assistant" | "user";
   markdown: string;
 };
 
+export type WalliChatFeedback = "like" | "dislike";
+export type WalliChatFeedbackCallback = (
+  id: string,
+  markdown: string,
+  feedback: WalliChatFeedback,
+) => void;
+export type WalliChatMessageCallback = (id: string, markdown: string) => void;
+
 export type WalliChatTextStream = ReadableStream<string | Uint8Array>;
 
 export type WalliChatStreamingOptions = {
+  messageId: string;
   stickToBottom?: boolean;
 };
 

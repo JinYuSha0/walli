@@ -5,10 +5,13 @@ export type MarkdownChatSeed = WalliChatMessage;
 
 function message(role: "assistant" | "user", ...lines: string[]): MarkdownChatSeed {
   return {
+    id: `demo-base-${BASE_MESSAGE_ID++}`,
     role,
     markdown: lines.join("\n"),
   };
 }
+
+let BASE_MESSAGE_ID = 0;
 
 const TOTAL_MESSAGE_LENGTH = 10_000;
 

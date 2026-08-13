@@ -11,6 +11,8 @@ import {
 import type { WalliChatElement } from "../web-components";
 import type {
   WalliChatMessage,
+  WalliChatFeedbackCallback,
+  WalliChatMessageCallback,
   WalliChatScrollTarget,
   WalliChatScrollToIndexOptions,
   WalliChatScrollToOptions,
@@ -23,6 +25,9 @@ export type WalliChatProps = {
   className?: string;
   defaultScrollToBottom?: boolean;
   messages: readonly WalliChatMessage[];
+  onFeedback?: WalliChatFeedbackCallback;
+  onReply?: WalliChatMessageCallback;
+  onShare?: WalliChatMessageCallback;
   style?: CSSProperties;
 };
 
@@ -31,7 +36,7 @@ export type WalliChatRef = {
   insertMessagesAtBottom: (messages: readonly WalliChatMessage[]) => void;
   insertStreamingMessageAtBottom: (
     stream: WalliChatTextStream,
-    options?: WalliChatStreamingOptions,
+    options: WalliChatStreamingOptions,
   ) => WalliChatStreamingHandle;
   insertMessagesAtTop: (messages: readonly WalliChatMessage[]) => void;
   scrollTo: (options: WalliChatScrollToOptions) => void;
@@ -39,7 +44,7 @@ export type WalliChatRef = {
 };
 
 export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function WalliChat(
-  { className, defaultScrollToBottom = true, messages, style },
+  { className, defaultScrollToBottom = true, messages, onFeedback, onReply, onShare, style },
   forwardedRef,
 ): ReactElement {
   const elementRef = useRef<WalliChatElement>(null);
@@ -55,6 +60,14 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
       elementRef.current.defaultScrollToBottom = defaultScrollToBottom;
     }
   }, [defaultScrollToBottom]);
+
+  useEffect(() => {
+    if (elementRef.current) {
+      elementRef.current.onFeedback = onFeedback;
+      elementRef.current.onReply = onReply;
+      elementRef.current.onShare = onShare;
+    }
+  }, [onFeedback, onReply, onShare]);
 
   useImperativeHandle(
     forwardedRef,
@@ -92,6 +105,8 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
 
 export type {
   WalliChatMessage,
+  WalliChatFeedbackCallback,
+  WalliChatMessageCallback,
   WalliChatScrollTarget,
   WalliChatScrollToIndexOptions,
   WalliChatScrollToOptions,

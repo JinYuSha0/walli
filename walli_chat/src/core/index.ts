@@ -26,6 +26,8 @@ export function createPreparedChatMessages(
 ): PreparedChatMessage[] {
   return messages.map((seed) => ({
     blocks: parseMarkdownBlocks(seed.markdown),
+    markdown: seed.markdown,
+    id: seed.id,
     role: seed.role,
   }));
 }
@@ -76,13 +78,18 @@ export function buildConversationFrame(
       top,
     };
     y = bottom;
-    y += getCommonStyle("messageGap");
+    if (preparedMessage.role === "assistant") {
+      y += getCommonStyle("messageGap");
+    }
   }
 
+  const lastMessage = preparedMessages[preparedMessages.length - 1];
+  const trailingMessageGap =
+    lastMessage?.role === "assistant" ? getCommonStyle("messageGap") : 0;
   const totalHeight =
     messages.length === 0
       ? chatTopPadding + chatBottomPadding
-      : y - getCommonStyle("messageGap") + chatBottomPadding;
+      : y - trailingMessageGap + chatBottomPadding;
 
   return {
     bottomOcclusionHeight,
@@ -128,6 +135,10 @@ function layoutMessageFrame(
   }
 
   const bubbleHeight = y + getCommonStyle("bubblePaddingY");
+  const actionHeight =
+    preparedMessage.role === "assistant"
+      ? getCommonStyle("assistantMessageActionHeight")
+      : getCommonStyle("userMessageActionHeight");
   const paddingTop =
     preparedMessage.role === "user" ? getCommonStyle("userMessagePaddingTop") : 0;
   const frameWidth =
@@ -135,13 +146,14 @@ function layoutMessageFrame(
       ? maxFrameWidth
       : Math.min(maxFrameWidth, contentInsetX * 2 + Math.max(1, usedContentWidth));
   return {
+    actionHeight,
     blocks,
     bubbleHeight,
     contentInsetX,
     frameWidth,
     layoutContentWidth: maxContentWidth,
     role: preparedMessage.role,
-    totalHeight: bubbleHeight + paddingTop,
+    totalHeight: bubbleHeight + paddingTop + actionHeight,
     paddingTop,
   };
 }
