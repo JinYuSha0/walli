@@ -5,15 +5,9 @@ import type { WalliChatElement } from "../web-components";
 import type { WalliChatMessage, WalliChatStreamingHandle } from "../types";
 
 const chat = document.querySelector<WalliChatElement>("walli-chat");
-const app = document.querySelector<HTMLElement>("#app");
 
 if (chat) {
   chat.messages = getDemoMessages();
-}
-
-if (app) {
-  app.style.padding = "16px";
-  app.style.boxSizing = "border-box";
 }
 
 const controls = document.createElement("div");

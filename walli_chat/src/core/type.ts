@@ -100,6 +100,7 @@ export type MessageFrame = {
   layoutContentWidth: number;
   role: "assistant" | "user";
   totalHeight: number;
+  paddingTop?: number;
 };
 
 export type ChatMessageInstance = {
@@ -110,9 +111,10 @@ export type ChatMessageInstance = {
 };
 
 export type ConversationFrame = {
+  topOcclusionHeight: number;
+  bottomOcclusionHeight: number;
   chatWidth: number;
   messages: ChatMessageInstance[];
-  occlusionBannerHeight: number;
   totalHeight: number;
 };
 

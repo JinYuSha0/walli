@@ -43,7 +43,7 @@ export class WalliMessageElement extends HTMLElement {
         "absolute left-0 flex w-full box-border justify-start": message.frame.role === "assistant",
         "absolute left-0 flex w-full box-border justify-end": message.frame.role === "user",
       })}
-      style=${`top:${message.top}px; height:${message.frame.totalHeight}px; padding-inline:${getCommonStyle("messageSidePadding")}px;`}
+      style=${`top:${message.top}px; height:${message.frame.totalHeight}px; padding-inline:${getCommonStyle("messageSidePadding")}px; padding-top:${message.frame.paddingTop}px;`}
     >
       <div
         class=${clsx({

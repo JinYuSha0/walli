@@ -385,17 +385,24 @@ export class WalliChatElement extends LitElement {
     const viewportHeight = this.viewportElement?.clientHeight ?? this.containerSize.height;
     const scrollTop = this.viewportElement?.scrollTop ?? this.viewportScrollTop;
     this.viewportScrollTop = scrollTop;
-    const occlusionBannerHeight = getCommonStyle("occlusionBannerHeight");
+    const topOcclusionHeight = getCommonStyle("topOcclusionHeight");
+    const bottomOcclusionHeight = getCommonStyle("bottomOcclusionHeight");
 
     const chatWidth = getMaxChatWidth(viewportWidth);
     const previousFrame = this.frame;
     const canReuseFrame =
       previousFrame !== null &&
       previousFrame.chatWidth === chatWidth &&
-      previousFrame.occlusionBannerHeight === occlusionBannerHeight;
+      previousFrame.topOcclusionHeight === topOcclusionHeight &&
+      previousFrame.bottomOcclusionHeight === bottomOcclusionHeight;
 
     if (!canReuseFrame) {
-      this.frame = buildConversationFrame(this.preparedMessages, chatWidth, occlusionBannerHeight);
+      this.frame = buildConversationFrame(
+        this.preparedMessages,
+        chatWidth,
+        topOcclusionHeight,
+        bottomOcclusionHeight,
+      );
     }
 
     const frame = this.frame!;
@@ -450,15 +457,22 @@ export class WalliChatElement extends LitElement {
 
   private prepareFrameForScroll(): ConversationFrame {
     const viewportWidth = this.viewportElement?.clientWidth ?? this.containerSize.width;
-    const occlusionBannerHeight = getCommonStyle("occlusionBannerHeight");
+    const topOcclusionHeight = getCommonStyle("topOcclusionHeight");
+    const bottomOcclusionHeight = getCommonStyle("bottomOcclusionHeight");
     const chatWidth = getMaxChatWidth(viewportWidth);
     const previousFrame = this.frame;
     const frame =
       previousFrame !== null &&
       previousFrame.chatWidth === chatWidth &&
-      previousFrame.occlusionBannerHeight === occlusionBannerHeight
+      previousFrame.topOcclusionHeight === topOcclusionHeight &&
+      previousFrame.bottomOcclusionHeight === bottomOcclusionHeight
         ? previousFrame
-        : buildConversationFrame(this.preparedMessages, chatWidth, occlusionBannerHeight);
+        : buildConversationFrame(
+            this.preparedMessages,
+            chatWidth,
+            topOcclusionHeight,
+            bottomOcclusionHeight,
+          );
 
     this.frame = frame;
     if (
