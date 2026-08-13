@@ -9,11 +9,15 @@ import {
   findVisibleRange,
 } from "../core/index";
 import type { ConversationFrame, PreparedChatMessage } from "../core/type";
+import { StreamingMarkdownParser } from "../core/md-parse";
 import { getCommonStyle } from "../core/styles";
 import type {
   WalliChatMessage,
   WalliChatScrollToIndexOptions,
   WalliChatScrollToOptions,
+  WalliChatStreamingHandle,
+  WalliChatStreamingOptions,
+  WalliChatTextStream,
 } from "../types";
 import type { WalliMessageElement } from "./walli-message";
 
@@ -83,7 +87,6 @@ export class WalliChatElement extends LitElement {
         this.applyMessagesInsertion(
           "bottom",
           messages,
-          messages.slice(previousMessages.length),
           previousMessages,
         );
         return;
@@ -93,7 +96,6 @@ export class WalliChatElement extends LitElement {
         this.applyMessagesInsertion(
           "top",
           messages,
-          messages.slice(0, insertedCount),
           previousMessages,
         );
         return;
@@ -159,7 +161,7 @@ export class WalliChatElement extends LitElement {
   insertMessagesAtTop(messages: readonly WalliChatMessage[]): void {
     if (messages.length === 0) return;
 
-    this.applyMessagesInsertion("top", [...messages, ...this._messages], messages, this._messages);
+    this.applyMessagesInsertion("top", [...messages, ...this._messages], this._messages);
   }
 
   insertMessagesAtBottom(messages: readonly WalliChatMessage[]): void {
@@ -168,9 +170,123 @@ export class WalliChatElement extends LitElement {
     this.applyMessagesInsertion(
       "bottom",
       [...this._messages, ...messages],
-      messages,
       this._messages,
     );
+  }
+
+  insertStreamingMessageAtBottom(
+    stream: WalliChatTextStream,
+    options: WalliChatStreamingOptions = {},
+  ): WalliChatStreamingHandle {
+    const abortController = new AbortController();
+    const reader = stream.getReader();
+    const message: WalliChatMessage = { role: "assistant", markdown: "" };
+    const parser = new StreamingMarkdownParser();
+    this.insertMessagesAtBottom([message]);
+    if (options.stickToBottom === true) {
+      this.scrollTo({ target: "bottom" });
+    }
+
+    const finished = this.consumeStreamingMessage(
+      reader,
+      abortController.signal,
+      options,
+      message,
+      parser,
+    );
+    return {
+      abort: (reason) => abortController.abort(reason),
+      finished,
+      signal: abortController.signal,
+    };
+  }
+
+  private async consumeStreamingMessage(
+    reader: ReadableStreamDefaultReader<string | Uint8Array>,
+    signal: AbortSignal,
+    options: WalliChatStreamingOptions,
+    message: WalliChatMessage,
+    parser: StreamingMarkdownParser,
+  ): Promise<void> {
+    const decoder = new TextDecoder();
+    const handleAbort = () => {
+      void reader.cancel(signal.reason).catch(() => undefined);
+    };
+    signal.addEventListener("abort", handleAbort, { once: true });
+    let markdown = "";
+    let renderedMarkdown = "";
+    let renderRaf: number | null = null;
+    let resolveRender: (() => void) | null = null;
+    let pendingRender: Promise<void> | null = null;
+
+    const scheduleRender = () => {
+      if (renderRaf !== null) return;
+
+      pendingRender = new Promise<void>((resolve) => {
+        resolveRender = resolve;
+      });
+      renderRaf = requestAnimationFrame(() => {
+        renderRaf = null;
+        this.updateStreamingMessage(message, parser, markdown);
+        if (options.stickToBottom === true) {
+          this.scrollTo({ target: "bottom" });
+        }
+        renderedMarkdown = markdown;
+        resolveRender?.();
+        resolveRender = null;
+      });
+    };
+
+    try {
+      while (true) {
+        if (signal.aborted) {
+          await reader.cancel(signal.reason);
+          break;
+        }
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        markdown += typeof value === "string" ? value : decoder.decode(value, { stream: true });
+        scheduleRender();
+      }
+
+      markdown += decoder.decode();
+      if (pendingRender !== null) await pendingRender;
+      if (markdown !== renderedMarkdown) {
+        this.updateStreamingMessage(message, parser, markdown);
+        if (options.stickToBottom === true) {
+          this.scrollTo({ target: "bottom" });
+        }
+      }
+    } finally {
+      signal.removeEventListener("abort", handleAbort);
+      if (renderRaf !== null) cancelAnimationFrame(renderRaf);
+      reader.releaseLock();
+      const completedMessageIndex = this._messages.indexOf(message);
+      if (completedMessageIndex >= 0) {
+        this.preparedMessages[completedMessageIndex] =
+          createPreparedChatMessages([message])[0]!;
+      }
+      this.invalidateFrame({ keepMountedRows: true });
+      await this.updateComplete;
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    }
+  }
+
+  private updateStreamingMessage(
+    message: WalliChatMessage,
+    parser: StreamingMarkdownParser,
+    markdown: string,
+  ): void {
+    const index = this._messages.indexOf(message);
+    if (index < 0) return;
+
+    message.markdown = markdown;
+    this.preparedMessages[index] = {
+      blocks: parser.parse(markdown),
+      role: "assistant",
+    };
+    this.invalidateFrame({ keepMountedRows: true });
   }
 
   override connectedCallback() {
@@ -454,7 +570,6 @@ export class WalliChatElement extends LitElement {
   private applyMessagesInsertion(
     kind: "top" | "bottom",
     nextMessages: readonly WalliChatMessage[],
-    insertedMessages: readonly WalliChatMessage[],
     previousMessages: readonly WalliChatMessage[],
   ): void {
     const shouldRestoreScrollTop = kind === "top" && this.pendingScrollRequest === null;
@@ -463,10 +578,20 @@ export class WalliChatElement extends LitElement {
     const previousTotalHeight = previousFrame?.totalHeight ?? 0;
 
     this._messages = nextMessages;
-    this.preparedMessages =
-      kind === "top"
-        ? [...createPreparedChatMessages(insertedMessages), ...this.preparedMessages]
-        : [...this.preparedMessages, ...createPreparedChatMessages(insertedMessages)];
+    const insertedCount = nextMessages.length - previousMessages.length;
+    if (kind === "top") {
+      const insertedMessages = nextMessages.slice(0, insertedCount);
+      this.preparedMessages = [
+        ...createPreparedChatMessages(insertedMessages),
+        ...this.preparedMessages,
+      ];
+    } else {
+      const insertedMessages = nextMessages.slice(previousMessages.length);
+      this.preparedMessages = [
+        ...this.preparedMessages,
+        ...createPreparedChatMessages(insertedMessages),
+      ];
+    }
     this.requestUpdate("messages", previousMessages);
     this.invalidateFrame({ keepMountedRows: true });
     if (shouldRestoreScrollTop) {

@@ -17,15 +17,15 @@ export class WalliMessageElement extends HTMLElement {
       return;
     }
 
-    const key = this.computeKey(message.frame);
+    const key = this.computeKey(message);
     const canReuseContents =
       this.currentMessage?.prepared === message.prepared && this.currentKey === key;
 
     this.currentMessage = message;
     this.currentKey = key;
-    if (!canReuseContents) {
-      this.currentBlocks = materializeMessageBlocks(message);
-    }
+    if (canReuseContents) return;
+
+    this.currentBlocks = materializeMessageBlocks(message);
     this.renderMessage(message);
   }
 
@@ -59,7 +59,8 @@ export class WalliMessageElement extends HTMLElement {
     </div>`;
   }
 
-  private computeKey(frame: MessageFrame): string {
-    return `${frame.frameWidth}:${frame.bubbleHeight}:${frame.totalHeight}:${frame.layoutContentWidth}:${frame.contentInsetX}`;
+  private computeKey(message: ChatMessageInstance): string {
+    const frame: MessageFrame = message.frame;
+    return `${message.top}:${frame.frameWidth}:${frame.bubbleHeight}:${frame.totalHeight}:${frame.layoutContentWidth}:${frame.contentInsetX}`;
   }
 }

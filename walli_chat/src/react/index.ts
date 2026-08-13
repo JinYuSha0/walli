@@ -14,6 +14,9 @@ import type {
   WalliChatScrollTarget,
   WalliChatScrollToIndexOptions,
   WalliChatScrollToOptions,
+  WalliChatStreamingHandle,
+  WalliChatStreamingOptions,
+  WalliChatTextStream,
 } from "../types";
 
 export type WalliChatProps = {
@@ -26,6 +29,10 @@ export type WalliChatProps = {
 export type WalliChatRef = {
   readonly element: WalliChatElement | null;
   insertMessagesAtBottom: (messages: readonly WalliChatMessage[]) => void;
+  insertStreamingMessageAtBottom: (
+    stream: WalliChatTextStream,
+    options?: WalliChatStreamingOptions,
+  ) => WalliChatStreamingHandle;
   insertMessagesAtTop: (messages: readonly WalliChatMessage[]) => void;
   scrollTo: (options: WalliChatScrollToOptions) => void;
   scrollToIndex: (options: WalliChatScrollToIndexOptions) => void;
@@ -58,6 +65,11 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
       insertMessagesAtBottom(nextMessages) {
         elementRef.current?.insertMessagesAtBottom(nextMessages);
       },
+      insertStreamingMessageAtBottom(stream, options) {
+        const element = elementRef.current;
+        if (element === null) throw new Error("WalliChat is not mounted.");
+        return element.insertStreamingMessageAtBottom(stream, options);
+      },
       insertMessagesAtTop(nextMessages) {
         elementRef.current?.insertMessagesAtTop(nextMessages);
       },
@@ -83,4 +95,7 @@ export type {
   WalliChatScrollTarget,
   WalliChatScrollToIndexOptions,
   WalliChatScrollToOptions,
+  WalliChatStreamingHandle,
+  WalliChatStreamingOptions,
+  WalliChatTextStream,
 };

@@ -1,4 +1,5 @@
 import { marked, type Token, type Tokens } from "marked";
+import remend from "remend";
 import type { ParseContext, PreparedBlock } from "./type";
 import {
   buildInlineBlocks,
@@ -12,13 +13,50 @@ import {
 import { appendBlockGroup, fallbackTextForToken, headingVariant } from "./helper";
 import { getCommonStyle } from "./styles";
 
-export function parseMarkdownBlocks(markdown: string): PreparedBlock[] {
-  const tokens = marked.lexer(markdown, { gfm: true });
+export function parseMarkdownBlocks(markdown: string, streaming = false): PreparedBlock[] {
+  const source = streaming ? remend(markdown) : markdown;
+  const tokens = marked.lexer(source, { gfm: true });
   return parseBlockTokens(tokens, { listDepth: 0, quoteDepth: 0 });
 }
 
-export function parseBlockTokens(tokens: readonly Token[], ctx: ParseContext): PreparedBlock[] {
-  const blocks: PreparedBlock[] = [];
+export class StreamingMarkdownParser {
+  private stableBlocks: PreparedBlock[] = [];
+  private stableTokenKeys: string[] = [];
+
+  parse(markdown: string): PreparedBlock[] {
+    const tokens = marked.lexer(remend(markdown), { gfm: true });
+    const stableTokenCount = Math.max(0, tokens.length - 1);
+    const reusableCount = Math.min(stableTokenCount, this.stableTokenKeys.length);
+
+    for (let index = 0; index < reusableCount; index++) {
+      if (this.stableTokenKeys[index] !== tokenKey(tokens[index]!)) {
+        this.stableBlocks = [];
+        this.stableTokenKeys = [];
+        break;
+      }
+    }
+
+    let blocks = [...this.stableBlocks];
+    for (let index = this.stableTokenKeys.length; index < tokens.length; index++) {
+      blocks = parseBlockTokens(tokens.slice(index, index + 1), { listDepth: 0, quoteDepth: 0 }, blocks);
+      if (index < stableTokenCount) {
+        this.stableTokenKeys.push(tokenKey(tokens[index]!));
+        this.stableBlocks = [...blocks];
+      }
+    }
+    return blocks;
+  }
+}
+
+function tokenKey(token: Token): string {
+  return `${token.type}:${token.raw}`;
+}
+
+export function parseBlockTokens(
+  tokens: readonly Token[],
+  ctx: ParseContext,
+  blocks: PreparedBlock[] = [],
+): PreparedBlock[] {
 
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index];

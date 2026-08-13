@@ -7,6 +7,9 @@ export type {
   WalliChatScrollTarget,
   WalliChatScrollToIndexOptions,
   WalliChatScrollToOptions,
+  WalliChatStreamingHandle,
+  WalliChatStreamingOptions,
+  WalliChatTextStream,
 } from "../types";
 
 declare global {
