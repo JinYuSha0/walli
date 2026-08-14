@@ -13,6 +13,20 @@ const lineHeight = 22;
 const font =
   '500 14px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
+type NoticeBlockData = {
+  text: string;
+};
+
+const preparedTextCache = new WeakMap<NoticeBlockData, PreparedTextWithSegments>();
+
+function getPreparedText(data: NoticeBlockData): PreparedTextWithSegments {
+  const cached = preparedTextCache.get(data);
+  if (cached !== undefined) return cached;
+  const prepared = prepareWithSegments(data.text, font);
+  preparedTextCache.set(data, prepared);
+  return prepared;
+}
+
 export const noticeBlockDefinition = {
   name: "notice",
   marginTop: 12,
@@ -22,14 +36,14 @@ export const noticeBlockDefinition = {
       const match = /^:::notice[ \t]*\n([\s\S]*?)\n:::[ \t]*(?:\n|$)/.exec(source);
       if (!match) return undefined;
       return {
-        data: { prepared: prepareWithSegments(match[1]!.trim(), font) },
+        data: { text: match[1]!.trim() },
         raw: match[0],
       };
     },
   },
   measure(data, { availableWidth }) {
     const contentWidth = Math.max(1, availableWidth - padding * 2);
-    const { lineCount } = measureLineStats(data.prepared, contentWidth);
+    const { lineCount } = measureLineStats(getPreparedText(data), contentWidth);
     return {
       height: padding * 2 + lineCount * lineHeight,
       width: availableWidth,
@@ -37,7 +51,7 @@ export const noticeBlockDefinition = {
   },
   render({ data, height, left, top, width }) {
     const contentWidth = Math.max(1, width - padding * 2);
-    const layout = layoutWithLines(data.prepared, contentWidth, lineHeight);
+    const layout = layoutWithLines(getPreparedText(data), contentWidth, lineHeight);
     return html`<div
       class="notice"
       style=${`left:${left}px;top:${top}px;width:${width}px;height:${height}px;font:${font};`}
@@ -50,4 +64,4 @@ export const noticeBlockDefinition = {
       )}
     </div>`;
   },
-} satisfies WalliChatCustomBlockDefinition<{ prepared: PreparedTextWithSegments }>;
+} satisfies WalliChatCustomBlockDefinition<NoticeBlockData>;
