@@ -15,6 +15,10 @@
   --table-scrollbar-track: transparent;
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
+  --stream-shimmer-base: oklch(0.65 0 0);
+  --stream-shimmer-highlight: var(--background);
+  --stream-shimmer-highlight-end: 57%;
+  --stream-shimmer-highlight-start: 43%;
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
@@ -54,6 +58,10 @@
   --table-scrollbar-track: transparent;
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
+  --stream-shimmer-base: var(--muted-foreground);
+  --stream-shimmer-highlight: var(--foreground);
+  --stream-shimmer-highlight-end: 70%;
+  --stream-shimmer-highlight-start: 30%;
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);

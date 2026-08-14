@@ -7,4 +7,4 @@ export {
   type WalliChatCustomBlockRegistration,
   type WalliChatCustomBlockRenderContext,
   type WalliChatCustomBlockTokenizer,
-} from "./core/custom-block";
+} from "./core/blocks/custom-block";

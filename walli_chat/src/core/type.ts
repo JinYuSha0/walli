@@ -1,6 +1,6 @@
 import type { LayoutLine, PreparedTextWithSegments } from "@chenglou/pretext";
 import type { PreparedRichInline } from "@chenglou/pretext/rich-inline";
-import type { AnyCustomBlockDefinition } from "./custom-block";
+import type { AnyCustomBlockDefinition } from "./blocks/custom-block";
 
 export type ParseContext = {
   listDepth: number;

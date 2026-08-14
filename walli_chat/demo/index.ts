@@ -2,6 +2,7 @@ import "walli_chat/theme.css";
 import { registerCustomBlock, type WalliChatElement } from "walli_chat";
 import { noticeBlockDefinition } from "./blocks/notice-block";
 import { getDemoMessages } from "./store";
+import { createDemoSseRecords } from "./mock/stream";
 import type { WalliChatMessage, WalliChatStreamingHandle } from "walli_chat";
 
 registerCustomBlock(noticeBlockDefinition);
@@ -87,6 +88,7 @@ streamButton.addEventListener("click", async () => {
 
   try {
     const handle = chat.insertStreamingMessageAtBottom(createMarkdownDemoStream(), {
+      getToolLabel: (toolName) => `调用 ${toolName} 工具中`,
       messageId: `demo-stream-${Date.now()}`,
       stickToBottom: true,
     });
@@ -289,76 +291,26 @@ function createBottomInsertionBatch(): WalliChatMessage[] {
   ];
 }
 
-const STREAMING_MARKDOWN_DEMO = `# Walli 流式 Markdown 演示
-
-这是一段逐块写入的长 Markdown，用来观察尚未闭合的 **粗体文本**、*斜体文本*、~~删除线~~ 和 \`行内代码\` 是否能在生成过程中稳定渲染。
-
-## 功能概览
-
-- 消息会立即插入到聊天列表底部
-- 每收到一个 chunk 都会重新排版
-- 流式阶段由 **remend** 修复暂时未闭合的 Markdown
-- ReadableStream 结束后进行最终解析
-
-> 流式输出的关键不是等全文生成完毕，而是让读者能尽早看到结构清晰、持续增长的内容。
->
-> 即使标记暂时只生成了一半，界面也不应该闪烁成错误的结构。
-
-## 执行步骤
-
-1. 创建一条空的 assistant 消息。
-2. 从 stream 中读取字符串或 UTF-8 字节。
-3. 把新内容追加到最后一条消息。
-4. 使用 remend 补全当前片段，再交给 Markdown parser。
-5. stream 关闭后，使用原始完整内容做最后一次渲染。
-
-## API 示例
-
-\`\`\`ts
-const response = await fetch("/api/chat", {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({ prompt: "介绍 Walli" }),
-});
-
-if (!response.body) {
-  throw new Error("Response body is empty");
-}
-
-await chat.insertStreamingMessageAtBottom(response.body);
-\`\`\`
-
-## 数据对比
-
-| 阶段 | Markdown 状态 | 渲染策略 |
-| --- | --- | --- |
-| 开始 | 内容为空 | 创建 assistant 对话框 |
-| 生成中 | 语法可能未闭合 | remend 临时补全 |
-| 已完成 | Markdown 完整 | 使用原文最终解析 |
-
-你也可以访问 [Walli 项目主页](https://github.com/) 查看相关说明。图片、列表、代码块和表格都会随着内容到达逐步出现。
-
----
-
-### 最终结果
-
-当这段文字完整显示时，代表 ReadableStream 已经关闭，返回的 Promise 也已经在最终渲染完成后 resolved。
-`;
-
 function createMarkdownDemoStream(): ReadableStream<string> {
+  const records = createDemoSseRecords();
   let offset = 0;
 
   return new ReadableStream<string>({
     async pull(controller) {
-      if (offset >= STREAMING_MARKDOWN_DEMO.length) {
+      if (offset >= records.length) {
         controller.close();
         return;
       }
 
-      await new Promise<void>((resolve) => setTimeout(resolve, 20));
-      const chunkLength = 16 + Math.floor(Math.random() * 17);
-      controller.enqueue(STREAMING_MARKDOWN_DEMO.slice(offset, offset + chunkLength));
-      offset += chunkLength;
+      const previousRecord = records[offset - 1];
+      const delay = previousRecord?.delayAfter ?? 0;
+      await new Promise<void>((resolve) => setTimeout(resolve, delay));
+      const record = records[offset++]!;
+      controller.enqueue(createSseRecord(record.event, record.data));
     },
   });
+}
+
+function createSseRecord(event: string, data: unknown): string {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }

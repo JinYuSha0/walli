@@ -12,6 +12,8 @@ import {
 } from "../core/index";
 import type { ConversationFrame, PreparedChatMessage } from "../core/type";
 import { StreamingMarkdownParser } from "../core/md-parse";
+import { parseEventData, ServerSentEventParser, type ServerSentEvent } from "../core/sse-parser";
+import { registerStreamBlocks } from "../core/blocks/stream-block";
 import { getCommonStyle } from "../core/styles";
 import type {
   WalliChatMessage,
@@ -61,6 +63,11 @@ export class WalliChatElement extends LitElement {
   private mountedStart = 0;
   private mountedEnd = 0;
 
+  constructor() {
+    super();
+    registerStreamBlocks();
+  }
+
   @property({ attribute: false })
   get messages(): readonly WalliChatMessage[] {
     return this._messages;
@@ -91,20 +98,12 @@ export class WalliChatElement extends LitElement {
       }
 
       if (isBottomInsertion) {
-        this.applyMessagesInsertion(
-          "bottom",
-          messages,
-          previousMessages,
-        );
+        this.applyMessagesInsertion("bottom", messages, previousMessages);
         return;
       }
 
       if (isTopInsertion) {
-        this.applyMessagesInsertion(
-          "top",
-          messages,
-          previousMessages,
-        );
+        this.applyMessagesInsertion("top", messages, previousMessages);
         return;
       }
     }
@@ -151,7 +150,7 @@ export class WalliChatElement extends LitElement {
       typeof optionsOrX === "number"
         ? false
         : "animated" in optionsOrX
-          ? optionsOrX.animated ?? false
+          ? (optionsOrX.animated ?? false)
           : "behavior" in optionsOrX && optionsOrX.behavior === "smooth";
     const request =
       typeof optionsOrX === "number"
@@ -174,11 +173,7 @@ export class WalliChatElement extends LitElement {
   insertMessagesAtBottom(messages: readonly WalliChatMessage[]): void {
     if (messages.length === 0) return;
 
-    this.applyMessagesInsertion(
-      "bottom",
-      [...this._messages, ...messages],
-      this._messages,
-    );
+    this.applyMessagesInsertion("bottom", [...this._messages, ...messages], this._messages);
   }
 
   insertStreamingMessageAtBottom(
@@ -220,11 +215,17 @@ export class WalliChatElement extends LitElement {
     parser: StreamingMarkdownParser,
   ): Promise<void> {
     const decoder = new TextDecoder();
+    const eventParser = new ServerSentEventParser();
+    const activeToolCalls = new Map<
+      string,
+      { label?: string; toolCallId: string; toolName: string }
+    >();
     const handleAbort = () => {
       void reader.cancel(signal.reason).catch(() => undefined);
     };
     signal.addEventListener("abort", handleAbort, { once: true });
-    let markdown = "";
+    let text = "";
+    let markdown = ":::start-block\n";
     let renderedMarkdown = "";
     let renderRaf: number | null = null;
     let resolveRender: (() => void) | null = null;
@@ -248,6 +249,45 @@ export class WalliChatElement extends LitElement {
       });
     };
 
+    const rebuildMarkdown = () => {
+      const toolBlocks = [...activeToolCalls.values()].map(
+        (toolCall) => `:::toolcall-block\n${JSON.stringify(toolCall)}\n:::`,
+      );
+      markdown = [text, ...toolBlocks].filter((part) => part.length > 0).join("\n\n");
+      scheduleRender();
+    };
+
+    const applyEvent = (event: ServerSentEvent) => {
+      if (event.event === "start") return;
+      if (event.event === "delta") {
+        const data = parseEventData<{ text?: unknown }>(event);
+        if (typeof data?.text === "string") text += data.text;
+        rebuildMarkdown();
+        return;
+      }
+      if (event.event === "tool-call") {
+        const data = parseEventData<{ toolCallId?: unknown; toolName?: unknown }>(event);
+        if (typeof data?.toolCallId === "string" && typeof data.toolName === "string") {
+          activeToolCalls.set(data.toolCallId, {
+            label: options.getToolLabel?.(data.toolName),
+            toolCallId: data.toolCallId,
+            toolName: data.toolName,
+          });
+        }
+        rebuildMarkdown();
+        return;
+      }
+      if (event.event === "tool-result") {
+        const data = parseEventData<{ toolCallId?: unknown }>(event);
+        if (typeof data?.toolCallId === "string") activeToolCalls.delete(data.toolCallId);
+        rebuildMarkdown();
+        return;
+      }
+      rebuildMarkdown();
+    };
+
+    scheduleRender();
+
     try {
       while (true) {
         if (signal.aborted) {
@@ -257,11 +297,12 @@ export class WalliChatElement extends LitElement {
         const { done, value } = await reader.read();
         if (done) break;
 
-        markdown += typeof value === "string" ? value : decoder.decode(value, { stream: true });
-        scheduleRender();
+        const chunk = typeof value === "string" ? value : decoder.decode(value, { stream: true });
+        for (const event of eventParser.push(chunk)) applyEvent(event);
       }
 
-      markdown += decoder.decode();
+      for (const event of eventParser.push(decoder.decode())) applyEvent(event);
+      for (const event of eventParser.finish()) applyEvent(event);
       if (pendingRender !== null) await pendingRender;
       if (markdown !== renderedMarkdown) {
         this.updateStreamingMessage(message, parser, markdown);
@@ -275,8 +316,7 @@ export class WalliChatElement extends LitElement {
       reader.releaseLock();
       const completedMessageIndex = this._messages.indexOf(message);
       if (completedMessageIndex >= 0) {
-        this.preparedMessages[completedMessageIndex] =
-          createPreparedChatMessages([message])[0]!;
+        this.preparedMessages[completedMessageIndex] = createPreparedChatMessages([message])[0]!;
       }
       this.invalidateFrame({ keepMountedRows: true });
       await this.updateComplete;
@@ -544,7 +584,7 @@ export class WalliChatElement extends LitElement {
           : frame.totalHeight
         : "top" in request
           ? request.top
-        : frame.messages[Math.max(0, Math.min(frame.messages.length - 1, request.index))]!.top;
+          : frame.messages[Math.max(0, Math.min(frame.messages.length - 1, request.index))]!.top;
     return Math.max(0, Math.min(Math.max(0, frame.totalHeight - viewportHeight), target));
   }
 

@@ -12,7 +12,7 @@ import {
 } from "./blocks/index";
 import { appendBlockGroup, fallbackTextForToken, headingVariant } from "./helper";
 import { getCommonStyle } from "./styles";
-import { resolveCustomBlockToken } from "./custom-block";
+import { resolveCustomBlockToken } from "./blocks/custom-block";
 
 export function parseMarkdownBlocks(markdown: string, streaming = false): PreparedBlock[] {
   const source = streaming ? remend(markdown) : markdown;
