@@ -5,7 +5,7 @@ declare module "virtual:walli-chat-uno-styles" {
 
 declare module "prismjs/components/*";
 
-declare module "prismjs/themes/*.css?inline" {
+declare module "*.css?inline" {
   const css: string;
   export default css;
 }

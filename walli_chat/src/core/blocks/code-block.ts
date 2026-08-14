@@ -165,7 +165,7 @@ export class WalliCodeBlockElement extends BlockShellElement<CodeBlockLayout> {
           )}</div>`,
       )}
       <div
-        class=${`absolute right-0 top-0 bottom-0 flex justify-center border-l border-border bg-secondary ${block.lines.length === 1 ? "items-center" : "items-start pt-2"}`}
+        class=${`absolute right-0 top-0 bottom-0 flex justify-center border-l border-border ${block.lines.length === 1 ? "items-center" : "items-start pt-2"}`}
         style=${`width:${getCodeBlockStyle("actionWidth")}px;`}
       >
         <walli-action-button

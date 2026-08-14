@@ -51,14 +51,16 @@ export class WalliMessageElement extends HTMLElement {
           class=${clsx({
             "message-bubble relative max-w-full flex-none rounded-none text-foreground":
               message.frame.role === "assistant",
-            "message-bubble relative max-w-full flex-none rounded-2xl bg-secondary text-secondary-foreground shadow-lg":
+            "message-bubble relative max-w-full flex-none rounded-2xl text-secondary-foreground shadow-lg":
               message.frame.role === "user",
           })}
-          style=${`width:${message.frame.frameWidth}px;height:${message.frame.bubbleHeight}px;`}
+          style=${`width:${message.frame.frameWidth}px;height:${message.frame.bubbleHeight}px;${message.frame.role === "user" ? "background-color:var(--user-message-background);" : ""}`}
         >
           ${blocks.map((block) => renderMessageBlockTemplate(block, message.frame.contentInsetX))}
         </div>
-        ${message.frame.role === "assistant"
+        ${message.prepared.streaming
+          ? null
+          : message.frame.role === "assistant"
           ? html`<walli-assistant-message-actions
               .id=${message.prepared.id}
               .markdown=${message.prepared.markdown}

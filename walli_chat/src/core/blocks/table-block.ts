@@ -346,7 +346,7 @@ type TableBlockLayout = Extract<BlockLayout, { kind: "table" }>;
 export class WalliTableBlockElement extends BlockShellElement<TableBlockLayout> {
   protected override renderContent(block: TableBlockLayout, contentInsetX: number): TemplateResult {
     return html`<div
-      class="absolute top-0 overflow-x-auto overflow-y-hidden rounded-[6px] bg-background ring-1 ring-border"
+      class="walli-table-scrollbar absolute top-0 overflow-x-auto overflow-y-hidden rounded-[6px] bg-background ring-1 ring-border"
       style=${`left:${contentInsetX + block.contentLeft}px; width:${block.viewportWidth}px; height:${block.height}px;`}
     >
       <div class="relative" style=${`width:${block.width}px; height:${block.height}px;`}>

@@ -9,6 +9,10 @@
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
+  --user-message-background: oklch(0.923 0.032 255.6);
+  --table-scrollbar-thumb: oklch(0.708 0 0 / 55%);
+  --table-scrollbar-thumb-hover: oklch(0.556 0 0 / 80%);
+  --table-scrollbar-track: transparent;
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
@@ -44,6 +48,10 @@
   --primary-foreground: oklch(0.205 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
+  --user-message-background: oklch(0.487 0.146 257.7 / 75.2%);
+  --table-scrollbar-thumb: oklch(0.556 0 0 / 65%);
+  --table-scrollbar-thumb-hover: oklch(0.708 0 0 / 85%);
+  --table-scrollbar-track: transparent;
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
   --accent: oklch(0.269 0 0);

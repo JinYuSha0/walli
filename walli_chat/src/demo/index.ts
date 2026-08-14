@@ -50,6 +50,23 @@ appendButton.addEventListener("click", () => {
   chat?.insertMessagesAtBottom(nextMessages);
 });
 
+const themeButton = document.createElement("button");
+applyButtonStyle(themeButton);
+updateThemeButtonLabel();
+themeButton.addEventListener("click", () => {
+  document.documentElement.classList.toggle("dark");
+  document.body.style.background = document.documentElement.classList.contains("dark")
+    ? "#171717"
+    : "#f8fafc";
+  controls.style.background = document.documentElement.classList.contains("dark")
+    ? "#262626"
+    : "#ffffff";
+  controls.style.borderColor = document.documentElement.classList.contains("dark")
+    ? "#404040"
+    : "#e5e7eb";
+  updateThemeButtonLabel();
+});
+
 const streamButton = document.createElement("button");
 streamButton.textContent = "流式输出长 Markdown";
 applyButtonStyle(streamButton);
@@ -161,6 +178,7 @@ hint.style.lineHeight = "20px";
 controls.append(
   prependButton,
   appendButton,
+  themeButton,
   streamButton,
   indexInput,
   scrollButton,
@@ -172,6 +190,12 @@ controls.append(
   hint,
 );
 document.body.append(controls);
+
+function updateThemeButtonLabel(): void {
+  themeButton.textContent = document.documentElement.classList.contains("dark")
+    ? "切换浅色模式"
+    : "切换深色模式";
+}
 
 function applyButtonStyle(button: HTMLButtonElement): void {
   button.style.border = "1px solid #d1d5db";

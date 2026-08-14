@@ -74,6 +74,7 @@ export type PreparedChatMessage = {
   markdown: string;
   id: string;
   role: "assistant" | "user";
+  streaming?: boolean;
 };
 
 export type InlineVariant = "body" | "h1" | "h2";

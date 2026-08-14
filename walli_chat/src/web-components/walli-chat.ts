@@ -2,7 +2,8 @@ import "./walli-message";
 import { html, LitElement } from "lit";
 import { customElement, eventOptions, property } from "lit/decorators.js";
 import walliChatUnoCss from "virtual:walli-chat-uno-styles";
-import prismThemeCss from "prismjs/themes/prism.css?inline";
+import prismThemeCss from "../core/styles/prism-theme.css?inline";
+import walliChatHostCss from "../core/styles/walli-chat.css?inline";
 import {
   buildConversationFrame,
   createPreparedChatMessages,
@@ -297,6 +298,7 @@ export class WalliChatElement extends LitElement {
       markdown,
       id: message.id,
       role: "assistant",
+      streaming: true,
     };
     this.invalidateFrame({ keepMountedRows: true });
   }
@@ -387,12 +389,7 @@ export class WalliChatElement extends LitElement {
   override createRenderRoot() {
     const renderRoot = super.createRenderRoot();
     const hostStyle = document.createElement("style");
-    hostStyle.textContent = `
-      :host{display:block;width:100%;height:100%;contain:layout paint style;}
-      :host(:not([feedback-enabled])) .feedback-action{display:none;}
-      :host(:not([reply-enabled])) .reply-action{display:none;}
-      :host(:not([share-enabled])) .share-action{display:none;}
-    `;
+    hostStyle.textContent = walliChatHostCss;
     const unoStyle = document.createElement("style");
     unoStyle.textContent = walliChatUnoCss;
     const prismStyle = document.createElement("style");
