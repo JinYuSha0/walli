@@ -12,10 +12,11 @@ import {
 } from "./blocks/index";
 import { appendBlockGroup, fallbackTextForToken, headingVariant } from "./helper";
 import { getCommonStyle } from "./styles";
+import { resolveCustomBlockToken } from "./custom-block";
 
 export function parseMarkdownBlocks(markdown: string, streaming = false): PreparedBlock[] {
   const source = streaming ? remend(markdown) : markdown;
-  const tokens = marked.lexer(source, { gfm: true });
+  const tokens = lexMarkdown(source);
   return parseBlockTokens(tokens, { listDepth: 0, quoteDepth: 0 });
 }
 
@@ -24,7 +25,7 @@ export class StreamingMarkdownParser {
   private stableTokenKeys: string[] = [];
 
   parse(markdown: string): PreparedBlock[] {
-    const tokens = marked.lexer(remend(markdown), { gfm: true });
+    const tokens = lexMarkdown(remend(markdown));
     const stableTokenCount = Math.max(0, tokens.length - 1);
     const reusableCount = Math.min(stableTokenCount, this.stableTokenKeys.length);
 
@@ -48,6 +49,10 @@ export class StreamingMarkdownParser {
   }
 }
 
+function lexMarkdown(markdown: string): Token[] {
+  return marked.lexer(markdown, { ...marked.defaults, gfm: true });
+}
+
 function tokenKey(token: Token): string {
   return `${token.type}:${token.raw}`;
 }
@@ -62,6 +67,26 @@ export function parseBlockTokens(
     const token = tokens[index];
 
     if (!token) continue;
+
+    const customBlock = resolveCustomBlockToken(token);
+    if (customBlock) {
+      appendBlockGroup(
+        blocks,
+        [{
+          contentLeft: 0,
+          data: customBlock.data,
+          definition: customBlock.definition,
+          kind: "custom",
+          marginTop: 0,
+          markerClassName: null,
+          markerLeft: null,
+          markerText: null,
+          quoteRailLefts: [],
+        }],
+        customBlock.definition.marginTop ?? getCommonStyle("richBlockGap"),
+      );
+      continue;
+    }
 
     switch (token.type) {
       case "space":

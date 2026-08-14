@@ -342,7 +342,15 @@ const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
     "| Accessibility | Kai | Backlog | P1 | Images have alt text and preview trigger roles. | Keyboard paths need broader test coverage. | Audit focus handling in preview and scroll container. | Tables may need semantic alternatives later. |",
     "| Packaging | Lina | Done | P2 | Web component and React wrapper build separately. | Public options should stay minimal. | Document `defaultScrollToBottom`. | Keep demo-only styles out of library runtime. |",
   ),
+  message("user", "展示一下外部注册的自定义 Block。"),
+  message(
+    "assistant",
+    ":::notice",
+    "自定义 Notice Block：这个区域的数据位于 mock 中，由 demo 在外部注册。Block 使用 Pretext 测量文本，并根据当前可用宽度计算换行和最终高度。调整窗口宽度可以验证布局是否准确更新。",
+    ":::",
+  ),
 ];
+
 
 export function getMessages() {
   const message: MarkdownChatSeed[] = [];

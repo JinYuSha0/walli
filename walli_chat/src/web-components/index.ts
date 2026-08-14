@@ -18,6 +18,7 @@ export type {
 declare global {
   interface HTMLElementTagNameMap {
     "walli-chat": WalliChatElement;
+    "walli-custom-block": HTMLElement;
     "walli-message": WalliMessageElement;
   }
 }

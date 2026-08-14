@@ -1,5 +1,6 @@
 import type { LayoutLine, PreparedTextWithSegments } from "@chenglou/pretext";
 import type { PreparedRichInline } from "@chenglou/pretext/rich-inline";
+import type { AnyCustomBlockDefinition } from "./custom-block";
 
 export type ParseContext = {
   listDepth: number;
@@ -53,6 +54,12 @@ export type PreparedTableBlock = PreparedBlockBase & {
   rows: PreparedTableCell[][];
 };
 
+export type PreparedCustomBlock = PreparedBlockBase & {
+  data: unknown;
+  definition: AnyCustomBlockDefinition;
+  kind: "custom";
+};
+
 export type PreparedTableCell = {
   align: "left" | "center" | "right" | null;
   classNames: string[];
@@ -67,7 +74,8 @@ export type PreparedBlock =
   | PreparedCodeBlock
   | PreparedImageBlock
   | PreparedRuleBlock
-  | PreparedTableBlock;
+  | PreparedTableBlock
+  | PreparedCustomBlock;
 
 export type PreparedChatMessage = {
   blocks: PreparedBlock[];
@@ -222,12 +230,27 @@ export type TableBlockLayout = {
   width: number;
 };
 
+export type CustomBlockLayout = {
+  contentLeft: number;
+  data: unknown;
+  definition: AnyCustomBlockDefinition;
+  height: number;
+  kind: "custom";
+  markerClassName: string | null;
+  markerLeft: number | null;
+  markerText: string | null;
+  quoteRailLefts: number[];
+  top: number;
+  width: number;
+};
+
 export type BlockLayout =
   | InlineBlockLayout
   | CodeBlockLayout
   | ImageBlockLayout
   | RuleBlockLayout
-  | TableBlockLayout;
+  | TableBlockLayout
+  | CustomBlockLayout;
 
 export type BlockFrameBase = {
   contentLeft: number;
@@ -268,5 +291,15 @@ export type TableBlockFrame = BlockFrameBase & {
   width: number;
 };
 
+export type CustomBlockFrame = BlockFrameBase & {
+  kind: "custom";
+  width: number;
+};
+
 export type BlockFrame =
-  InlineBlockFrame | CodeBlockFrame | ImageBlockFrame | RuleBlockFrame | TableBlockFrame;
+  | InlineBlockFrame
+  | CodeBlockFrame
+  | ImageBlockFrame
+  | RuleBlockFrame
+  | TableBlockFrame
+  | CustomBlockFrame;

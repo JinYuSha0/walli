@@ -8,6 +8,7 @@ export { buildImageBlock, WalliImageBlockElement } from "./image-block";
 export { buildPlainTextBlocks } from "./plain-text-block";
 export { buildListBlocks } from "./list-block";
 export { buildTableBlock, WalliTableBlockElement } from "./table-block";
+export { WalliCustomBlockElement } from "./custom-block";
 
 export function renderMessageBlockTemplate(
   block: BlockLayout,
@@ -24,5 +25,7 @@ export function renderMessageBlockTemplate(
       return html`<walli-rule-block .layout=${{ block, contentInsetX }}></walli-rule-block>`;
     case "table":
       return html`<walli-table-block .layout=${{ block, contentInsetX }}></walli-table-block>`;
+    case "custom":
+      return html`<walli-custom-block .layout=${{ block, contentInsetX }}></walli-custom-block>`;
   }
 }

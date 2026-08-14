@@ -112,6 +112,8 @@ function getUsedBlockWidth(block: BlockFrame): number {
       return block.contentLeft + block.width;
     case "table":
       return block.contentLeft + block.width;
+    case "custom":
+      return block.contentLeft + block.width;
   }
 }
 
@@ -254,6 +256,28 @@ function layoutBlockFrame(block: PreparedBlock, contentWidth: number, top: numbe
         width: metrics.viewportWidth,
       };
     }
+
+    case "custom": {
+      const availableWidth = Math.max(1, contentWidth - block.contentLeft);
+      const metrics = block.definition.measure(block.data, { availableWidth });
+      if (!Number.isFinite(metrics.height) || metrics.height < 0) {
+        throw new Error(`Custom block \"${block.definition.name}\" returned an invalid height`);
+      }
+      if (metrics.width !== undefined && (!Number.isFinite(metrics.width) || metrics.width < 0)) {
+        throw new Error(`Custom block \"${block.definition.name}\" returned an invalid width`);
+      }
+      return {
+        contentLeft: block.contentLeft,
+        height: metrics.height,
+        kind: "custom",
+        markerClassName: block.markerClassName,
+        markerLeft: block.markerLeft,
+        markerText: block.markerText,
+        quoteRailLefts: block.quoteRailLefts,
+        top,
+        width: Math.max(0, Math.min(availableWidth, metrics.width ?? availableWidth)),
+      };
+    }
   }
 }
 
@@ -380,6 +404,23 @@ function materializeBlockLayout(
         viewportWidth: frame.width,
         top: frame.top,
         width: metrics.width,
+      };
+    }
+
+    case "custom": {
+      if (block.kind !== "custom") throw new Error("Custom block/frame mismatch");
+      return {
+        contentLeft: frame.contentLeft,
+        data: block.data,
+        definition: block.definition,
+        height: frame.height,
+        kind: "custom",
+        markerClassName: frame.markerClassName,
+        markerLeft: frame.markerLeft,
+        markerText: frame.markerText,
+        quoteRailLefts: frame.quoteRailLefts,
+        top: frame.top,
+        width: frame.width,
       };
     }
   }
