@@ -1,5 +1,5 @@
 import readmeZhCn from "../../../README.zh-CN.md?raw";
-import type { WalliChatMessage } from "../types";
+import type { WalliChatMessage } from "../../src/types";
 
 export type MarkdownChatSeed = WalliChatMessage;
 

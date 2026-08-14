@@ -1,5 +1,5 @@
-import "../theme.css";
-import "../web-components";
+import "../src/theme.css";
+import "../src/web-components";
 import { html } from "lit";
 import {
   layoutWithLines,
@@ -7,10 +7,10 @@ import {
   prepareWithSegments,
   type PreparedTextWithSegments,
 } from "@chenglou/pretext";
-import { registerCustomBlock } from "../core/custom-block";
+import { registerCustomBlock } from "../src/core/custom-block";
 import { getDemoMessages } from "./store";
-import type { WalliChatElement } from "../web-components";
-import type { WalliChatMessage, WalliChatStreamingHandle } from "../types";
+import type { WalliChatElement } from "../src/web-components";
+import type { WalliChatMessage, WalliChatStreamingHandle } from "../src/types";
 
 const noticePadding = 16;
 const noticeLineHeight = 22;
