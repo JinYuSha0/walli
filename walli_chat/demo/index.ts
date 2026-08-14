@@ -1,71 +1,10 @@
-import "../src/theme.css";
-import "../src/web-components";
-import { html } from "lit";
-import {
-  layoutWithLines,
-  measureLineStats,
-  prepareWithSegments,
-  type PreparedTextWithSegments,
-} from "@chenglou/pretext";
-import { registerCustomBlock } from "../src/core/custom-block";
+import "walli_chat/theme.css";
+import { registerCustomBlock, type WalliChatElement } from "walli_chat";
+import { noticeBlockDefinition } from "./blocks/notice-block";
 import { getDemoMessages } from "./store";
-import type { WalliChatElement } from "../src/web-components";
-import type { WalliChatMessage, WalliChatStreamingHandle } from "../src/types";
+import type { WalliChatMessage, WalliChatStreamingHandle } from "walli_chat";
 
-const noticePadding = 16;
-const noticeLineHeight = 22;
-const noticeFont =
-  '500 14px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-
-registerCustomBlock<{ prepared: PreparedTextWithSegments }>({
-  name: "notice",
-  marginTop: 12,
-  tokenizer: {
-    tokenize(source) {
-      const match = /^:::notice[ \t]*\n([\s\S]*?)\n:::[ \t]*(?:\n|$)/.exec(source);
-      if (!match) return undefined;
-      const text = match[1]!.trim();
-      return {
-        data: { prepared: prepareWithSegments(text, noticeFont) },
-        raw: match[0],
-      };
-    },
-  },
-  measure(data, { availableWidth }) {
-    const contentWidth = Math.max(1, availableWidth - noticePadding * 2);
-    const { lineCount } = measureLineStats(data.prepared, contentWidth);
-    return {
-      height: noticePadding * 2 + lineCount * noticeLineHeight,
-      width: availableWidth,
-    };
-  },
-  render({ data, height, left, top, width }) {
-    const contentWidth = Math.max(1, width - noticePadding * 2);
-    const layout = layoutWithLines(data.prepared, contentWidth, noticeLineHeight);
-    return html`<div
-      style=${`
-        position:absolute;
-        box-sizing:border-box;
-        left:${left}px;
-        top:${top}px;
-        width:${width}px;
-        height:${height}px;
-        overflow:hidden;
-        border:1px solid color-mix(in oklch, var(--foreground) 16%, transparent);
-        border-radius:12px;
-        background:color-mix(in oklch, var(--foreground) 6%, transparent);
-        color:var(--foreground);
-        font:${noticeFont};
-      `}
-    >
-      ${layout.lines.map(
-        (line, index) => html`<div
-          style=${`position:absolute;left:${noticePadding}px;top:${noticePadding + index * noticeLineHeight}px;height:${noticeLineHeight}px;white-space:pre;`}
-        >${line.text}</div>`,
-      )}
-    </div>`;
-  },
-});
+registerCustomBlock(noticeBlockDefinition);
 
 const chat = document.querySelector<WalliChatElement>("walli-chat");
 

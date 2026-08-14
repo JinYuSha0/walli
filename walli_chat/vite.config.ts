@@ -91,6 +91,18 @@ export default defineConfig(({ mode }) => ({
   server: {
     port: 5174,
   },
+  resolve: {
+    alias: [
+      {
+        find: /^walli_chat\/theme\.css$/,
+        replacement: resolve(sourceRoot, "theme.css"),
+      },
+      {
+        find: /^walli_chat$/,
+        replacement: resolve(sourceRoot, "index.ts"),
+      },
+    ],
+  },
   build: {
     cssCodeSplit: false,
     lib: {

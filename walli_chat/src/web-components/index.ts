@@ -19,6 +19,7 @@ declare global {
   interface HTMLElementTagNameMap {
     "walli-chat": WalliChatElement;
     "walli-custom-block": HTMLElement;
+    "walli-custom-block-content": HTMLElement;
     "walli-message": WalliMessageElement;
   }
 }
