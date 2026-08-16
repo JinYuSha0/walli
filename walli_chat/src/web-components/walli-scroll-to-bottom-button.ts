@@ -5,6 +5,7 @@ import { customElement, property } from "lit/decorators.js";
 export class WalliScrollToBottomButtonElement extends LitElement {
   static override styles = css`
     :host {
+      -webkit-tap-highlight-color: transparent;
       left: 50%;
       opacity: 0;
       pointer-events: none;
@@ -23,6 +24,8 @@ export class WalliScrollToBottomButtonElement extends LitElement {
     }
 
     button {
+      -webkit-appearance: none;
+      -webkit-tap-highlight-color: transparent;
       align-items: center;
       background: var(--background);
       border: 1px solid var(--border);
@@ -35,6 +38,15 @@ export class WalliScrollToBottomButtonElement extends LitElement {
       justify-content: center;
       padding: 0;
       width: 32px;
+    }
+
+    button:focus {
+      outline: none;
+    }
+
+    button:focus-visible {
+      outline: 2px solid var(--ring);
+      outline-offset: 2px;
     }
 
     button:hover {
@@ -96,24 +108,28 @@ export class WalliScrollToBottomButtonElement extends LitElement {
   @property({ reflect: true, type: Boolean }) accessor visible = false;
 
   private handleClick(): void {
-    this.dispatchEvent(new CustomEvent("walli-scroll-to-bottom", { bubbles: true, composed: true }));
+    this.dispatchEvent(
+      new CustomEvent("walli-scroll-to-bottom", { bubbles: true, composed: true }),
+    );
   }
 
   override render() {
     return html`<button
       type="button"
-      aria-label="滚动到底部"
+      aria-label="Scroll to bottom"
       aria-hidden=${this.visible ? "false" : "true"}
       ?disabled=${!this.visible}
       @click=${this.handleClick}
     >
-      ${this.streaming
-        ? html`<span class="streaming-indicator" aria-hidden="true">
-            <span></span><span></span><span></span>
-          </span>`
-        : html`<svg aria-hidden="true" viewBox="0 0 24 24">
-            <path d="m6 9 6 6 6-6"></path>
-          </svg>`}
+      ${
+        this.streaming
+          ? html`<span class="streaming-indicator" aria-hidden="true">
+              <span></span><span></span><span></span>
+            </span>`
+          : html`<svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="m6 9 6 6 6-6"></path>
+            </svg>`
+      }
     </button>`;
   }
 }
