@@ -1,9 +1,9 @@
 import "walli_chat/theme.css";
-import { registerCustomBlock, type WalliChatElement } from "walli_chat";
+import { registerCustomBlock } from "walli_chat";
+import type { WalliChatElement, WalliChatMessage, WalliChatStreamingHandle } from "walli_chat";
 import { noticeBlockDefinition } from "./blocks/notice-block";
 import { getDemoMessages } from "./store";
 import { createDemoSseRecords } from "./mock/stream";
-import type { WalliChatMessage, WalliChatStreamingHandle } from "walli_chat";
 
 registerCustomBlock(noticeBlockDefinition);
 
@@ -84,13 +84,12 @@ streamButton.addEventListener("click", async () => {
   }
 
   streamButton.textContent = "再次点击停止";
-  chat.scrollTo({ target: "bottom" });
 
   try {
     const handle = chat.insertStreamingMessageAtBottom(createMarkdownDemoStream(), {
       getToolLabel: (toolName) => `调用 ${toolName} 工具中`,
       messageId: `demo-stream-${Date.now()}`,
-      stickToBottom: true,
+      // stickToBottom: true,
     });
     activeStreamingHandle = handle;
     await handle.finished;

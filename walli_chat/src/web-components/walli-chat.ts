@@ -1,6 +1,7 @@
 import "./walli-message";
+import "./walli-scroll-to-bottom-button";
 import { html, LitElement } from "lit";
-import { customElement, eventOptions, property } from "lit/decorators.js";
+import { customElement, eventOptions, property, state } from "lit/decorators.js";
 import walliChatUnoCss from "virtual:walli-chat-uno-styles";
 import prismThemeCss from "../core/styles/prism-theme.css?inline";
 import walliChatHostCss from "../core/styles/walli-chat.css?inline";
@@ -60,6 +61,9 @@ export class WalliChatElement extends LitElement {
     height: 0,
   };
   private viewportScrollTop = 0;
+  @state() private accessor isAtBottom = true;
+  @state() private accessor activeStreamingMessageCount = 0;
+  private isScrollingToBottom = false;
   private mountedStart = 0;
   private mountedEnd = 0;
 
@@ -189,17 +193,20 @@ export class WalliChatElement extends LitElement {
     };
     const parser = new StreamingMarkdownParser();
     this.insertMessagesAtBottom([message]);
-    if (options.stickToBottom === true) {
+    if (options.stickToBottom) {
       this.scrollTo({ target: "bottom" });
     }
 
+    this.activeStreamingMessageCount++;
     const finished = this.consumeStreamingMessage(
       reader,
       abortController.signal,
       options,
       message,
       parser,
-    );
+    ).finally(() => {
+      this.activeStreamingMessageCount--;
+    });
     return {
       abort: (reason) => abortController.abort(reason),
       finished,
@@ -231,6 +238,12 @@ export class WalliChatElement extends LitElement {
     let resolveRender: (() => void) | null = null;
     let pendingRender: Promise<void> | null = null;
 
+    const finishPendingRender = () => {
+      const resolve = resolveRender;
+      resolveRender = null;
+      resolve?.();
+    };
+
     const scheduleRender = () => {
       if (renderRaf !== null) return;
 
@@ -240,12 +253,11 @@ export class WalliChatElement extends LitElement {
       renderRaf = requestAnimationFrame(() => {
         renderRaf = null;
         this.updateStreamingMessage(message, parser, markdown);
-        if (options.stickToBottom === true) {
+        if (this.shouldFollowStreamingMessage(options)) {
           this.scrollTo({ target: "bottom" });
         }
         renderedMarkdown = markdown;
-        resolveRender?.();
-        resolveRender = null;
+        finishPendingRender();
       });
     };
 
@@ -306,13 +318,21 @@ export class WalliChatElement extends LitElement {
       if (pendingRender !== null) await pendingRender;
       if (markdown !== renderedMarkdown) {
         this.updateStreamingMessage(message, parser, markdown);
-        if (options.stickToBottom === true) {
+        if (this.shouldFollowStreamingMessage(options)) {
           this.scrollTo({ target: "bottom" });
         }
       }
     } finally {
       signal.removeEventListener("abort", handleAbort);
-      if (renderRaf !== null) cancelAnimationFrame(renderRaf);
+      if (renderRaf !== null) {
+        cancelAnimationFrame(renderRaf);
+        renderRaf = null;
+      }
+      finishPendingRender();
+      pendingRender = null;
+      activeToolCalls.clear();
+      markdown = text;
+      message.markdown = markdown;
       reader.releaseLock();
       const completedMessageIndex = this._messages.indexOf(message);
       if (completedMessageIndex >= 0) {
@@ -341,6 +361,10 @@ export class WalliChatElement extends LitElement {
       streaming: true,
     };
     this.invalidateFrame({ keepMountedRows: true });
+  }
+
+  private shouldFollowStreamingMessage(options: WalliChatStreamingOptions): boolean {
+    return options.stickToBottom !== false && this.isAtBottom;
   }
 
   override connectedCallback() {
@@ -444,7 +468,25 @@ export class WalliChatElement extends LitElement {
   private handleScroll(event: Event) {
     const viewport = event.currentTarget as HTMLDivElement | null;
     this.viewportScrollTop = viewport?.scrollTop ?? 0;
+    if (viewport !== null) {
+      const distanceToBottom = Math.max(
+        0,
+        viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop,
+      );
+      const isAtBottom = distanceToBottom <= getCommonStyle("bottomOcclusionHeight");
+      if (this.isScrollingToBottom) {
+        if (isAtBottom) this.isScrollingToBottom = false;
+      } else {
+        this.isAtBottom = isAtBottom;
+      }
+    }
     this.scheduleProjection();
+  }
+
+  private handleScrollToBottom(): void {
+    this.isScrollingToBottom = true;
+    this.isAtBottom = true;
+    this.scrollTo({ animated: true, target: "bottom" });
   }
 
   private scheduleProjection(): void {
@@ -713,6 +755,12 @@ export class WalliChatElement extends LitElement {
         <div class="chat-viewport absolute inset-0 overflow-auto" @scroll=${this.handleScroll}>
           <div class="chat-canvas relative mx-auto min-h-full"></div>
         </div>
+        <walli-scroll-to-bottom-button
+          style=${`bottom:${getCommonStyle("scrollToBottomButtonBottom")}px;`}
+          .streaming=${this.activeStreamingMessageCount > 0}
+          .visible=${!this.isAtBottom}
+          @walli-scroll-to-bottom=${this.handleScrollToBottom}
+        ></walli-scroll-to-bottom-button>
       </main>
     `;
   }
