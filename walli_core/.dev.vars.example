@@ -1,4 +1,7 @@
 API_TOKEN="replace-with-internal-api-token"
+CLOUDFLARE_ACCOUNT_ID="replace-with-cloudflare-account-id"
+AI_GATEWAY_ID="replace-with-ai-gateway-id"
+CF_AIG_TOKEN="replace-with-ai-gateway-token"
 BETTER_AUTH_SECRET="replace-with-openssl-rand-base64-32"
 BETTER_AUTH_URL="http://localhost:5173"
 BETTER_AUTH_TRUSTED_ORIGINS="http://localhost:5173,http://localhost:5174"

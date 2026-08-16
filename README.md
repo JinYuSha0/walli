@@ -63,6 +63,9 @@ cp .dev.vars.example .dev.vars
 
 Required values:
 
+- `CLOUDFLARE_ACCOUNT_ID`: Cloudflare account ID that owns the AI Gateway
+- `AI_GATEWAY_ID`: AI Gateway ID configured for Walli
+- `CF_AIG_TOKEN`: API token accepted by an authenticated AI Gateway; this is not Walli's `API_TOKEN`
 - `BETTER_AUTH_SECRET`: generate with `openssl rand -base64 32`
 - `BETTER_AUTH_URL`: public base URL for Better Auth, for example `http://localhost:5173` in local development
 - `BETTER_AUTH_TRUSTED_ORIGINS`: comma-separated allowed origins

@@ -63,6 +63,9 @@ cp .dev.vars.example .dev.vars
 
 需要填写：
 
+- `CLOUDFLARE_ACCOUNT_ID`：AI Gateway 所属的 Cloudflare Account ID
+- `AI_GATEWAY_ID`：Walli 使用的 AI Gateway ID
+- `CF_AIG_TOKEN`：已开启认证的 AI Gateway 接受的 API Token；不能使用 Walli 自身的 `API_TOKEN` 替代
 - `BETTER_AUTH_SECRET`：使用 `openssl rand -base64 32` 生成
 - `BETTER_AUTH_URL`：Better Auth 对外基础地址，本地开发可用 `http://localhost:5173`
 - `BETTER_AUTH_TRUSTED_ORIGINS`：允许访问认证接口的来源，多个值用逗号分隔
