@@ -173,6 +173,9 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
+      walli_chat:
+        specifier: workspace:*
+        version: link:../walli_chat
       zustand:
         specifier: ^5.0.14
         version: 5.0.14(@types/react@19.2.18)(immer@11.1.11)(react@19.2.1)(use-sync-external-store@1.6.0(react@19.2.1))

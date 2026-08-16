@@ -4,11 +4,13 @@ import { cloudflare } from "@cloudflare/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import { readFileSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
+import { walliChatUnoCss } from "../walli_chat/vite.config.ts";
 
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    walliChatUnoCss(),
     {
       name: "durable-object-sql-migration-loader",
       load(id) {
@@ -31,10 +33,22 @@ export default defineConfig({
     },
   ],
   resolve: {
-    alias: {
-      "@": resolve("src/react-app"),
-      "@shared": resolve("src/shared"),
-      "@worker": resolve("src/worker"),
-    },
+    alias: [
+      {
+        find: /^walli_chat\/theme\.css$/,
+        replacement: resolve("../walli_chat/src/theme.css"),
+      },
+      {
+        find: /^walli_chat\/react$/,
+        replacement: resolve("../walli_chat/src/react/index.ts"),
+      },
+      {
+        find: /^walli_chat$/,
+        replacement: resolve("../walli_chat/src/index.ts"),
+      },
+      { find: "@shared", replacement: resolve("src/shared") },
+      { find: "@worker", replacement: resolve("src/worker") },
+      { find: "@", replacement: resolve("src/react-app") },
+    ],
   },
 });

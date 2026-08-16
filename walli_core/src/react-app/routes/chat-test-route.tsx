@@ -1,164 +1,36 @@
-import { useChat } from "@ai-sdk/react";
-import { TextStreamChatTransport, type UIMessage } from "ai";
 import { Send, Square, Trash2 } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
+import {
+  WalliChat,
+  type WalliChatMessage,
+  type WalliChatRef,
+  type WalliChatStreamingHandle,
+} from "walli_chat/react";
+import "walli_chat/theme.css";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { authClient } from "@/auth-client";
-
-type ChatRole = "system" | "user" | "assistant";
-
-const getMessageText = (message: UIMessage) =>
-  message.parts
-    .filter((part) => part.type === "text")
-    .map((part) => part.text)
-    .join("");
-
-const toChatApiMessages = (messages: UIMessage[]) =>
-  messages
-    .map((message) => ({
-      role: message.role as ChatRole,
-      content: getMessageText(message).trim(),
-    }))
-    .filter((message) => message.content.length > 0);
-
-const parseSseBlock = (block: string) => {
-  let event = "message";
-  const dataLines: string[] = [];
-
-  block.split("\n").forEach((line) => {
-    if (line.startsWith("event:")) {
-      event = line.slice("event:".length).trim();
-      return;
-    }
-
-    if (line.startsWith("data:")) {
-      dataLines.push(line.slice("data:".length).trimStart());
-    }
-  });
-
-  return {
-    event,
-    data: dataLines.join("\n"),
-  };
-};
-
-const createSseToTextFetch =
-  (): typeof fetch =>
-    async (input, init) => {
-      const response = await fetch(input, init);
-
-      if (!response.ok || !response.body) {
-        return response;
-      }
-
-      const decoder = new TextDecoder();
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream<Uint8Array>({
-        async start(controller) {
-          const reader = response.body?.getReader();
-
-          if (!reader) {
-            controller.close();
-            return;
-          }
-
-          let buffer = "";
-
-          const processBlock = (block: string) => {
-            const { event, data } = parseSseBlock(block);
-
-            if (event === "delta") {
-              const payload = JSON.parse(data) as { text?: unknown };
-
-              if (typeof payload.text === "string") {
-                controller.enqueue(encoder.encode(payload.text));
-              }
-              return;
-            }
-
-            if (event === "error") {
-              const payload = JSON.parse(data) as { error?: { message?: unknown } };
-              controller.error(
-                new Error(
-                  typeof payload.error?.message === "string"
-                    ? payload.error.message
-                    : "Chat stream failed",
-                ),
-              );
-            }
-          };
-
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-
-              if (done) {
-                break;
-              }
-
-              buffer += decoder.decode(value, { stream: true });
-
-              while (buffer.includes("\n\n")) {
-                const separatorIndex = buffer.indexOf("\n\n");
-                const block = buffer.slice(0, separatorIndex);
-                buffer = buffer.slice(separatorIndex + 2);
-
-                if (block.trim().length > 0) {
-                  processBlock(block);
-                }
-              }
-            }
-
-            buffer += decoder.decode();
-
-            if (buffer.trim().length > 0) {
-              processBlock(buffer);
-            }
-
-            controller.close();
-          } catch (error) {
-            controller.error(error);
-          }
-        },
-      });
-
-      return new Response(stream, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: {
-          "content-type": "text/plain; charset=utf-8",
-        },
-      });
-    };
 
 export function ChatTestRoute() {
   const { t } = useTranslation();
   const session = authClient.useSession();
   const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<readonly WalliChatMessage[]>([]);
+  const [isRunning, setIsRunning] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const chatRef = useRef<WalliChatRef>(null);
+  const requestAbortControllerRef = useRef<AbortController | null>(null);
+  const streamingHandleRef = useRef<WalliChatStreamingHandle | null>(null);
   const currentUserId = session.data?.user.id ?? "";
   const trimmedUserId = currentUserId.trim();
 
-  const transport = useMemo(
-    () =>
-      new TextStreamChatTransport({
-        api: "/api/internal/chat",
-        fetch: createSseToTextFetch(),
-        prepareSendMessagesRequest: ({ messages }) => ({
-          body: {
-            messages: toChatApiMessages(messages),
-          },
-        }),
-      }),
-    [],
-  );
-  const { messages, sendMessage, setMessages, status, stop, error } = useChat({
-    transport,
-  });
-  const isRunning = status === "submitted" || status === "streaming";
+  const syncMessagesFromChat = () => {
+    const nextMessages = chatRef.current?.element?.messages;
+    if (nextMessages) setMessages(nextMessages.map((message) => ({ ...message })));
+  };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const text = input.trim();
@@ -168,7 +40,66 @@ export function ChatTestRoute() {
     }
 
     setInput("");
-    void sendMessage({ text });
+    setError(null);
+    setIsRunning(true);
+
+    const userMessage: WalliChatMessage = {
+      id: crypto.randomUUID(),
+      markdown: text,
+      role: "user",
+    };
+    const requestMessages = [...messages, userMessage];
+    chatRef.current?.insertMessagesAtBottom([userMessage]);
+    setMessages(requestMessages);
+
+    const abortController = new AbortController();
+    requestAbortControllerRef.current = abortController;
+
+    try {
+      const response = await fetch("/api/internal/chat", {
+        body: JSON.stringify({
+          messages: requestMessages.map((message) => ({
+            content: message.markdown,
+            role: message.role,
+          })),
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+        signal: abortController.signal,
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => undefined)) as
+          { error?: unknown } | undefined;
+        throw new Error(
+          typeof payload?.error === "string" ? payload.error : `Chat failed (${response.status})`,
+        );
+      }
+      if (!response.body) throw new Error("Chat response did not include a stream");
+
+      const streamingHandle = chatRef.current?.insertStreamingMessageAtBottom(response.body, {
+        messageId: crypto.randomUUID(),
+        stickToBottom: true,
+      });
+      if (!streamingHandle) throw new Error("Walli Chat is not mounted");
+
+      streamingHandleRef.current = streamingHandle;
+      await streamingHandle.finished;
+    } catch (cause) {
+      if (!abortController.signal.aborted) {
+        setError(cause instanceof Error ? cause : new Error("Chat failed"));
+      }
+    } finally {
+      syncMessagesFromChat();
+      requestAbortControllerRef.current = null;
+      streamingHandleRef.current = null;
+      setIsRunning(false);
+    }
+  };
+
+  const handleStop = () => {
+    requestAbortControllerRef.current?.abort();
+    streamingHandleRef.current?.abort();
   };
 
   return (
@@ -184,34 +115,18 @@ export function ChatTestRoute() {
           <CardDescription>{t("chatTestPanelDescription")}</CardDescription>
         </CardHeader>
         <CardContent className="grid min-h-0 flex-1 grid-rows-[1fr_auto] gap-4 p-4">
-          <div className="min-h-0 overflow-auto rounded-md border bg-muted/20 p-3">
-            {messages.length === 0 ? (
-              <div className="grid h-full place-items-center text-sm text-muted-foreground">
+          <div className="relative min-h-0 overflow-hidden rounded-md border bg-muted/20">
+            {messages.length === 0 && (
+              <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center text-sm text-muted-foreground">
                 {t("chatTestEmpty")}
               </div>
-            ) : (
-              <div className="grid gap-3">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={
-                      message.role === "user"
-                        ? "ml-auto max-w-[80%] rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground"
-                        : "mr-auto max-w-[80%] whitespace-pre-wrap rounded-md border bg-background px-3 py-2 text-sm"
-                    }
-                  >
-                    {getMessageText(message)}
-                  </div>
-                ))}
-              </div>
             )}
+            <WalliChat className="h-full" messages={messages} ref={chatRef} />
           </div>
 
           <form className="grid gap-2" onSubmit={handleSubmit}>
             {error && (
-              <p className="text-sm text-destructive">
-                {error.message || t("chatTestError")}
-              </p>
+              <p className="text-sm text-destructive">{error.message || t("chatTestError")}</p>
             )}
             <div className="grid grid-cols-[1fr_auto_auto] gap-2">
               <textarea
@@ -222,7 +137,7 @@ export function ChatTestRoute() {
                 onChange={(event) => setInput(event.target.value)}
               />
               {isRunning ? (
-                <Button type="button" variant="outline" onClick={() => void stop()}>
+                <Button type="button" variant="outline" onClick={handleStop}>
                   <Square />
                   {t("chatTestStop")}
                 </Button>
