@@ -37,6 +37,8 @@ type PendingScrollRequest = {
   animated: boolean;
 } & ({ index: number } | { target: "top" | "bottom" } | { top: number });
 
+const STREAMING_START_MARKDOWN = ":::start-block\n";
+
 @customElement("walli-chat")
 export class WalliChatElement extends LitElement {
   @property({ attribute: false }) accessor onFeedback: WalliChatFeedbackCallback | undefined;
@@ -189,10 +191,12 @@ export class WalliChatElement extends LitElement {
     const message: WalliChatMessage = {
       id: options.messageId,
       role: "assistant",
-      markdown: "",
+      markdown: STREAMING_START_MARKDOWN,
     };
     const parser = new StreamingMarkdownParser();
-    this.insertMessagesAtBottom([message]);
+    this.applyMessagesInsertion("bottom", [...this._messages, message], this._messages, {
+      streaming: true,
+    });
     if (options.stickToBottom) {
       this.scrollTo({ target: "bottom" });
     }
@@ -227,12 +231,13 @@ export class WalliChatElement extends LitElement {
       string,
       { label?: string; toolCallId: string; toolName: string }
     >();
+    const completedToolCallIds = new Set<string>();
     const handleAbort = () => {
       void reader.cancel(signal.reason).catch(() => undefined);
     };
     signal.addEventListener("abort", handleAbort, { once: true });
     let text = "";
-    let markdown = ":::start-block\n";
+    let markdown = message.markdown;
     let renderedMarkdown = "";
     let renderRaf: number | null = null;
     let resolveRender: (() => void) | null = null;
@@ -263,9 +268,14 @@ export class WalliChatElement extends LitElement {
 
     const rebuildMarkdown = () => {
       const toolBlocks = [...activeToolCalls.values()].map(
-        (toolCall) => `:::toolcall-block\n${JSON.stringify(toolCall)}\n:::`,
+        (toolCall) =>
+          `:::toolcall-block\n${JSON.stringify({
+            label: toolCall.label,
+            toolCallId: toolCall.toolCallId,
+            toolName: toolCall.toolName,
+          })}\n:::`,
       );
-      markdown = [text, ...toolBlocks].filter((part) => part.length > 0).join("\n\n");
+      markdown = [text.length > 0 ? text : STREAMING_START_MARKDOWN, ...toolBlocks].join("\n\n");
       scheduleRender();
     };
 
@@ -273,7 +283,11 @@ export class WalliChatElement extends LitElement {
       if (event.event === "start") return;
       if (event.event === "delta") {
         const data = parseEventData<{ text?: unknown }>(event);
-        if (typeof data?.text === "string") text += data.text;
+        if (typeof data?.text === "string" && data.text.length > 0) {
+          text += data.text;
+          for (const toolCallId of completedToolCallIds) activeToolCalls.delete(toolCallId);
+          completedToolCallIds.clear();
+        }
         rebuildMarkdown();
         return;
       }
@@ -291,8 +305,9 @@ export class WalliChatElement extends LitElement {
       }
       if (event.event === "tool-result") {
         const data = parseEventData<{ toolCallId?: unknown }>(event);
-        if (typeof data?.toolCallId === "string") activeToolCalls.delete(data.toolCallId);
-        rebuildMarkdown();
+        if (typeof data?.toolCallId === "string" && activeToolCalls.has(data.toolCallId)) {
+          completedToolCallIds.add(data.toolCallId);
+        }
         return;
       }
       rebuildMarkdown();
@@ -331,6 +346,7 @@ export class WalliChatElement extends LitElement {
       finishPendingRender();
       pendingRender = null;
       activeToolCalls.clear();
+      completedToolCallIds.clear();
       markdown = text;
       message.markdown = markdown;
       reader.releaseLock();
@@ -702,6 +718,7 @@ export class WalliChatElement extends LitElement {
     kind: "top" | "bottom",
     nextMessages: readonly WalliChatMessage[],
     previousMessages: readonly WalliChatMessage[],
+    preparationOptions?: { streaming?: boolean },
   ): void {
     const shouldRestoreScrollTop = kind === "top" && this.pendingScrollRequest === null;
     const previousFrame = shouldRestoreScrollTop ? this.prepareFrameForScroll() : null;
@@ -713,14 +730,14 @@ export class WalliChatElement extends LitElement {
     if (kind === "top") {
       const insertedMessages = nextMessages.slice(0, insertedCount);
       this.preparedMessages = [
-        ...createPreparedChatMessages(insertedMessages),
+        ...createPreparedChatMessages(insertedMessages, preparationOptions),
         ...this.preparedMessages,
       ];
     } else {
       const insertedMessages = nextMessages.slice(previousMessages.length);
       this.preparedMessages = [
         ...this.preparedMessages,
-        ...createPreparedChatMessages(insertedMessages),
+        ...createPreparedChatMessages(insertedMessages, preparationOptions),
       ];
     }
     this.requestUpdate("messages", previousMessages);

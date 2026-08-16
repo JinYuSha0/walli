@@ -23,12 +23,14 @@ import type { WalliChatMessage } from "../types";
 
 export function createPreparedChatMessages(
   messages: readonly WalliChatMessage[],
+  options: { streaming?: boolean } = {},
 ): PreparedChatMessage[] {
   return messages.map((seed) => ({
-    blocks: parseMarkdownBlocks(seed.markdown),
+    blocks: parseMarkdownBlocks(seed.markdown, options.streaming),
     markdown: seed.markdown,
     id: seed.id,
     role: seed.role,
+    streaming: options.streaming || undefined,
   }));
 }
 
@@ -84,8 +86,7 @@ export function buildConversationFrame(
   }
 
   const lastMessage = preparedMessages[preparedMessages.length - 1];
-  const trailingMessageGap =
-    lastMessage?.role === "assistant" ? getCommonStyle("messageGap") : 0;
+  const trailingMessageGap = lastMessage?.role === "assistant" ? getCommonStyle("messageGap") : 0;
   const totalHeight =
     messages.length === 0
       ? chatTopPadding + chatBottomPadding
@@ -141,8 +142,7 @@ function layoutMessageFrame(
     preparedMessage.role === "assistant"
       ? getCommonStyle("assistantMessageActionHeight")
       : getCommonStyle("userMessageActionHeight");
-  const paddingTop =
-    preparedMessage.role === "user" ? getCommonStyle("userMessagePaddingTop") : 0;
+  const paddingTop = preparedMessage.role === "user" ? getCommonStyle("userMessagePaddingTop") : 0;
   const frameWidth =
     preparedMessage.role === "assistant"
       ? maxFrameWidth

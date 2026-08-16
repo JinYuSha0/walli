@@ -29,7 +29,7 @@ async function collectStyleSourceFiles(directory: string): Promise<string[]> {
   return files;
 }
 
-function walliChatUnoCss(): Plugin {
+export function walliChatUnoCss(): Plugin {
   return {
     name: "walli-chat-uno-css",
     resolveId(id) {
