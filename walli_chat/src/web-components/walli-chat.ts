@@ -250,7 +250,7 @@ export class WalliChatElement extends LitElement {
       streaming: true,
     });
     if (options.stickToBottom) {
-      this.scrollTo({ target: "bottom" });
+      this.handleScrollToBottom();
     }
 
     this.activeStreamingMessageCount++;
@@ -618,6 +618,10 @@ export class WalliChatElement extends LitElement {
     this.scrollTo({ animated: true, target: "bottom" });
   }
 
+  private handleScrollEnd(): void {
+    this.isScrollingToBottom = false;
+  }
+
   private scheduleProjection(): void {
     if (this.scheduledRaf !== null) return;
     this.scheduledRaf = requestAnimationFrame(() => {
@@ -897,6 +901,7 @@ export class WalliChatElement extends LitElement {
           @touchcancel=${this.handleScrollInteractionEnd}
           @wheel=${this.handleWheel}
           @scroll=${this.handleScroll}
+          @scrollend=${this.handleScrollEnd}
         >
           <div class="chat-canvas relative mx-auto min-h-full"></div>
         </div>
