@@ -122,6 +122,12 @@ export class WalliChatComposerElement extends LitElement {
     this.onValueChange?.(this.value);
   }
 
+  private handleSurfaceClick(event: MouseEvent): void {
+    const target = event.target;
+    if (target instanceof Element && target.closest("button, input, img")) return;
+    this.focus();
+  }
+
   private handleKeyDown(event: KeyboardEvent): void {
     if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
     event.preventDefault();
@@ -191,7 +197,8 @@ export class WalliChatComposerElement extends LitElement {
 
   override render() {
     return html`<div
-      class="relative box-border min-h-[52px] rounded-[28px] bg-background px-2 py-[5px] text-foreground [box-shadow:0_0_0_1px_rgb(0_0_0_/_4%),0_2px_8px_rgb(0_0_0_/_4%),0_4px_40px_8px_rgb(0_0_0_/_2.5%)]"
+      class="relative box-border min-h-[52px] cursor-text rounded-[28px] bg-background px-2 py-[5px] text-foreground [box-shadow:0_0_0_1px_rgb(0_0_0_/_4%),0_2px_8px_rgb(0_0_0_/_4%),0_4px_40px_8px_rgb(0_0_0_/_2.5%)]"
+      @click=${this.handleSurfaceClick}
     >
       ${
         this.attachments.length > 0
@@ -270,7 +277,7 @@ export class WalliChatComposerElement extends LitElement {
         <textarea
           name="prompt-textarea"
           class=${clsx(
-            "box-border block h-10 min-h-10 w-full min-w-0 resize-none overflow-x-hidden overflow-y-hidden whitespace-pre-wrap break-words border-0 bg-transparent px-[7px] py-2 font-sans text-base leading-6 text-inherit outline-none transition-[height,padding] duration-150 [transition-timing-function:ease] motion-reduce:transition-none [scrollbar-color:var(--muted-foreground)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60",
+            "box-border block h-10 min-h-10 w-full min-w-0 cursor-text select-text resize-none overflow-x-hidden overflow-y-hidden whitespace-pre-wrap break-words border-0 bg-transparent px-[7px] py-2 font-sans text-base leading-6 text-inherit outline-none transition-[height,padding] duration-150 [transition-timing-function:ease] motion-reduce:transition-none [scrollbar-color:var(--muted-foreground)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60",
             this.expanded && "col-span-2 col-start-1 row-start-1",
           )}
           .value=${this.value}

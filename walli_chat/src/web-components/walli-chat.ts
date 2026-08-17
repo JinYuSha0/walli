@@ -619,9 +619,10 @@ export class WalliChatElement extends LitElement {
     if (frame.messages.length === 0) return;
 
     const targetScrollTop = this.resolveScrollTop(frame, pendingScrollRequest, viewportHeight);
-    const { start, end } = findVisibleRange(frame, targetScrollTop, viewportHeight, 0, 0);
-
-    this.projectVisibleRows(frame, start, end, true);
+    if (!pendingScrollRequest.animated) {
+      const { start, end } = findVisibleRange(frame, targetScrollTop, viewportHeight, 0, 0);
+      this.projectVisibleRows(frame, start, end, true);
+    }
     this.pendingScrollRequest = null;
     void this.updateComplete.then(() => {
       this.scrollViewportTo(targetScrollTop, pendingScrollRequest.animated);
@@ -687,7 +688,7 @@ export class WalliChatElement extends LitElement {
   }
 
   private scrollViewportTo(scrollTop: number, animated: boolean): void {
-    this.viewportScrollTop = scrollTop;
+    if (!animated) this.viewportScrollTop = scrollTop;
     this.viewportElement?.scrollTo({
       behavior: animated ? "smooth" : "auto",
       top: scrollTop,
