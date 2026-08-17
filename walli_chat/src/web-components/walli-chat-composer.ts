@@ -24,6 +24,7 @@ const singleLineTextareaHeight = 40;
 export class WalliChatComposerElement extends LitElement {
   static override styles = css`
     :host {
+      color-scheme: inherit;
       display: block;
       width: 100%;
     }
@@ -197,7 +198,7 @@ export class WalliChatComposerElement extends LitElement {
 
   override render() {
     return html`<div
-      class="relative box-border min-h-[52px] cursor-text rounded-[28px] bg-background px-2 py-[5px] text-foreground [box-shadow:0_0_0_1px_rgb(0_0_0_/_4%),0_2px_8px_rgb(0_0_0_/_4%),0_4px_40px_8px_rgb(0_0_0_/_2.5%)]"
+      class="relative box-border min-h-[52px] cursor-text rounded-[28px] bg-card px-2 py-[5px] text-card-foreground [box-shadow:0_0_0_1px_var(--border),0_2px_8px_rgb(0_0_0_/_8%),0_4px_40px_8px_rgb(0_0_0_/_5%)]"
       @click=${this.handleSurfaceClick}
     >
       ${
@@ -255,7 +256,7 @@ export class WalliChatComposerElement extends LitElement {
             this.menuOpen
               ? html`<div
                   class=${clsx(
-                    "absolute left-0 right-0 z-20 origin-bottom-left rounded-[20px] bg-background px-2 py-2.5 text-foreground [box-shadow:0_0_0_1px_rgb(0_0_0_/_4%),0_2px_8px_rgb(0_0_0_/_4%),0_4px_40px_8px_rgb(0_0_0_/_2.5%)]",
+                    "absolute left-0 right-0 z-20 origin-bottom-left rounded-[20px] bg-popover px-2 py-2.5 text-popover-foreground [box-shadow:0_0_0_1px_var(--border),0_2px_8px_rgb(0_0_0_/_12%),0_4px_40px_8px_rgb(0_0_0_/_8%)]",
                     this.expanded ? "bottom-[48px]" : "bottom-[56px]",
                   )}
                 >
@@ -304,7 +305,7 @@ export class WalliChatComposerElement extends LitElement {
           <button
             class=${clsx(
               "[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 p-0 transition-[opacity,transform] duration-150 enabled:hover:scale-105 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-30 motion-reduce:transition-none",
-              this.running ? "bg-black text-white" : "bg-foreground text-background",
+              "bg-foreground text-background",
             )}
             type="button"
             aria-label=${this.running ? "Stop generating" : "Send message"}

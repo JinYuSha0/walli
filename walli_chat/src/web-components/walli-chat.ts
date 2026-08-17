@@ -16,6 +16,7 @@ import { StreamingMarkdownParser } from "../core/md-parse";
 import { parseEventData, ServerSentEventParser, type ServerSentEvent } from "../core/sse-parser";
 import { registerStreamBlocks } from "../core/blocks/stream-block";
 import { getCommonStyle } from "../core/styles";
+import { timeScheduler } from "../core/helper";
 import type {
   WalliChatMessage,
   WalliChatFeedbackCallback,
@@ -38,6 +39,7 @@ type Size = {
 
 type PendingScrollRequest = {
   animated: boolean;
+  source?: "streaming";
 } & ({ index: number } | { target: "top" | "bottom" } | { top: number });
 
 const STREAMING_START_MARKDOWN = ":::start-block\n";
@@ -77,6 +79,8 @@ export class WalliChatElement extends LitElement {
   @state() private accessor activeStreamingMessageCount = 0;
   @state() private accessor hasComposer = false;
   private isScrollingToBottom = false;
+  private isUserScrolling = false;
+  private readonly scrollInteractionEndTaskType = "scroll-interaction-end";
   private mountedStart = 0;
   private mountedEnd = 0;
 
@@ -306,9 +310,7 @@ export class WalliChatElement extends LitElement {
       renderRaf = requestAnimationFrame(() => {
         renderRaf = null;
         this.updateStreamingMessage(message, parser, markdown);
-        if (this.shouldFollowStreamingMessage(options)) {
-          this.scrollTo({ target: "bottom" });
-        }
+        this.requestStreamingFollow();
         renderedMarkdown = markdown;
         finishPendingRender();
       });
@@ -381,9 +383,7 @@ export class WalliChatElement extends LitElement {
       if (pendingRender !== null) await pendingRender;
       if (markdown !== renderedMarkdown) {
         this.updateStreamingMessage(message, parser, markdown);
-        if (this.shouldFollowStreamingMessage(options)) {
-          this.scrollTo({ target: "bottom" });
-        }
+        this.requestStreamingFollow();
       }
     } finally {
       signal.removeEventListener("abort", handleAbort);
@@ -427,8 +427,23 @@ export class WalliChatElement extends LitElement {
     this.invalidateFrame({ keepMountedRows: true });
   }
 
-  private shouldFollowStreamingMessage(options: WalliChatStreamingOptions): boolean {
-    return options.stickToBottom !== false && this.isAtBottom;
+  private shouldFollowStreamingMessage(): boolean {
+    return (
+      this.isAtBottom &&
+      !this.isUserScrolling &&
+      !this.isScrollingToBottom &&
+      (this.pendingScrollRequest === null || this.pendingScrollRequest.source === "streaming")
+    );
+  }
+
+  private requestStreamingFollow(): void {
+    if (!this.shouldFollowStreamingMessage()) return;
+    this.pendingScrollRequest = {
+      animated: false,
+      source: "streaming",
+      target: "bottom",
+    };
+    this.scheduleScrollRequest();
   }
 
   override connectedCallback() {
@@ -484,6 +499,7 @@ export class WalliChatElement extends LitElement {
       cancelAnimationFrame(this.scheduledScrollRaf);
       this.scheduledScrollRaf = null;
     }
+    timeScheduler.destroy();
     this.resizeObserver?.disconnect();
     this.resizeObserver = undefined;
     this.composerResizeObserver?.disconnect();
@@ -576,6 +592,26 @@ export class WalliChatElement extends LitElement {
     this.scheduleProjection();
   }
 
+  private handleScrollInteractionStart(): void {
+    this.isUserScrolling = true;
+    if (this.pendingScrollRequest?.source === "streaming") {
+      this.pendingScrollRequest = null;
+    }
+    timeScheduler.cancelByType(this.scrollInteractionEndTaskType);
+  }
+
+  private handleScrollInteractionEnd(): void {
+    timeScheduler.scheduleByType(this.scrollInteractionEndTaskType, Date.now() + 160, () => {
+      this.isUserScrolling = false;
+    });
+  }
+
+  @eventOptions({ passive: true })
+  private handleWheel(): void {
+    this.handleScrollInteractionStart();
+    this.handleScrollInteractionEnd();
+  }
+
   private handleScrollToBottom(): void {
     this.isScrollingToBottom = true;
     this.isAtBottom = true;
@@ -665,6 +701,7 @@ export class WalliChatElement extends LitElement {
     }
     this.pendingScrollRequest = null;
     void this.updateComplete.then(() => {
+      if (pendingScrollRequest.source === "streaming" && this.isUserScrolling) return;
       this.scrollViewportTo(targetScrollTop, pendingScrollRequest.animated);
     });
   }
@@ -850,7 +887,17 @@ export class WalliChatElement extends LitElement {
         @walli-reply=${this.handleReply}
         @walli-share=${this.handleShare}
       >
-        <div class="chat-viewport absolute inset-0 overflow-auto" @scroll=${this.handleScroll}>
+        <div
+          class="chat-viewport absolute inset-0 overflow-auto"
+          @pointerdown=${this.handleScrollInteractionStart}
+          @pointerup=${this.handleScrollInteractionEnd}
+          @pointercancel=${this.handleScrollInteractionEnd}
+          @touchstart=${this.handleScrollInteractionStart}
+          @touchend=${this.handleScrollInteractionEnd}
+          @touchcancel=${this.handleScrollInteractionEnd}
+          @wheel=${this.handleWheel}
+          @scroll=${this.handleScroll}
+        >
           <div class="chat-canvas relative mx-auto min-h-full"></div>
         </div>
         <walli-scroll-to-bottom-button

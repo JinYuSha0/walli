@@ -59,3 +59,166 @@ export function appendBlockGroup(
     } satisfies PreparedBlock);
   }
 }
+
+export class TimeScheduler<T = string> {
+  private static instance: TimeScheduler;
+  private tasks: Map<string, { timestamp: number; execute: () => void }>;
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private taskIdCounter: number;
+  private lastCheckTime: number;
+  // Tracks the latest task ID registered for each task type.
+  private lastTaskByType: Map<T, string>;
+
+  public constructor() {
+    this.tasks = new Map();
+    this.taskIdCounter = 0;
+    this.lastCheckTime = Date.now();
+    this.lastTaskByType = new Map();
+  }
+
+  public static getInstance() {
+    if (!TimeScheduler.instance) {
+      TimeScheduler.instance = new TimeScheduler();
+    }
+    return TimeScheduler.instance;
+  }
+
+  /** Starts the underlying timer. */
+  private startTimer(): void {
+    if (this.timer) return;
+
+    const checkTasks = () => {
+      const now = Date.now();
+      const timeDiff = now - this.lastCheckTime;
+
+      // Check more frequently after a long event-loop pause or scheduling delay.
+      const nextInterval = timeDiff > 200 ? 50 : 100;
+
+      // Execute every task whose scheduled time has passed.
+      this.tasks.forEach((task, taskId) => {
+        if (task.timestamp <= now) {
+          try {
+            task.execute();
+          } catch (error) {
+          } finally {
+            this.tasks.delete(taskId);
+
+            for (const [type, id] of this.lastTaskByType.entries()) {
+              if (id === taskId) {
+                this.lastTaskByType.delete(type);
+                break;
+              }
+            }
+          }
+        }
+      });
+
+      this.lastCheckTime = now;
+
+      // Keep the timer alive while scheduled tasks remain.
+      if (this.tasks.size > 0) {
+        this.timer = setTimeout(checkTasks, nextInterval);
+      } else {
+        this.timer = null;
+      }
+    };
+
+    this.timer = setTimeout(checkTasks, 100);
+  }
+
+  /**
+   * Schedules a task.
+   * @param timestamp Execution time as a Unix timestamp in milliseconds.
+   * @param execute Task callback.
+   * @returns The scheduled task ID.
+   */
+  public schedule(timestamp: number, execute: () => void): string {
+    const taskId = `task_${++this.taskIdCounter}`;
+    this.tasks.set(taskId, { timestamp, execute });
+
+    // Start the timer when the first task is added.
+    if (this.tasks.size === 1) {
+      this.startTimer();
+    }
+
+    return taskId;
+  }
+
+  /**
+   * Schedules a task and cancels the previously scheduled task of the same type.
+   * @param type Task type.
+   * @param timestamp Execution time as a Unix timestamp in milliseconds.
+   * @param execute Task callback.
+   * @returns The scheduled task ID.
+   */
+  public scheduleByType(type: T, timestamp: number, execute: () => void): string {
+    // Cancel the previously scheduled task of the same type.
+    const lastTaskId = this.lastTaskByType.get(type);
+    if (lastTaskId) {
+      this.cancel(lastTaskId);
+    }
+
+    // Schedule the replacement task.
+    const taskId = this.schedule(timestamp, execute);
+
+    // Track the replacement task ID.
+    this.lastTaskByType.set(type, taskId);
+
+    return taskId;
+  }
+
+  /**
+   * Cancels a task.
+   * @param taskId Scheduled task ID.
+   */
+  public cancel(taskId: string): void {
+    this.tasks.delete(taskId);
+
+    // Remove the matching task type entry.
+    for (const [type, id] of this.lastTaskByType.entries()) {
+      if (id === taskId) {
+        this.lastTaskByType.delete(type);
+        break;
+      }
+    }
+
+    // Stop the timer when no scheduled tasks remain.
+    if (this.tasks.size === 0 && this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+  }
+
+  /**
+   * Cancels the scheduled task for a type.
+   * @param type Task type.
+   */
+  public cancelByType(type: T): void {
+    const taskId = this.lastTaskByType.get(type);
+    if (taskId) {
+      this.cancel(taskId);
+    }
+  }
+
+  /**
+   * Cancels all scheduled tasks.
+   */
+  public cancelAll(): void {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    this.tasks.clear();
+    this.lastTaskByType.clear();
+  }
+
+  /**
+   * Destroys the scheduler and cancels all scheduled tasks.
+   */
+  public destroy(): void {
+    this.cancelAll();
+  }
+}
+
+// Shared scheduler instance.
+export const timeScheduler = TimeScheduler.getInstance();

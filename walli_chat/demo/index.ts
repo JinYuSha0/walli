@@ -9,6 +9,9 @@ import type {
 import { noticeBlockDefinition } from "./blocks/notice-block";
 import { getDemoMessages } from "./store";
 import { createDemoSseRecords } from "./mock/stream";
+import { TimeScheduler } from "../src/core/helper";
+
+const timeScheduler = new TimeScheduler();
 
 registerCustomBlock(noticeBlockDefinition);
 
@@ -337,7 +340,9 @@ function createMarkdownDemoStream(): ReadableStream<string> {
 
       const previousRecord = records[offset - 1];
       const delay = previousRecord?.delayAfter ?? 0;
-      await new Promise<void>((resolve) => setTimeout(resolve, delay));
+      await new Promise<void>((resolve) => {
+        timeScheduler.schedule(Date.now() + delay, resolve);
+      });
       const record = records[offset++]!;
       controller.enqueue(createSseRecord(record.event, record.data));
     },

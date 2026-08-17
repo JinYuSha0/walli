@@ -76,7 +76,9 @@ export function walliChatUnoCss(): Plugin {
   };
 }
 
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ command, mode }) => ({
+  root: command === "serve" ? resolve(projectRoot, "demo") : projectRoot,
+  cacheDir: resolve(projectRoot, "node_modules/.vite/walli-chat-demo"),
   publicDir: false,
   plugins: [
     walliChatUnoCss(),
@@ -90,6 +92,9 @@ export default defineConfig(({ mode }) => ({
   ],
   server: {
     port: 5174,
+  },
+  optimizeDeps: {
+    entries: [resolve(projectRoot, "demo/index.html")],
   },
   resolve: {
     alias: [
