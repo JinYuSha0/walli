@@ -28,6 +28,8 @@ import type {
 } from "../types";
 import type { WalliMessageElement } from "./walli-message";
 
+export { registerCustomBlock } from "../core/blocks/custom-block";
+
 type Size = {
   width: number;
   height: number;
@@ -773,6 +775,7 @@ export class WalliChatElement extends LitElement {
           <div class="chat-canvas relative mx-auto min-h-full"></div>
         </div>
         <walli-scroll-to-bottom-button
+          class="absolute left-1/2 z-10 [transform:translateX(-50%)]"
           style=${`bottom:${getCommonStyle("scrollToBottomButtonBottom")}px;`}
           .streaming=${this.activeStreamingMessageCount > 0}
           .visible=${!this.isAtBottom}

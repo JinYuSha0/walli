@@ -9,6 +9,11 @@ import {
   type ReactElement,
 } from "react";
 import type { WalliChatElement } from "../web-components";
+import {
+  type WalliChatCustomBlockDefinition,
+  type WalliChatCustomBlockRegistration,
+  registerCustomBlock,
+} from "../core/blocks/custom-block";
 import type {
   WalliChatMessage,
   WalliChatFeedbackCallback,
@@ -33,14 +38,17 @@ export type WalliChatProps = {
 
 export type WalliChatRef = {
   readonly element: WalliChatElement | null;
+  insertMessagesAtTop: (messages: readonly WalliChatMessage[]) => void;
   insertMessagesAtBottom: (messages: readonly WalliChatMessage[]) => void;
   insertStreamingMessageAtBottom: (
     stream: WalliChatTextStream,
     options: WalliChatStreamingOptions,
   ) => WalliChatStreamingHandle;
-  insertMessagesAtTop: (messages: readonly WalliChatMessage[]) => void;
   scrollTo: (options: WalliChatScrollToOptions) => void;
   scrollToIndex: (options: WalliChatScrollToIndexOptions) => void;
+  registerCustomBlock: <T = unknown>(
+    definition: WalliChatCustomBlockDefinition<T>,
+  ) => WalliChatCustomBlockRegistration;
 };
 
 export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function WalliChat(
@@ -75,6 +83,9 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
       get element() {
         return elementRef.current;
       },
+      insertMessagesAtTop(nextMessages) {
+        elementRef.current?.insertMessagesAtTop(nextMessages);
+      },
       insertMessagesAtBottom(nextMessages) {
         elementRef.current?.insertMessagesAtBottom(nextMessages);
       },
@@ -83,14 +94,14 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
         if (element === null) throw new Error("WalliChat is not mounted.");
         return element.insertStreamingMessageAtBottom(stream, options);
       },
-      insertMessagesAtTop(nextMessages) {
-        elementRef.current?.insertMessagesAtTop(nextMessages);
-      },
       scrollTo(options) {
         elementRef.current?.scrollTo(options);
       },
       scrollToIndex(options) {
         elementRef.current?.scrollToIndex(options);
+      },
+      registerCustomBlock(definition) {
+        return registerCustomBlock(definition);
       },
     }),
     [],

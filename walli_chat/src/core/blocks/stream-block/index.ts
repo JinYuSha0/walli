@@ -8,7 +8,7 @@ import {
 import { getFont } from "../../styles";
 import { getLineHeight, getSpace } from "../../styles/config";
 import { registerCustomBlock, type WalliChatCustomBlockDefinition } from "../custom-block";
-import streamBlockStyles from "./stream-block.css?inline";
+import walliChatUnoCss from "virtual:walli-chat-uno-styles";
 
 type StartBlockData = Record<string, never>;
 
@@ -55,7 +55,7 @@ function getPreparedToolLabel(data: ToolCallBlockData): PreparedTextWithSegments
 
 const startBlockDefinition = {
   name: "start-block",
-  styles: streamBlockStyles,
+  styles: walliChatUnoCss,
   tokenizer: {
     tokenize(source) {
       const match = /^:::start-block[ \t]*(?:\n|$)/.exec(source);
@@ -68,12 +68,12 @@ const startBlockDefinition = {
   },
   render() {
     return html`<div
-      class="start-row"
-      aria-label="starting now"
+      class="absolute inset-0 box-border flex items-center overflow-visible text-foreground"
+      aria-label="Starting now"
       style=${`padding:${getStreamBlockStyle("startPaddingY")}px ${getStreamBlockStyle("startPaddingX")}px;`}
     >
       <span
-        class="breath"
+        class="animate-walli-breathe flex-none origin-center rounded-full bg-current opacity-45 motion-reduce:animate-none"
         style=${`height:${getStreamBlockStyle("startDotSize")}px;width:${getStreamBlockStyle("startDotSize")}px;`}
       ></span>
     </div>`;
@@ -82,7 +82,7 @@ const startBlockDefinition = {
 
 const toolCallBlockDefinition = {
   name: "toolcall-block",
-  styles: streamBlockStyles,
+  styles: walliChatUnoCss,
   tokenizer: {
     tokenize(source) {
       const match = /^:::toolcall-block[ \t]*\n([^\n]+)\n:::[ \t]*(?:\n|$)/.exec(source);
@@ -113,12 +113,12 @@ const toolCallBlockDefinition = {
   render({ data }) {
     const label = getToolLabel(data);
     return html`<div
-      class="row tool-row"
+      class="box-border flex h-full items-start gap-2.5 text-foreground"
       aria-label=${label}
       style=${`padding-block:${getStreamBlockStyle("toolPaddingY")}px;`}
     >
       <span
-        class="shimmer"
+        class="animate-walli-shimmer min-w-0 bg-clip-text text-transparent [-webkit-background-clip:text] motion-reduce:animate-none"
         style=${`font:${getStreamBlockStyle("toolLabelFont")};line-height:${getStreamBlockStyle("toolLineHeight")}px;`}
         >${label}</span
       >

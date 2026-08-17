@@ -1,108 +1,16 @@
-import { css, html, LitElement } from "lit";
+import { html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators.js";
+import walliChatUnoCss from "virtual:walli-chat-uno-styles";
 
 @customElement("walli-scroll-to-bottom-button")
 export class WalliScrollToBottomButtonElement extends LitElement {
-  static override styles = css`
-    :host {
-      -webkit-tap-highlight-color: transparent;
-      left: 50%;
-      opacity: 0;
-      pointer-events: none;
-      position: absolute;
-      transform: translate(-50%, 8px) scale(0.9);
-      transition:
-        opacity 160ms ease,
-        transform 160ms ease;
-      z-index: 10;
-    }
-
-    :host([visible]) {
-      opacity: 1;
-      pointer-events: auto;
-      transform: translate(-50%, 0) scale(1);
-    }
-
-    button {
-      -webkit-appearance: none;
-      -webkit-tap-highlight-color: transparent;
-      align-items: center;
-      background: var(--background);
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      box-shadow: 0 2px 10px rgb(0 0 0 / 12%);
-      color: var(--foreground);
-      cursor: pointer;
-      display: flex;
-      height: 32px;
-      justify-content: center;
-      padding: 0;
-      width: 32px;
-    }
-
-    button:focus {
-      outline: none;
-    }
-
-    button:focus-visible {
-      outline: 2px solid var(--ring);
-      outline-offset: 2px;
-    }
-
-    button:hover {
-      background: var(--accent);
-    }
-
-    svg {
-      fill: none;
-      height: 18px;
-      stroke: currentColor;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-width: 2;
-      width: 18px;
-    }
-
-    .streaming-indicator {
-      align-items: center;
-      display: flex;
-      gap: 3px;
-    }
-
-    .streaming-indicator span {
-      animation: pulse 1s ease-in-out infinite;
-      background: currentColor;
-      border-radius: 999px;
-      height: 4px;
-      opacity: 0.35;
-      width: 4px;
-    }
-
-    .streaming-indicator span:nth-child(2) {
-      animation-delay: 160ms;
-    }
-
-    .streaming-indicator span:nth-child(3) {
-      animation-delay: 320ms;
-    }
-
-    @keyframes pulse {
-      50% {
-        opacity: 1;
-        transform: translateY(-1.5px);
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      :host {
-        transition: none;
-      }
-
-      .streaming-indicator span {
-        animation: none;
-      }
-    }
-  `;
+  override createRenderRoot() {
+    const renderRoot = super.createRenderRoot();
+    const unoStyle = document.createElement("style");
+    unoStyle.textContent = walliChatUnoCss;
+    renderRoot.append(unoStyle);
+    return renderRoot;
+  }
 
   @property({ type: Boolean }) accessor streaming = false;
   @property({ reflect: true, type: Boolean }) accessor visible = false;
@@ -114,23 +22,44 @@ export class WalliScrollToBottomButtonElement extends LitElement {
   }
 
   override render() {
-    return html`<button
-      type="button"
-      aria-label="Scroll to bottom"
-      aria-hidden=${this.visible ? "false" : "true"}
-      ?disabled=${!this.visible}
-      @click=${this.handleClick}
+    return html`<div
+      class=${`[-webkit-tap-highlight-color:transparent] transition-[opacity,transform] [transition-duration:160ms] [transition-timing-function:ease] motion-reduce:transition-none ${
+        this.visible
+          ? "pointer-events-auto opacity-100 [transform:translateY(0)_scale(1)]"
+          : "pointer-events-none opacity-0 [transform:translateY(8px)_scale(0.9)]"
+      }`}
     >
-      ${
-        this.streaming
-          ? html`<span class="streaming-indicator" aria-hidden="true">
-              <span></span><span></span><span></span>
-            </span>`
-          : html`<svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="m6 9 6 6 6-6"></path>
-            </svg>`
-      }
-    </button>`;
+      <button
+        class="[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] [appearance:none] [box-shadow:0_2px_10px_rgb(0_0_0_/_12%)] flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-solid border-border bg-background p-0 text-foreground outline-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        type="button"
+        aria-label="Scroll to bottom"
+        aria-hidden=${this.visible ? "false" : "true"}
+        ?disabled=${!this.visible}
+        @click=${this.handleClick}
+      >
+        ${
+          this.streaming
+            ? html`<span class="flex items-center gap-[3px]" aria-hidden="true">
+                <span
+                  class="animate-walli-scroll-to-bottom-dot-pulse h-1 w-1 rounded-full bg-current motion-reduce:animate-none"
+                ></span>
+                <span
+                  class="animate-walli-scroll-to-bottom-dot-pulse h-1 w-1 rounded-full bg-current ![animation-delay:100ms] motion-reduce:animate-none"
+                ></span>
+                <span
+                  class="animate-walli-scroll-to-bottom-dot-pulse h-1 w-1 rounded-full bg-current ![animation-delay:200ms] motion-reduce:animate-none"
+                ></span>
+              </span>`
+            : html`<svg
+                class="h-[18px] w-[18px] fill-none stroke-current stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+              >
+                <path d="m6 9 6 6 6-6"></path>
+              </svg>`
+        }
+      </button>
+    </div>`;
   }
 }
 
