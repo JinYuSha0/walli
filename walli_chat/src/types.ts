@@ -12,6 +12,13 @@ export type WalliChatFeedbackCallback = (
 ) => void;
 export type WalliChatMessageCallback = (id: string, markdown: string) => void;
 
+export type WalliChatComposerSubmitCallback = (
+  value: string,
+  images: readonly File[],
+) => void | Promise<void>;
+export type WalliChatComposerValueCallback = (value: string) => void;
+export type WalliChatComposerActionCallback = () => void;
+
 /** A UTF-8 Server-Sent Events stream containing start, delta, tool-call and tool-result events. */
 export type WalliChatTextStream = ReadableStream<string | Uint8Array>;
 

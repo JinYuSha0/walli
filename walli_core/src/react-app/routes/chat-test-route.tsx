@@ -1,8 +1,9 @@
-import { Send, Square, Trash2 } from "lucide-react";
-import { useRef, useState, type FormEvent } from "react";
+import { Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   WalliChat,
+  WalliChatComposer,
   type WalliChatMessage,
   type WalliChatRef,
   type WalliChatStreamingHandle,
@@ -30,12 +31,12 @@ export function ChatTestRoute() {
     if (nextMessages) setMessages(nextMessages.map((message) => ({ ...message })));
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handleSubmit = async (value: string, images: readonly File[]) => {
+    const text = value.trim();
+    const imageLabels = images.map((image) => `[Image: ${image.name}]`).join("\n");
+    const markdown = [text, imageLabels].filter(Boolean).join("\n\n");
 
-    const text = input.trim();
-
-    if (!text || !trimmedUserId || isRunning) {
+    if (!markdown || !trimmedUserId || isRunning) {
       return;
     }
 
@@ -45,7 +46,7 @@ export function ChatTestRoute() {
 
     const userMessage: WalliChatMessage = {
       id: crypto.randomUUID(),
-      markdown: text,
+      markdown,
       role: "user",
     };
     const requestMessages = [...messages, userMessage];
@@ -124,31 +125,22 @@ export function ChatTestRoute() {
             <WalliChat className="h-full" messages={messages} ref={chatRef} />
           </div>
 
-          <form className="grid gap-2" onSubmit={handleSubmit}>
+          <div className="grid gap-2">
             {error && (
               <p className="text-sm text-destructive">{error.message || t("chatTestError")}</p>
             )}
-            <div className="grid grid-cols-[1fr_auto_auto] gap-2">
-              <textarea
-                className="min-h-16 resize-none rounded-md border border-input bg-input/30 px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={isRunning}
-                placeholder={t("chatTestInputPlaceholder")}
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-              />
-              {isRunning ? (
-                <Button type="button" variant="outline" onClick={handleStop}>
-                  <Square />
-                  {t("chatTestStop")}
-                </Button>
-              ) : (
-                <Button type="submit" disabled={input.trim().length === 0 || !trimmedUserId}>
-                  <Send />
-                  {t("chatTestSend")}
-                </Button>
-              )}
+            <WalliChatComposer
+              disabled={!trimmedUserId}
+              onCancel={handleStop}
+              onSubmit={handleSubmit}
+              onValueChange={setInput}
+              placeholder={t("chatTestInputPlaceholder")}
+              value={input}
+            />
+            <div className="flex justify-end">
               <Button
                 type="button"
+                size="sm"
                 variant="outline"
                 disabled={isRunning || messages.length === 0}
                 onClick={() => setMessages([])}
@@ -157,7 +149,7 @@ export function ChatTestRoute() {
                 {t("chatTestClear")}
               </Button>
             </div>
-          </form>
+          </div>
         </CardContent>
       </Card>
     </div>

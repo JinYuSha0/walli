@@ -11,6 +11,17 @@
   display: none;
 }
 
+.composer-overlay {
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--background) 64%, transparent) 44%,
+    color-mix(in srgb, var(--background) 86%, transparent)
+  );
+  box-sizing: border-box;
+  padding: 48px 16px max(24px, env(safe-area-inset-bottom));
+}
+
 .walli-table-scrollbar {
   scrollbar-color: var(--table-scrollbar-thumb) var(--table-scrollbar-track);
   scrollbar-width: thin;

@@ -7,8 +7,9 @@ import {
   useRef,
   type CSSProperties,
   type ReactElement,
+  type ReactNode,
 } from "react";
-import type { WalliChatElement } from "../web-components";
+import type { WalliChatComposerElement, WalliChatElement } from "../web-components";
 import {
   type WalliChatCustomBlockDefinition,
   type WalliChatCustomBlockRegistration,
@@ -16,6 +17,9 @@ import {
 } from "../core/blocks/custom-block";
 import type {
   WalliChatMessage,
+  WalliChatComposerActionCallback,
+  WalliChatComposerSubmitCallback,
+  WalliChatComposerValueCallback,
   WalliChatFeedbackCallback,
   WalliChatMessageCallback,
   WalliChatScrollTarget,
@@ -26,7 +30,82 @@ import type {
   WalliChatTextStream,
 } from "../types";
 
+export type WalliChatComposerProps = {
+  className?: string;
+  disabled?: boolean;
+  maxHeight?: number;
+  onCancel?: WalliChatComposerActionCallback;
+  onSubmit?: WalliChatComposerSubmitCallback;
+  onValueChange?: WalliChatComposerValueCallback;
+  onVoice?: WalliChatComposerActionCallback;
+  placeholder?: string;
+  slot?: string;
+  style?: CSSProperties;
+  value: string;
+};
+
+export type WalliChatComposerRef = {
+  readonly element: WalliChatComposerElement | null;
+  focus: () => void;
+};
+
+export const WalliChatComposer = forwardRef<WalliChatComposerRef, WalliChatComposerProps>(
+  function WalliChatComposer(
+    {
+      className,
+      disabled = false,
+      maxHeight = 200,
+      onCancel,
+      onSubmit,
+      onValueChange,
+      onVoice,
+      placeholder = "Message",
+      slot,
+      style,
+      value,
+    },
+    forwardedRef,
+  ): ReactElement {
+    const elementRef = useRef<WalliChatComposerElement>(null);
+
+    useEffect(() => {
+      const element = elementRef.current;
+      if (!element) return;
+      element.disabled = disabled;
+      element.maxHeight = maxHeight;
+      element.onCancel = onCancel;
+      element.onSubmit = onSubmit;
+      element.onValueChange = onValueChange;
+      element.onVoice = onVoice;
+      element.placeholder = placeholder;
+      element.value = value;
+    }, [disabled, maxHeight, onCancel, onSubmit, onValueChange, onVoice, placeholder, value]);
+
+    useImperativeHandle(
+      forwardedRef,
+      () => ({
+        get element() {
+          return elementRef.current;
+        },
+        focus() {
+          elementRef.current?.focus();
+        },
+      }),
+      [],
+    );
+
+    return createElement("walli-chat-composer", {
+      className,
+      ref: elementRef,
+      slot,
+      style,
+    });
+  },
+);
+
 export type WalliChatProps = {
+  bottomOcclusionHeight?: number;
+  children?: ReactNode;
   className?: string;
   defaultScrollToBottom?: boolean;
   messages: readonly WalliChatMessage[];
@@ -52,7 +131,17 @@ export type WalliChatRef = {
 };
 
 export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function WalliChat(
-  { className, defaultScrollToBottom = true, messages, onFeedback, onReply, onShare, style },
+  {
+    bottomOcclusionHeight,
+    children,
+    className,
+    defaultScrollToBottom = true,
+    messages,
+    onFeedback,
+    onReply,
+    onShare,
+    style,
+  },
   forwardedRef,
 ): ReactElement {
   const elementRef = useRef<WalliChatElement>(null);
@@ -68,6 +157,12 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
       elementRef.current.defaultScrollToBottom = defaultScrollToBottom;
     }
   }, [defaultScrollToBottom]);
+
+  useEffect(() => {
+    if (elementRef.current && bottomOcclusionHeight !== undefined) {
+      elementRef.current.bottomOcclusionHeight = bottomOcclusionHeight;
+    }
+  }, [bottomOcclusionHeight]);
 
   useEffect(() => {
     if (elementRef.current) {
@@ -107,14 +202,21 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
     [],
   );
 
-  return createElement("walli-chat", {
-    className,
-    ref: elementRef,
-    style,
-  });
+  return createElement(
+    "walli-chat",
+    {
+      className,
+      ref: elementRef,
+      style,
+    },
+    children,
+  );
 });
 
 export type {
+  WalliChatComposerActionCallback,
+  WalliChatComposerSubmitCallback,
+  WalliChatComposerValueCallback,
   WalliChatMessage,
   WalliChatFeedbackCallback,
   WalliChatMessageCallback,

@@ -1,6 +1,11 @@
 import "walli_chat/theme.css";
 import { registerCustomBlock } from "walli_chat";
-import type { WalliChatElement, WalliChatMessage, WalliChatStreamingHandle } from "walli_chat";
+import type {
+  WalliChatComposerElement,
+  WalliChatElement,
+  WalliChatMessage,
+  WalliChatStreamingHandle,
+} from "walli_chat";
 import { noticeBlockDefinition } from "./blocks/notice-block";
 import { getDemoMessages } from "./store";
 import { createDemoSseRecords } from "./mock/stream";
@@ -8,6 +13,8 @@ import { createDemoSseRecords } from "./mock/stream";
 registerCustomBlock(noticeBlockDefinition);
 
 const chat = document.querySelector<WalliChatElement>("walli-chat");
+const composer = document.querySelector<WalliChatComposerElement>("walli-chat-composer");
+let activeStreamingHandle: WalliChatStreamingHandle | null = null;
 
 if (chat) {
   chat.messages = getDemoMessages();
@@ -17,6 +24,26 @@ if (chat) {
   chat.onShare = (id, markdown) => {
     console.log("share", { id, markdown });
   };
+}
+
+if (composer) {
+  composer.onSubmit = (value, images) => {
+    const imageLabels = images.map((image) => `[Image: ${image.name}]`).join("\n");
+    const markdown = [value, imageLabels].filter(Boolean).join("\n\n");
+    if (!markdown) return;
+
+    chat?.insertMessagesAtBottom([
+      {
+        id: `demo-user-${crypto.randomUUID()}`,
+        markdown,
+        role: "user",
+      },
+    ]);
+    composer.value = "";
+    return startDemoStreaming();
+  };
+  composer.onCancel = stopDemoStreaming;
+  composer.onVoice = () => console.log("voice input");
 }
 
 const controls = document.createElement("div");
@@ -73,15 +100,17 @@ themeButton.addEventListener("click", () => {
 const streamButton = document.createElement("button");
 streamButton.textContent = "流式输出长 Markdown";
 applyButtonStyle(streamButton);
-let activeStreamingHandle: WalliChatStreamingHandle | null = null;
-streamButton.addEventListener("click", async () => {
-  if (!chat) return;
-
+streamButton.addEventListener("click", () => {
   if (activeStreamingHandle !== null) {
-    activeStreamingHandle.abort("Demo streaming stopped by user");
-    streamButton.textContent = "正在停止…";
+    stopDemoStreaming();
     return;
   }
+
+  void startDemoStreaming();
+});
+
+async function startDemoStreaming(): Promise<void> {
+  if (!chat || activeStreamingHandle !== null) return;
 
   streamButton.textContent = "再次点击停止";
 
@@ -89,7 +118,7 @@ streamButton.addEventListener("click", async () => {
     const handle = chat.insertStreamingMessageAtBottom(createMarkdownDemoStream(), {
       getToolLabel: (toolName) => `调用 ${toolName} 工具中`,
       messageId: `demo-stream-${Date.now()}`,
-      // stickToBottom: true,
+      stickToBottom: true,
     });
     activeStreamingHandle = handle;
     await handle.finished;
@@ -97,7 +126,12 @@ streamButton.addEventListener("click", async () => {
     activeStreamingHandle = null;
     streamButton.textContent = "流式输出长 Markdown";
   }
-});
+}
+
+function stopDemoStreaming(): void {
+  activeStreamingHandle?.abort("Demo streaming stopped by user");
+  streamButton.textContent = "正在停止…";
+}
 
 const indexInput = document.createElement("input");
 indexInput.type = "number";

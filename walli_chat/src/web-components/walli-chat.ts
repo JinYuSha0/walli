@@ -46,15 +46,20 @@ export class WalliChatElement extends LitElement {
   @property({ attribute: false }) accessor onFeedback: WalliChatFeedbackCallback | undefined;
   @property({ attribute: false }) accessor onReply: WalliChatMessageCallback | undefined;
   @property({ attribute: false }) accessor onShare: WalliChatMessageCallback | undefined;
+  @property({ attribute: false }) accessor bottomOcclusionHeight =
+    getCommonStyle("bottomOcclusionHeight");
   private _messages: readonly WalliChatMessage[] = [];
   private preparedMessages: PreparedChatMessage[] = [];
   private pendingScrollRequest: PendingScrollRequest | null = null;
   private resizeObserver?: ResizeObserver;
+  private composerResizeObserver?: ResizeObserver;
   private scheduledRaf: number | null = null;
   private scheduledScrollRaf: number | null = null;
   private frame: ConversationFrame | null = null;
   private canvasElement: HTMLDivElement | null = null;
   private viewportElement: HTMLDivElement | null = null;
+  private composerOverlayElement: HTMLDivElement | null = null;
+  private composerShellElement: HTMLDivElement | null = null;
   private mountedMessageElements = new Map<number, WalliMessageElement>();
   private containerSize: Size = {
     width: this.clientWidth,
@@ -67,6 +72,7 @@ export class WalliChatElement extends LitElement {
   private viewportScrollTop = 0;
   @state() private accessor isAtBottom = true;
   @state() private accessor activeStreamingMessageCount = 0;
+  @state() private accessor hasComposer = false;
   private isScrollingToBottom = false;
   private mountedStart = 0;
   private mountedEnd = 0;
@@ -400,13 +406,26 @@ export class WalliChatElement extends LitElement {
         }
       }
     });
+    this.composerResizeObserver = new ResizeObserver(([entry]) => {
+      const borderBoxHeight = entry?.borderBoxSize[0]?.blockSize;
+      const height = borderBoxHeight ?? entry?.target.getBoundingClientRect().height;
+      if (height !== undefined && this.hasComposer && this.bottomOcclusionHeight !== height) {
+        this.bottomOcclusionHeight = height;
+      }
+    });
   }
 
   override firstUpdated() {
     this.viewportElement = this.renderRoot.querySelector<HTMLDivElement>(".chat-viewport");
     this.canvasElement = this.renderRoot.querySelector<HTMLDivElement>(".chat-canvas");
+    this.composerOverlayElement =
+      this.renderRoot.querySelector<HTMLDivElement>(".composer-overlay");
+    this.composerShellElement = this.renderRoot.querySelector<HTMLDivElement>(".composer-shell");
 
     this.resizeObserver?.observe(this);
+    if (this.composerOverlayElement) {
+      this.composerResizeObserver?.observe(this.composerOverlayElement);
+    }
     this.scheduleProjection();
     if (this.pendingScrollRequest !== null) {
       this.scheduleScrollRequest();
@@ -427,16 +446,27 @@ export class WalliChatElement extends LitElement {
     }
     this.resizeObserver?.disconnect();
     this.resizeObserver = undefined;
+    this.composerResizeObserver?.disconnect();
+    this.composerResizeObserver = undefined;
     this.mountedMessageElements.clear();
     this.canvasElement = null;
     this.viewportElement = null;
+    this.composerOverlayElement = null;
+    this.composerShellElement = null;
     super.disconnectedCallback();
   }
 
-  override updated(): void {
+  override updated(changedProperties: Map<PropertyKey, unknown>): void {
     this.toggleAttribute("feedback-enabled", this.onFeedback !== undefined);
     this.toggleAttribute("reply-enabled", this.onReply !== undefined);
     this.toggleAttribute("share-enabled", this.onShare !== undefined);
+    if (changedProperties.has("bottomOcclusionHeight")) {
+      this.invalidateFrame({ keepMountedRows: true });
+      if (this.isAtBottom) {
+        this.pendingScrollRequest = { animated: false, target: "bottom" };
+        this.scheduleScrollRequest();
+      }
+    }
   }
 
   private handleFeedback(
@@ -451,6 +481,11 @@ export class WalliChatElement extends LitElement {
 
   private handleShare(event: CustomEvent<{ id: string; markdown: string }>): void {
     this.onShare?.(event.detail.id, event.detail.markdown);
+  }
+
+  private handleComposerSlotChange(event: Event): void {
+    const slot = event.currentTarget as HTMLSlotElement;
+    this.hasComposer = slot.assignedElements({ flatten: true }).length > 0;
   }
 
   private invalidateFrame(options: { keepMountedRows?: boolean } = {}): void {
@@ -521,9 +556,12 @@ export class WalliChatElement extends LitElement {
     const scrollTop = this.viewportElement?.scrollTop ?? this.viewportScrollTop;
     this.viewportScrollTop = scrollTop;
     const topOcclusionHeight = getCommonStyle("topOcclusionHeight");
-    const bottomOcclusionHeight = getCommonStyle("bottomOcclusionHeight");
+    const bottomOcclusionHeight = this.bottomOcclusionHeight;
 
     const chatWidth = getMaxChatWidth(viewportWidth);
+    if (this.composerShellElement) {
+      this.composerShellElement.style.width = `${chatWidth}px`;
+    }
     const previousFrame = this.frame;
     const canReuseFrame =
       previousFrame !== null &&
@@ -593,7 +631,7 @@ export class WalliChatElement extends LitElement {
   private prepareFrameForScroll(): ConversationFrame {
     const viewportWidth = this.viewportElement?.clientWidth ?? this.containerSize.width;
     const topOcclusionHeight = getCommonStyle("topOcclusionHeight");
-    const bottomOcclusionHeight = getCommonStyle("bottomOcclusionHeight");
+    const bottomOcclusionHeight = this.bottomOcclusionHeight;
     const chatWidth = getMaxChatWidth(viewportWidth);
     const previousFrame = this.frame;
     const frame =
@@ -776,11 +814,23 @@ export class WalliChatElement extends LitElement {
         </div>
         <walli-scroll-to-bottom-button
           class="absolute left-1/2 z-10 [transform:translateX(-50%)]"
-          style=${`bottom:${getCommonStyle("scrollToBottomButtonBottom")}px;`}
+          style=${`bottom:${Math.max(
+            getCommonStyle("scrollToBottomButtonBottom"),
+            this.bottomOcclusionHeight - getCommonStyle("chatBottomPadding"),
+          )}px;`}
           .streaming=${this.activeStreamingMessageCount > 0}
           .visible=${!this.isAtBottom}
           @walli-scroll-to-bottom=${this.handleScrollToBottom}
         ></walli-scroll-to-bottom-button>
+        <div
+          class=${`composer-overlay pointer-events-none absolute bottom-0 left-0 right-0 z-20 ${
+            this.hasComposer ? "" : "hidden"
+          }`}
+        >
+          <div class="composer-shell pointer-events-auto mx-auto max-w-full">
+            <slot name="composer" @slotchange=${this.handleComposerSlotChange}></slot>
+          </div>
+        </div>
       </main>
     `;
   }
