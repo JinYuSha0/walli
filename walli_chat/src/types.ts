@@ -11,6 +11,7 @@ export type WalliChatFeedbackCallback = (
   feedback: WalliChatFeedback,
 ) => void;
 export type WalliChatMessageCallback = (id: string, markdown: string) => void;
+export type WalliChatRemoveMessages = () => void;
 
 export type WalliChatComposerSubmitCallback = (
   value: string,

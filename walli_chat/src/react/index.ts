@@ -22,6 +22,7 @@ import type {
   WalliChatComposerValueCallback,
   WalliChatFeedbackCallback,
   WalliChatMessageCallback,
+  WalliChatRemoveMessages,
   WalliChatScrollTarget,
   WalliChatScrollToIndexOptions,
   WalliChatScrollToOptions,
@@ -117,8 +118,8 @@ export type WalliChatProps = {
 
 export type WalliChatRef = {
   readonly element: WalliChatElement | null;
-  insertMessagesAtTop: (messages: readonly WalliChatMessage[]) => void;
-  insertMessagesAtBottom: (messages: readonly WalliChatMessage[]) => void;
+  insertMessagesAtTop: (messages: readonly WalliChatMessage[]) => WalliChatRemoveMessages;
+  insertMessagesAtBottom: (messages: readonly WalliChatMessage[]) => WalliChatRemoveMessages;
   insertStreamingMessageAtBottom: (
     stream: WalliChatTextStream,
     options: WalliChatStreamingOptions,
@@ -179,10 +180,10 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
         return elementRef.current;
       },
       insertMessagesAtTop(nextMessages) {
-        elementRef.current?.insertMessagesAtTop(nextMessages);
+        return elementRef.current?.insertMessagesAtTop(nextMessages) ?? (() => undefined);
       },
       insertMessagesAtBottom(nextMessages) {
-        elementRef.current?.insertMessagesAtBottom(nextMessages);
+        return elementRef.current?.insertMessagesAtBottom(nextMessages) ?? (() => undefined);
       },
       insertStreamingMessageAtBottom(stream, options) {
         const element = elementRef.current;
@@ -220,6 +221,7 @@ export type {
   WalliChatMessage,
   WalliChatFeedbackCallback,
   WalliChatMessageCallback,
+  WalliChatRemoveMessages,
   WalliChatScrollTarget,
   WalliChatScrollToIndexOptions,
   WalliChatScrollToOptions,

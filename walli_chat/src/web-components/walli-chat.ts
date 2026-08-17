@@ -20,6 +20,7 @@ import type {
   WalliChatMessage,
   WalliChatFeedbackCallback,
   WalliChatMessageCallback,
+  WalliChatRemoveMessages,
   WalliChatScrollToIndexOptions,
   WalliChatScrollToOptions,
   WalliChatStreamingHandle,
@@ -50,6 +51,8 @@ export class WalliChatElement extends LitElement {
     getCommonStyle("bottomOcclusionHeight");
   private _messages: readonly WalliChatMessage[] = [];
   private preparedMessages: PreparedChatMessage[] = [];
+  private topInsertedMessageGroups: WalliChatMessage[][] = [];
+  private bottomInsertedMessageGroups: WalliChatMessage[][] = [];
   private pendingScrollRequest: PendingScrollRequest | null = null;
   private resizeObserver?: ResizeObserver;
   private composerResizeObserver?: ResizeObserver;
@@ -90,6 +93,8 @@ export class WalliChatElement extends LitElement {
   set messages(messages: readonly WalliChatMessage[]) {
     const previousMessages = this._messages;
     if (Object.is(messages, previousMessages)) return;
+    this.topInsertedMessageGroups = [];
+    this.bottomInsertedMessageGroups = [];
 
     if (previousMessages.length > 0 && messages.length > previousMessages.length) {
       const insertedCount = messages.length - previousMessages.length;
@@ -178,16 +183,51 @@ export class WalliChatElement extends LitElement {
     this.scheduleScrollRequest();
   }
 
-  insertMessagesAtTop(messages: readonly WalliChatMessage[]): void {
-    if (messages.length === 0) return;
+  insertMessagesAtTop(messages: readonly WalliChatMessage[]): WalliChatRemoveMessages {
+    if (messages.length === 0) return () => undefined;
 
-    this.applyMessagesInsertion("top", [...messages, ...this._messages], this._messages);
+    const insertedMessages = [...messages];
+    this.topInsertedMessageGroups.unshift(insertedMessages);
+    this.applyMessagesInsertion("top", [...insertedMessages, ...this._messages], this._messages);
+    return this.createInsertedMessagesRemoval("top", insertedMessages);
   }
 
-  insertMessagesAtBottom(messages: readonly WalliChatMessage[]): void {
-    if (messages.length === 0) return;
+  insertMessagesAtBottom(messages: readonly WalliChatMessage[]): WalliChatRemoveMessages {
+    if (messages.length === 0) return () => undefined;
 
-    this.applyMessagesInsertion("bottom", [...this._messages, ...messages], this._messages);
+    const insertedMessages = [...messages];
+    this.bottomInsertedMessageGroups.push(insertedMessages);
+    this.applyMessagesInsertion("bottom", [...this._messages, ...insertedMessages], this._messages);
+    return this.createInsertedMessagesRemoval("bottom", insertedMessages);
+  }
+
+  private createInsertedMessagesRemoval(
+    kind: "top" | "bottom",
+    insertedMessages: WalliChatMessage[],
+  ): WalliChatRemoveMessages {
+    let removed = false;
+    return () => {
+      if (removed) return;
+      const groups =
+        kind === "top" ? this.topInsertedMessageGroups : this.bottomInsertedMessageGroups;
+      const groupIndex = groups.indexOf(insertedMessages);
+      if (groupIndex < 0) return;
+      removed = true;
+
+      const previousMessages = this._messages;
+      const start =
+        kind === "top"
+          ? groups.slice(0, groupIndex).reduce((count, group) => count + group.length, 0)
+          : previousMessages.length -
+            groups.slice(groupIndex).reduce((count, group) => count + group.length, 0);
+      groups.splice(groupIndex, 1);
+      const end = start + insertedMessages.length;
+      const nextMessages = [...previousMessages.slice(0, start), ...previousMessages.slice(end)];
+      this._messages = nextMessages;
+      this.preparedMessages.splice(start, insertedMessages.length);
+      this.requestUpdate("messages", previousMessages);
+      this.invalidateFrame({ keepMountedRows: true });
+    };
   }
 
   insertStreamingMessageAtBottom(

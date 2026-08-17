@@ -11,6 +11,7 @@ export type {
   WalliChatFeedback,
   WalliChatFeedbackCallback,
   WalliChatMessageCallback,
+  WalliChatRemoveMessages,
   WalliChatScrollTarget,
   WalliChatScrollToIndexOptions,
   WalliChatScrollToOptions,
