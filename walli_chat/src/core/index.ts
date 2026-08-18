@@ -46,6 +46,7 @@ export function buildConversationFrame(
   chatWidth: number,
   topOcclusionHeight: number = getCommonStyle("topOcclusionHeight"),
   bottomOcclusionHeight: number = getCommonStyle("bottomOcclusionHeight"),
+  composerBottomInsetHeight = 0,
 ): ConversationFrame {
   const laneWidth = Math.max(120, chatWidth - getCommonStyle("messageSidePadding") * 2);
   const userFrameWidth = Math.min(
@@ -55,7 +56,8 @@ export function buildConversationFrame(
   const assistantFrameWidth = laneWidth;
   const messages: ChatMessageInstance[] = new Array(preparedMessages.length);
   const chatTopPadding = topOcclusionHeight + getCommonStyle("chatTopPadding");
-  const chatBottomPadding = bottomOcclusionHeight + getCommonStyle("chatBottomPadding");
+  const chatBottomPadding =
+    bottomOcclusionHeight + composerBottomInsetHeight + getCommonStyle("chatBottomPadding");
 
   let y = chatTopPadding;
   for (let ordinal = 0; ordinal < preparedMessages.length; ordinal++) {
@@ -95,6 +97,7 @@ export function buildConversationFrame(
   return {
     bottomOcclusionHeight,
     chatWidth,
+    composerBottomInsetHeight,
     messages,
     topOcclusionHeight,
     totalHeight,
@@ -138,8 +141,9 @@ function layoutMessageFrame(
   }
 
   const bubbleHeight = y + getCommonStyle("bubblePaddingY");
-  const actionHeight =
-    preparedMessage.role === "assistant"
+  const actionHeight = preparedMessage.streaming
+    ? 0
+    : preparedMessage.role === "assistant"
       ? getCommonStyle("assistantMessageActionHeight")
       : getCommonStyle("userMessageActionHeight");
   const paddingTop = preparedMessage.role === "user" ? getCommonStyle("userMessagePaddingTop") : 0;

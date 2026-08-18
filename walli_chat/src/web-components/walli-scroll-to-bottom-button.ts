@@ -30,7 +30,7 @@ export class WalliScrollToBottomButtonElement extends LitElement {
       }`}
     >
       <button
-        class="[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] [appearance:none] [box-shadow:0_2px_10px_rgb(0_0_0_/_12%)] flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-solid border-border bg-background p-0 text-foreground outline-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        class="[-webkit-appearance:none] [-webkit-backdrop-filter:blur(12px)] [-webkit-tap-highlight-color:transparent] [appearance:none] [backdrop-filter:blur(12px)] [box-shadow:0_2px_10px_rgb(0_0_0_/_12%)] flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-solid border-border bg-scroll-to-bottom p-0 text-foreground outline-none hover:bg-scroll-to-bottom-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         type="button"
         aria-label="Scroll to bottom"
         aria-hidden=${this.visible ? "false" : "true"}
@@ -41,13 +41,13 @@ export class WalliScrollToBottomButtonElement extends LitElement {
           this.streaming
             ? html`<span class="flex items-center gap-[3px]" aria-hidden="true">
                 <span
-                  class="animate-walli-scroll-to-bottom-dot-pulse h-1 w-1 rounded-full bg-current motion-reduce:animate-none"
+                  class="animate-walli-scroll-to-bottom-dot-pulse h-1 w-1 flex-none rounded-full bg-current motion-reduce:animate-none"
                 ></span>
                 <span
-                  class="animate-walli-scroll-to-bottom-dot-pulse h-1 w-1 rounded-full bg-current ![animation-delay:100ms] motion-reduce:animate-none"
+                  class="animate-walli-scroll-to-bottom-dot-pulse h-1 w-1 flex-none rounded-full bg-current ![animation-delay:100ms] motion-reduce:animate-none"
                 ></span>
                 <span
-                  class="animate-walli-scroll-to-bottom-dot-pulse h-1 w-1 rounded-full bg-current ![animation-delay:200ms] motion-reduce:animate-none"
+                  class="animate-walli-scroll-to-bottom-dot-pulse h-1 w-1 flex-none rounded-full bg-current ![animation-delay:200ms] motion-reduce:animate-none"
                 ></span>
               </span>`
             : html`<svg

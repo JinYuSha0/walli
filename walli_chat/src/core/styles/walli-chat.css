@@ -3,12 +3,17 @@
   width: 100%;
   height: 100%;
   contain: layout paint style;
+  touch-action: manipulation;
 }
 
 :host(:not([feedback-enabled])) .feedback-action,
 :host(:not([reply-enabled])) .reply-action,
 :host(:not([share-enabled])) .share-action {
   display: none;
+}
+
+.chat-viewport {
+  scrollbar-gutter: stable;
 }
 
 .composer-overlay {
@@ -19,6 +24,7 @@
     color-mix(in srgb, var(--background) 86%, transparent)
   );
   box-sizing: border-box;
+  min-height: 52px;
   padding: 48px 16px max(24px, env(safe-area-inset-bottom));
 }
 

@@ -10,6 +10,7 @@ import { walliUnoTheme } from "./uno.theme.ts";
 const walliChatUnoCssId = "virtual:walli-chat-uno-styles";
 const resolvedWalliChatUnoCssId = `\0${walliChatUnoCssId}`;
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
+const demoRoot = fileURLToPath(new URL("./demo", import.meta.url));
 const sourceRoot = fileURLToPath(new URL("./src", import.meta.url));
 const styleSourceExtensions = new Set([".ts", ".tsx", ".js", ".jsx"]);
 
@@ -77,9 +78,9 @@ export function walliChatUnoCss(): Plugin {
 }
 
 export default defineConfig(({ command, mode }) => ({
-  root: command === "serve" ? resolve(projectRoot, "demo") : projectRoot,
+  root: command === "serve" || mode === "demo" ? demoRoot : projectRoot,
   cacheDir: resolve(projectRoot, "node_modules/.vite/walli-chat-demo"),
-  publicDir: false,
+  publicDir: mode === "demo" ? resolve(projectRoot, "public") : false,
   plugins: [
     walliChatUnoCss(),
     mode === "analyze" &&
@@ -108,23 +109,29 @@ export default defineConfig(({ command, mode }) => ({
       },
     ],
   },
-  build: {
-    cssCodeSplit: false,
-    lib: {
-      cssFileName: "walli-chat",
-      entry: {
-        index: resolve(projectRoot, "src/index.ts"),
-        react: resolve(projectRoot, "src/react/index.ts"),
-        theme: resolve(projectRoot, "src/theme-entry.ts"),
-      },
-      formats: ["es"],
-    },
-    rollupOptions: {
-      external: ["react"],
-      output: {
-        assetFileNames: "walli-chat[extname]",
-        entryFileNames: "[name].js",
-      },
-    },
-  },
+  build:
+    mode === "demo"
+      ? {
+          emptyOutDir: true,
+          outDir: resolve(projectRoot, "dist-demo"),
+        }
+      : {
+          cssCodeSplit: false,
+          lib: {
+            cssFileName: "walli-chat",
+            entry: {
+              index: resolve(projectRoot, "src/index.ts"),
+              react: resolve(projectRoot, "src/react/index.ts"),
+              theme: resolve(projectRoot, "src/theme-entry.ts"),
+            },
+            formats: ["es"],
+          },
+          rollupOptions: {
+            external: ["react"],
+            output: {
+              assetFileNames: "walli-chat[extname]",
+              entryFileNames: "[name].js",
+            },
+          },
+        },
 }));

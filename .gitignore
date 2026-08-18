@@ -43,6 +43,7 @@ web_modules/
 
 # Build output and caches
 dist/
+dist-demo/
 build/
 coverage/
 .nyc_output/

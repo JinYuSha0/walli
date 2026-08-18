@@ -19,6 +19,8 @@
   --stream-shimmer-highlight: var(--background);
   --stream-shimmer-highlight-end: 57%;
   --stream-shimmer-highlight-start: 43%;
+  --scroll-to-bottom-background: oklch(1 0 0 / 62%);
+  --scroll-to-bottom-background-hover: oklch(0.97 0 0 / 76%);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
@@ -62,6 +64,8 @@
   --stream-shimmer-highlight: var(--foreground);
   --stream-shimmer-highlight-end: 70%;
   --stream-shimmer-highlight-start: 30%;
+  --scroll-to-bottom-background: oklch(0.205 0 0 / 48%);
+  --scroll-to-bottom-background-hover: oklch(0.269 0 0 / 58%);
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);

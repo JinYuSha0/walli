@@ -50,6 +50,7 @@ if (composer) {
 }
 
 const controls = document.createElement("div");
+controls.className = "demo-controls";
 controls.style.display = "flex";
 controls.style.flexDirection = "column";
 controls.style.gap = "10px";
@@ -66,6 +67,33 @@ controls.style.border = "1px solid #e5e7eb";
 controls.style.borderRadius = "8px";
 controls.style.background = "#ffffff";
 controls.style.boxShadow = "0 1px 3px rgba(15, 23, 42, 0.08)";
+
+const controlsToggle = document.createElement("button");
+controlsToggle.className = "demo-controls-toggle";
+controlsToggle.type = "button";
+applyButtonStyle(controlsToggle);
+
+const controlsContent = document.createElement("div");
+controlsContent.className = "demo-controls-content";
+
+const mobileControlsQuery = window.matchMedia("(max-width: 640px)");
+let controlsCollapsed = mobileControlsQuery.matches;
+
+function updateControlsVisibility(): void {
+  controls.dataset.collapsed = String(controlsCollapsed);
+  controlsToggle.textContent = controlsCollapsed ? "展开面板" : "收起面板";
+  controlsToggle.setAttribute("aria-expanded", String(!controlsCollapsed));
+  controlsToggle.setAttribute(
+    "aria-label",
+    controlsCollapsed ? "Expand demo controls" : "Collapse demo controls",
+  );
+}
+
+controlsToggle.addEventListener("click", () => {
+  controlsCollapsed = !controlsCollapsed;
+  updateControlsVisibility();
+});
+updateControlsVisibility();
 
 const prependButton = document.createElement("button");
 prependButton.textContent = "顶部插入 3 条";
@@ -215,7 +243,7 @@ hint.style.font =
 hint.style.color = "#6b7280";
 hint.style.lineHeight = "20px";
 
-controls.append(
+controlsContent.append(
   prependButton,
   appendButton,
   themeButton,
@@ -229,6 +257,7 @@ controls.append(
   scrollBottomButton,
   hint,
 );
+controls.append(controlsToggle, controlsContent);
 document.body.append(controls);
 
 function updateThemeButtonLabel(): void {

@@ -3,7 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <title>walli_chat</title>
     <style>
       html,
@@ -12,6 +15,10 @@
         height: 100%;
         margin: 0;
         padding: 0;
+        overflow: hidden;
+      }
+      body {
+        overscroll-behavior: none;
       }
       #app {
         width: 100%;
@@ -30,6 +37,33 @@
         display: block;
         width: 100%;
         height: 100%;
+      }
+      .demo-controls-toggle {
+        display: none;
+      }
+      .demo-controls-content {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      @media (max-width: 640px) {
+        .demo-controls {
+          top: 8px !important;
+          right: 8px !important;
+          width: min(240px, calc(100vw - 16px)) !important;
+          max-height: calc(100dvh - 16px);
+          overflow-y: auto;
+        }
+        .demo-controls-toggle {
+          display: block;
+        }
+        .demo-controls[data-collapsed="true"] {
+          width: auto !important;
+          padding: 8px !important;
+        }
+        .demo-controls[data-collapsed="true"] .demo-controls-content {
+          display: none;
+        }
       }
     </style>
   </head>

@@ -34,6 +34,8 @@ export const walliUnoTheme: PresetWind3Theme = {
   },
   colors: {
     background: "var(--background)",
+    "scroll-to-bottom": "var(--scroll-to-bottom-background, var(--background))",
+    "scroll-to-bottom-hover": "var(--scroll-to-bottom-background-hover, var(--accent))",
     foreground: "var(--foreground)",
     card: "var(--card)",
     "card-foreground": "var(--card-foreground)",

@@ -1,5 +1,6 @@
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, query, state } from "lit/decorators.js";
+import { measureLineStats, prepareWithSegments } from "@chenglou/pretext";
 import { ArrowUp, ImagePlus, Mic, Plus, Square, X, createElement } from "lucide";
 import clsx from "clsx";
 import walliChatUnoCss from "virtual:walli-chat-uno-styles";
@@ -26,6 +27,8 @@ export class WalliChatComposerElement extends LitElement {
     :host {
       color-scheme: inherit;
       display: block;
+      min-height: 52px;
+      touch-action: manipulation;
       width: 100%;
     }
   `;
@@ -52,6 +55,7 @@ export class WalliChatComposerElement extends LitElement {
   @state() private accessor expanded = false;
   @state() private accessor menuOpen = false;
   @state() private accessor running = false;
+  @query(".composer-grid") private accessor gridElement!: HTMLDivElement;
   @query("textarea") private accessor textareaElement!: HTMLTextAreaElement;
   @query('input[type="file"]') private accessor fileInputElement!: HTMLInputElement;
   private lastMeasuredValue: string | undefined;
@@ -95,10 +99,36 @@ export class WalliChatComposerElement extends LitElement {
     );
     textarea.style.transition = "none";
     textarea.style.maxHeight = `${maxHeight}px`;
+
+    const gridWidth = this.gridElement?.clientWidth ?? textarea.clientWidth;
+    const gridChildren = this.gridElement?.children;
+    const leadingWidth =
+      gridChildren?.item(0)?.querySelector(":scope > button")?.getBoundingClientRect().width ?? 0;
+    const trailingWidth = gridChildren
+      ? (gridChildren.item(gridChildren.length - 1)?.getBoundingClientRect().width ?? 0)
+      : 0;
+    const collapsedWidth = Math.max(1, gridWidth - leadingWidth - trailingWidth);
+
+    let shouldExpand = this.expanded && this.value.length > 0;
+    if (!this.expanded) {
+      const textareaStyle = getComputedStyle(textarea);
+      const horizontalPadding =
+        Number.parseFloat(textareaStyle.paddingLeft) +
+        Number.parseFloat(textareaStyle.paddingRight);
+      const textWidth = Math.max(1, collapsedWidth - horizontalPadding);
+      const font =
+        textareaStyle.font ||
+        `${textareaStyle.fontStyle} ${textareaStyle.fontWeight} ${textareaStyle.fontSize} ${textareaStyle.fontFamily}`;
+      const prepared = prepareWithSegments(this.value, font, { whiteSpace: "pre-wrap" });
+      shouldExpand = measureLineStats(prepared, textWidth).lineCount > 1;
+    }
+
+    textarea.style.width = `${shouldExpand ? gridWidth : collapsedWidth}px`;
     textarea.style.height = "0px";
     const contentHeight = textarea.scrollHeight;
     const height = Math.min(maxHeight, Math.max(singleLineTextareaHeight, contentHeight));
     textarea.style.overflowY = contentHeight > maxHeight ? "auto" : "hidden";
+    textarea.style.removeProperty("width");
     textarea.style.height = `${currentHeight}px`;
     void textarea.offsetHeight;
     textarea.style.removeProperty("transition");
@@ -113,7 +143,7 @@ export class WalliChatComposerElement extends LitElement {
     }
 
     this.lastMeasuredValue = textarea.value;
-    this.expanded = height > singleLineTextareaHeight;
+    this.expanded = shouldExpand;
   }
 
   private handleInput(event: Event): void {
@@ -135,9 +165,17 @@ export class WalliChatComposerElement extends LitElement {
     void this.submit();
   }
 
+  private dismissKeyboard(): void {
+    const textarea = this.textareaElement;
+    if (!textarea) return;
+    textarea.blur();
+    requestAnimationFrame(() => textarea.blur());
+  }
+
   private async submit(): Promise<void> {
     if (this.disabled || this.running || !this.canSubmit) return;
     const files = this.attachments.map((attachment) => attachment.file);
+    this.dismissKeyboard();
     this.running = true;
     this.clearAttachments();
     void this.updateComplete.then(() => this.resizeTextarea());
@@ -152,11 +190,12 @@ export class WalliChatComposerElement extends LitElement {
     return this.value.trim().length > 0 || this.attachments.length > 0;
   }
 
-  private handlePrimaryAction(): void {
+  private handlePrimaryAction(event: MouseEvent): void {
     if (this.running) {
       this.onCancel?.();
       return;
     }
+    (event.currentTarget as HTMLButtonElement).focus({ preventScroll: true });
     void this.submit();
   }
 
@@ -232,11 +271,10 @@ export class WalliChatComposerElement extends LitElement {
       }
 
       <div
-        class=${
-          this.expanded
-            ? "grid grid-cols-[1fr_auto]"
-            : "grid min-h-[42px] grid-cols-[auto_1fr_auto] items-center"
-        }
+        class=${clsx(
+          "composer-grid grid min-h-[42px]",
+          this.expanded ? "grid-cols-[1fr_auto]" : "grid-cols-[auto_1fr_auto] items-center",
+        )}
       >
         <div class=${clsx("flex items-center", this.expanded && "col-start-1 row-start-2")}>
           <button
@@ -276,7 +314,6 @@ export class WalliChatComposerElement extends LitElement {
         </div>
 
         <textarea
-          name="prompt-textarea"
           class=${clsx(
             "box-border block h-10 min-h-10 w-full min-w-0 cursor-text select-text resize-none overflow-x-hidden overflow-y-hidden whitespace-pre-wrap break-words border-0 bg-transparent px-[7px] py-2 font-sans text-base leading-6 text-inherit outline-none transition-[height,padding] duration-150 [transition-timing-function:ease] motion-reduce:transition-none [scrollbar-color:var(--muted-foreground)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60",
             this.expanded && "col-span-2 col-start-1 row-start-1",
@@ -285,6 +322,15 @@ export class WalliChatComposerElement extends LitElement {
           ?disabled=${this.disabled}
           placeholder=${this.placeholder}
           rows="1"
+          autocomplete="off"
+          autocapitalize="sentences"
+          autocorrect="on"
+          enterkeyhint="send"
+          inputmode="text"
+          spellcheck="true"
+          data-form-type="other"
+          data-lpignore="true"
+          data-1p-ignore="true"
           aria-label=${this.placeholder}
           @input=${this.handleInput}
           @keydown=${this.handleKeyDown}

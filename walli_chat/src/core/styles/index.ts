@@ -156,10 +156,10 @@ const CommonStyle = computed(() => ({
   userMessageActionHeight: getSpace(10),
   userMessagePaddingTop: getSpace(2),
   topOcclusionHeight: getSpace(2),
-  bottomOcclusionHeight: getSpace(32),
-  scrollToBottomButtonBottom: getSpace(28),
+  bottomOcclusionHeight: getSpace(2),
+  scrollToBottomButtonBottom: getSpace(6),
   chatTopPadding: getSpace(4),
-  chatBottomPadding: getSpace(3),
+  chatBottomPadding: getSpace(6),
   maxChatWidth: getSpace(215),
   pageMargin: getSpace(getResponsiveValue({ base: 2, xl: 7 })),
 }));

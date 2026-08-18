@@ -21,7 +21,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && pnpm run build:types",
+    "build:demo": "vite build --mode demo",
     "build:types": "tsc -p tsconfig.build.json",
+    "deploy:demo": "pnpm run build:demo && pnpm dlx wrangler pages deploy dist-demo --project-name=walli-chat-demo --branch=main --commit-dirty=true",
     "analyze": "vite build --mode analyze && pnpm run build:types",
     "preview": "vite preview"
   },

@@ -127,6 +127,7 @@ export type ChatMessageInstance = {
 export type ConversationFrame = {
   topOcclusionHeight: number;
   bottomOcclusionHeight: number;
+  composerBottomInsetHeight: number;
   chatWidth: number;
   messages: ChatMessageInstance[];
   totalHeight: number;
