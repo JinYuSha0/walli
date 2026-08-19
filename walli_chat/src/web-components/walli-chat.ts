@@ -933,23 +933,23 @@ export class WalliChatElement extends LitElement {
       >
         <div
           class="chat-viewport absolute inset-0 overflow-auto"
-            @pointerdown=${this.handleScrollInteractionStart}
-            @pointerup=${this.handleScrollInteractionEnd}
-            @pointercancel=${this.handleScrollInteractionEnd}
-            @touchstart=${this.handleScrollInteractionStart}
-            @touchend=${this.handleScrollInteractionEnd}
-            @touchcancel=${this.handleScrollInteractionEnd}
-            @wheel=${this.handleWheel}
-            @scroll=${this.handleScroll}
-            @scrollend=${this.handleScrollEnd}
+          @pointerdown=${this.handleScrollInteractionStart}
+          @pointerup=${this.handleScrollInteractionEnd}
+          @pointercancel=${this.handleScrollInteractionEnd}
+          @touchstart=${this.handleScrollInteractionStart}
+          @touchend=${this.handleScrollInteractionEnd}
+          @touchcancel=${this.handleScrollInteractionEnd}
+          @wheel=${this.handleWheel}
+          @scroll=${this.handleScroll}
+          @scrollend=${this.handleScrollEnd}
         >
           <div class="chat-canvas relative mx-auto min-h-full"></div>
         </div>
         <walli-scroll-to-bottom-button
           class="absolute left-1/2 z-10 [transform:translateX(-50%)]"
-          style=${`bottom:${this.composerBottomInsetHeight + getCommonStyle(
-            "scrollToBottomButtonBottom",
-          )}px;`}
+          style=${`bottom:${
+            this.composerBottomInsetHeight + getCommonStyle("scrollToBottomButtonBottom")
+          }px;`}
           .streaming=${this.activeStreamingMessageCount > 0}
           .visible=${!this.isAtBottom}
           @walli-scroll-to-bottom=${this.handleScrollToBottom}
