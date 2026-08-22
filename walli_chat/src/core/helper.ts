@@ -12,6 +12,18 @@ export function parseMarkdownHref(href: string | null | undefined): string | und
   }
 }
 
+export function parseMarkdownImageSrc(src: string | null | undefined): string | undefined {
+  if (src === undefined || src === null) return;
+  try {
+    const url = new URL(src);
+    return url.protocol === "http:" || url.protocol === "https:" || url.protocol === "blob:"
+      ? url.href
+      : undefined;
+  } catch {
+    return;
+  }
+}
+
 export function fallbackTextForToken(token: Token): string {
   if ("text" in token && typeof token.text === "string") return token.text;
   return token.raw ?? "";

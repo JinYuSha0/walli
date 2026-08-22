@@ -25,13 +25,39 @@ export function createPreparedChatMessages(
   messages: readonly WalliChatMessage[],
   options: { streaming?: boolean } = {},
 ): PreparedChatMessage[] {
-  return messages.map((seed) => ({
-    blocks: parseMarkdownBlocks(seed.markdown, options.streaming),
-    markdown: seed.markdown,
-    id: seed.id,
-    role: seed.role,
-    streaming: options.streaming || undefined,
-  }));
+  return messages.map((seed) => {
+    const blocks = parseMarkdownBlocks(seed.markdown, options.streaming);
+    return {
+      blocks: seed.role === "user" ? groupUserMessageImages(blocks) : blocks,
+      markdown: seed.markdown,
+      id: seed.id,
+      role: seed.role,
+      streaming: options.streaming || undefined,
+    };
+  });
+}
+
+function groupUserMessageImages(blocks: readonly PreparedBlock[]): PreparedBlock[] {
+  const grouped: PreparedBlock[] = [];
+  for (let index = 0; index < blocks.length; index++) {
+    const block = blocks[index]!;
+    if (block.kind !== "image") {
+      grouped.push(block);
+      continue;
+    }
+
+    const images = [block];
+    while (blocks[index + images.length]?.kind === "image") {
+      images.push(blocks[index + images.length] as typeof block);
+    }
+    grouped.push({
+      ...block,
+      images,
+      kind: "imageGroup",
+    });
+    index += images.length - 1;
+  }
+  return grouped;
 }
 
 export function getMaxChatWidth(viewportWidth: number): number {
@@ -104,18 +130,15 @@ export function buildConversationFrame(
   };
 }
 
-function getUsedBlockWidth(block: BlockFrame): number {
+export function getBlockUsedWidth(block: BlockFrame | BlockLayout): number {
   switch (block.kind) {
     case "inline":
       return block.contentLeft + block.usedWidth;
     case "code":
-      return block.contentLeft + block.width;
     case "image":
-      return block.contentLeft + block.width;
+    case "imageGroup":
     case "rule":
-      return block.contentLeft + block.width;
     case "table":
-      return block.contentLeft + block.width;
     case "custom":
       return block.contentLeft + block.width;
   }
@@ -137,7 +160,7 @@ function layoutMessageFrame(
     const blockFrame = layoutBlockFrame(block, maxContentWidth, y);
     blocks.push(blockFrame);
     y += blockFrame.height;
-    usedContentWidth = Math.max(usedContentWidth, getUsedBlockWidth(blockFrame));
+    usedContentWidth = Math.max(usedContentWidth, getBlockUsedWidth(blockFrame));
   }
 
   const bubbleHeight = y + getCommonStyle("bubblePaddingY");
@@ -210,23 +233,22 @@ function layoutBlockFrame(block: PreparedBlock, contentWidth: number, top: numbe
       };
     }
 
-    case "image": {
-      const availableWidth = Math.max(1, contentWidth - block.contentLeft);
-      const preferredWidth = block.targetWidth ?? availableWidth;
-      const width = Math.max(1, Math.round(Math.min(availableWidth, preferredWidth)));
+    case "image":
+      return layoutImageFrame(block, contentWidth, top);
+
+    case "imageGroup": {
+      const images = layoutImageGroup(block.images, contentWidth);
       return {
         contentLeft: block.contentLeft,
-        height: Math.max(
-          1,
-          Math.round(block.targetHeight ?? getImageBlockStyle("imageBlockHeight")),
-        ),
-        kind: "image",
+        height: Math.max(...images.map((image) => image.top + image.height)),
+        images,
+        kind: "imageGroup",
         markerClassName: block.markerClassName,
         markerLeft: block.markerLeft,
         markerText: block.markerText,
         quoteRailLefts: block.quoteRailLefts,
         top,
-        width,
+        width: Math.max(...images.map((image) => image.left + image.width)),
       };
     }
 
@@ -283,6 +305,62 @@ function layoutBlockFrame(block: PreparedBlock, contentWidth: number, top: numbe
       };
     }
   }
+}
+
+function layoutImageFrame(
+  block: Extract<PreparedBlock, { kind: "image" }>,
+  contentWidth: number,
+  top: number,
+): Extract<BlockFrame, { kind: "image" }> {
+  const availableWidth = Math.max(1, contentWidth - block.contentLeft);
+  const preferredWidth = block.targetWidth ?? availableWidth;
+  const width = Math.max(1, Math.round(Math.min(availableWidth, preferredWidth)));
+  const height =
+    block.targetHeight !== null && block.targetWidth !== null
+      ? block.targetHeight * (width / block.targetWidth)
+      : (block.targetHeight ?? getImageBlockStyle("imageBlockHeight"));
+  return {
+    contentLeft: block.contentLeft,
+    height: Math.max(1, Math.round(height)),
+    kind: "image",
+    markerClassName: block.markerClassName,
+    markerLeft: block.markerLeft,
+    markerText: block.markerText,
+    quoteRailLefts: block.quoteRailLefts,
+    top,
+    width,
+  };
+}
+
+function layoutImageGroup(
+  images: readonly Extract<PreparedBlock, { kind: "image" }>[],
+  contentWidth: number,
+): Extract<BlockFrame, { kind: "imageGroup" }>["images"] {
+  const maxWidth = getImageBlockStyle("imageBlockMaxWidth");
+  if (images.length === 1) {
+    const availableWidth = Math.max(1, contentWidth - images[0]!.contentLeft);
+    const width = Math.max(1, Math.round(Math.min(maxWidth, availableWidth)));
+    const height = width * (getImageBlockStyle("imageBlockHeight") / maxWidth);
+    return [{ crop: true, height: Math.max(1, Math.round(height)), left: 0, top: 0, width }];
+  }
+
+  const gap = getImageBlockStyle("imageBlockGap");
+  const width = Math.min(contentWidth, maxWidth);
+  const columnCount = Math.min(3, images.length);
+  const cell = (width - gap * (columnCount - 1)) / columnCount;
+
+  return images.map((_, index) => {
+    const row = Math.floor(index / columnCount);
+    const columnFromRight = index % columnCount;
+    const column = columnCount - columnFromRight - 1;
+    return {
+      crop: true,
+      height: Math.max(1, Math.round(cell)),
+      left: Math.round(column * (cell + gap)),
+      top: Math.round(row * (cell + gap)),
+      width: Math.max(1, Math.round(cell)),
+    };
+  });
 }
 
 export function materializeMessageBlocks(message: ChatMessageInstance): BlockLayout[] {
@@ -372,6 +450,26 @@ function materializeBlockLayout(
         markerText: frame.markerText,
         quoteRailLefts: frame.quoteRailLefts,
         src: block.src,
+        top: frame.top,
+        width: frame.width,
+      };
+    }
+
+    case "imageGroup": {
+      if (block.kind !== "imageGroup") throw new Error("Image group block/frame mismatch");
+      return {
+        contentLeft: frame.contentLeft,
+        height: frame.height,
+        images: frame.images.map((imageFrame, index) => ({
+          ...imageFrame,
+          alt: block.images[index]!.alt,
+          src: block.images[index]!.src,
+        })),
+        kind: "imageGroup",
+        markerClassName: frame.markerClassName,
+        markerLeft: frame.markerLeft,
+        markerText: frame.markerText,
+        quoteRailLefts: frame.quoteRailLefts,
         top: frame.top,
         width: frame.width,
       };

@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import type { InlineVariant, MarkState, InlinePiece } from "../type";
 import { getFontSize, getResponsiveValue, getSpace } from "./config";
-import { parseMarkdownHref } from "../helper";
+import { parseMarkdownImageSrc } from "../helper";
 import { computed } from "@preact/signals-core";
 
 const fontFamilyMap = {
@@ -105,7 +105,7 @@ function code(text: string): InlinePiece {
 }
 
 function image(src: string | null | undefined, alt: string): InlinePiece {
-  const safeSrc = parseMarkdownHref(src);
+  const safeSrc = parseMarkdownImageSrc(src);
   const label = alt.length > 0 ? alt : "image";
 
   return {

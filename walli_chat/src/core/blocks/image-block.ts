@@ -1,5 +1,5 @@
 import type { Token } from "marked";
-import { createBlockBase, parseMarkdownHref } from "../helper";
+import { createBlockBase, parseMarkdownImageSrc } from "../helper";
 import type { BlockLayout, ParseContext, PreparedImageBlock } from "../type";
 import PhotoSwipe from "photoswipe";
 import "photoswipe/style.css";
@@ -9,7 +9,9 @@ import { BlockShellElement } from "./block-shell";
 import { html, type TemplateResult } from "lit";
 
 const ImageBlockStyle = computed(() => ({
+  imageBlockGap: 2,
   imageBlockHeight: 240,
+  imageBlockMaxWidth: 320,
 }));
 
 const WIDTH_ATTRIBUTE_RE = /\bwidth=["']?(\d+(?:\.\d+)?)(?:px)?["']?/;
@@ -30,7 +32,7 @@ export function buildImageBlock(
   const dimensions = parseImageDimensions(tokens[1]);
   if (tokens.length === 2 && dimensions === null) return null;
 
-  const src = parseMarkdownHref(token.href);
+  const src = parseMarkdownImageSrc(token.href);
   if (!src) return null;
 
   return createImageBlock({
@@ -106,7 +108,7 @@ export class WalliImageBlockElement extends BlockShellElement<ImageBlockLayout> 
     this.renderedBlock = block;
 
     return html`<img
-      class="absolute top-0 block cursor-zoom-in rounded-[10px] bg-muted object-cover ring-1 ring-border"
+      class="pointer-events-auto absolute top-0 block cursor-zoom-in rounded-[10px] bg-muted object-cover ring-1 ring-border"
       src=${block.src}
       alt=${block.alt}
       loading="lazy"

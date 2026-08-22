@@ -1,4 +1,5 @@
 import { html, render as litRender, type TemplateResult } from "lit";
+import clsx from "clsx";
 import type { BlockLayout } from "../type";
 
 type ShellBlockLayout = Pick<
@@ -24,7 +25,9 @@ export abstract class BlockShellElement<Block extends BlockLayout> extends HTMLE
 
     const { block, contentInsetX } = this.currentLayout;
     return html`<div
-      class="absolute left-0 w-full box-border"
+      class=${clsx("absolute left-0 w-full box-border", {
+        "pointer-events-none": block.kind === "image",
+      })}
       style=${`top:${block.top}px;height:${block.height}px;`}
     >
       ${this.renderQuoteRails(block, contentInsetX)}${this.renderMarker(

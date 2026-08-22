@@ -1,20 +1,20 @@
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, query, state } from "lit/decorators.js";
 import { measureLineStats, prepareWithSegments } from "@chenglou/pretext";
-import { ArrowUp, ImagePlus, Mic, Plus, Square, X, createElement } from "lucide";
+import { ArrowUp, Mic, Paperclip, Plus, Square, createElement } from "lucide";
 import clsx from "clsx";
 import walliChatUnoCss from "virtual:walli-chat-uno-styles";
 import type {
   WalliChatComposerActionCallback,
+  WalliChatComposerInsertedAssetsHandle,
+  WalliChatComposerInsertAsset,
+  WalliChatComposerMenuItem,
   WalliChatComposerSubmitCallback,
+  WalliChatComposerUploadImagesCallback,
   WalliChatComposerValueCallback,
 } from "../types";
-
-type ImageAttachment = {
-  file: File;
-  id: string;
-  url: string;
-};
+import type { ComposerAttachment } from "./walli-chat-composer-assets";
+import "./walli-chat-composer-assets";
 
 const createIcon = (icon: Parameters<typeof createElement>[0], size = 20) =>
   createElement(icon, { "aria-hidden": "true", height: size, width: size });
@@ -44,14 +44,18 @@ export class WalliChatComposerElement extends LitElement {
   @property({ type: Boolean }) accessor disabled = false;
   @property({ attribute: "max-height", type: Number }) accessor maxHeight = 200;
   @property() accessor placeholder = "Message";
+  @property({ attribute: "upload-images-title" }) accessor uploadImagesTitle = "Add files";
   @property() accessor value = "";
   @property({ attribute: false }) accessor onCancel: WalliChatComposerActionCallback | undefined;
   @property({ attribute: false }) accessor onSubmit: WalliChatComposerSubmitCallback | undefined;
+  @property({ attribute: false }) accessor onUploadImages:
+    WalliChatComposerUploadImagesCallback | undefined;
   @property({ attribute: false }) accessor onValueChange:
     WalliChatComposerValueCallback | undefined;
   @property({ attribute: false }) accessor onVoice: WalliChatComposerActionCallback | undefined;
+  @property({ attribute: false }) accessor menuItems: readonly WalliChatComposerMenuItem[] = [];
 
-  @state() private accessor attachments: ImageAttachment[] = [];
+  @state() private accessor attachments: ComposerAttachment[] = [];
   @state() private accessor expanded = false;
   @state() private accessor menuOpen = false;
   @state() private accessor running = false;
@@ -60,6 +64,12 @@ export class WalliChatComposerElement extends LitElement {
   @query('input[type="file"]') private accessor fileInputElement!: HTMLInputElement;
   private lastMeasuredValue: string | undefined;
   private resizeAnimationFrame: number | undefined;
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    document.addEventListener("pointerdown", this.handleDocumentPointerDown);
+    document.addEventListener("keydown", this.handleDocumentKeyDown);
+  }
 
   override updated(changedProperties: Map<PropertyKey, unknown>): void {
     if (
@@ -72,6 +82,8 @@ export class WalliChatComposerElement extends LitElement {
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
+    document.removeEventListener("pointerdown", this.handleDocumentPointerDown);
+    document.removeEventListener("keydown", this.handleDocumentKeyDown);
     if (this.resizeAnimationFrame !== undefined) {
       cancelAnimationFrame(this.resizeAnimationFrame);
       this.resizeAnimationFrame = undefined;
@@ -79,8 +91,61 @@ export class WalliChatComposerElement extends LitElement {
     this.revokeAttachments(this.attachments);
   }
 
+  private readonly handleDocumentPointerDown = (event: PointerEvent): void => {
+    if (this.menuOpen && !event.composedPath().includes(this)) this.menuOpen = false;
+  };
+
+  private readonly handleDocumentKeyDown = (event: KeyboardEvent): void => {
+    if (this.menuOpen && event.key === "Escape") this.menuOpen = false;
+  };
+
   focus(): void {
     this.textareaElement?.focus();
+  }
+
+  insertAssets(
+    assets: readonly WalliChatComposerInsertAsset[],
+  ): WalliChatComposerInsertedAssetsHandle {
+    const attachments = assets.map<ComposerAttachment>((asset) => ({
+      assetUrl: asset.url,
+      file: asset.file,
+      id: crypto.randomUUID(),
+      progress: asset.url ? 100 : 0,
+      status: asset.url ? "ready" : "uploading",
+      url: asset.url ?? URL.createObjectURL(asset.file),
+    }));
+    if (attachments.length > 0) this.attachments = [...this.attachments, ...attachments];
+    return this.createUploadHandle(attachments);
+  }
+
+  private createUploadHandle(
+    attachments: readonly ComposerAttachment[],
+  ): WalliChatComposerInsertedAssetsHandle {
+    const attachmentIds = new Set(attachments.map((attachment) => attachment.id));
+    return {
+      setProgress: (file, progress) => {
+        const normalizedProgress = Math.min(100, Math.max(0, progress));
+        this.attachments = this.attachments.map((attachment) =>
+          attachmentIds.has(attachment.id) && attachment.file === file
+            ? { ...attachment, progress: normalizedProgress }
+            : attachment,
+        );
+      },
+      setResult: (file, result) => {
+        this.attachments = this.attachments.map((attachment) => {
+          if (!attachmentIds.has(attachment.id) || attachment.file !== file) return attachment;
+          return "url" in result
+            ? {
+                ...attachment,
+                assetUrl: result.url,
+                error: undefined,
+                progress: 100,
+                status: "ready",
+              }
+            : { ...attachment, assetUrl: undefined, error: result.error, status: "error" };
+        });
+      },
+    };
   }
 
   private resizeTextarea(): void {
@@ -153,10 +218,10 @@ export class WalliChatComposerElement extends LitElement {
     this.onValueChange?.(this.value);
   }
 
-  private handleSurfaceClick(event: MouseEvent): void {
-    const target = event.target;
-    if (target instanceof Element && target.closest("button, input, img")) return;
-    this.focus();
+  private handleMenuToggle(event: MouseEvent): void {
+    event.stopPropagation();
+    this.menuOpen = !this.menuOpen;
+    if (this.menuOpen) this.textareaElement?.blur();
   }
 
   private handleKeyDown(event: KeyboardEvent): void {
@@ -174,20 +239,38 @@ export class WalliChatComposerElement extends LitElement {
 
   private async submit(): Promise<void> {
     if (this.disabled || this.running || !this.canSubmit) return;
-    const files = this.attachments.map((attachment) => attachment.file);
+    const assets = this.attachments.flatMap((attachment) =>
+      attachment.status === "ready" && attachment.assetUrl
+        ? [
+            {
+              file: attachment.file,
+              type: attachment.file.type.startsWith("image/")
+                ? ("image" as const)
+                : ("file" as const),
+              url: attachment.assetUrl,
+            },
+          ]
+        : [],
+    );
+    const text = this.value.trim();
+    const markdown = createSubmitMarkdown(text, assets);
     this.dismissKeyboard();
     this.running = true;
     this.clearAttachments();
     void this.updateComplete.then(() => this.resizeTextarea());
     try {
-      await this.onSubmit?.(this.value.trim(), files);
+      await this.onSubmit?.(markdown, text, assets);
     } finally {
       this.running = false;
     }
   }
 
   private get canSubmit(): boolean {
-    return this.value.trim().length > 0 || this.attachments.length > 0;
+    if (this.attachments.some((attachment) => attachment.status === "uploading")) return false;
+    return (
+      this.value.trim().length > 0 ||
+      this.attachments.some((attachment) => attachment.status === "ready")
+    );
   }
 
   private handlePrimaryAction(event: MouseEvent): void {
@@ -204,25 +287,61 @@ export class WalliChatComposerElement extends LitElement {
     this.fileInputElement?.click();
   }
 
-  private handleFiles(event: Event): void {
+  private async handleFiles(event: Event): Promise<void> {
     const input = event.currentTarget as HTMLInputElement;
-    const files = [...(input.files ?? [])].filter((file) => file.type.startsWith("image/"));
-    if (files.length > 0) {
-      this.attachments = [
-        ...this.attachments,
-        ...files.map((file) => ({
-          file,
-          id: crypto.randomUUID(),
-          url: URL.createObjectURL(file),
-        })),
-      ];
-    }
+    const files = [...(input.files ?? [])];
     input.value = "";
+    if (files.length === 0 || !this.onUploadImages) return;
+
+    const newAttachments: ComposerAttachment[] = files.map((file) => ({
+      file,
+      id: crypto.randomUUID(),
+      progress: 0,
+      status: "uploading",
+      url: URL.createObjectURL(file),
+    }));
+    this.attachments = [...this.attachments, ...newAttachments];
+
+    const { setProgress, setResult } = this.createUploadHandle(newAttachments);
+    let onRemove: Awaited<ReturnType<WalliChatComposerUploadImagesCallback>> = undefined;
+    try {
+      onRemove = await this.onUploadImages(files, setProgress, setResult);
+    } catch (cause) {
+      const error = cause instanceof Error ? cause : new Error(String(cause));
+      for (const file of files) setResult(file, { error });
+    }
+    const removeCallback = typeof onRemove === "function" ? onRemove : undefined;
+    const newAttachmentIds = new Set(newAttachments.map(({ id }) => id));
+    this.attachments = this.attachments.map((attachment) =>
+      newAttachmentIds.has(attachment.id)
+        ? {
+            ...attachment,
+            onRemove: removeCallback,
+            ...(attachment.status === "uploading"
+              ? { error: new Error("Upload did not return a result"), status: "error" as const }
+              : {}),
+          }
+        : attachment,
+    );
+    if (!removeCallback) return;
+
+    const remainingIds = new Set(this.attachments.map(({ id }) => id));
+    for (const attachment of newAttachments) {
+      if (!remainingIds.has(attachment.id)) void removeCallback(attachment.file);
+    }
+  }
+
+  private handleMenuItemClick(item: WalliChatComposerMenuItem): void {
+    this.menuOpen = false;
+    item.onClick();
   }
 
   private removeAttachment(id: string): void {
     const attachment = this.attachments.find((item) => item.id === id);
-    if (attachment) URL.revokeObjectURL(attachment.url);
+    if (attachment) {
+      URL.revokeObjectURL(attachment.url);
+      void attachment.onRemove?.(attachment.file);
+    }
     this.attachments = this.attachments.filter((item) => item.id !== id);
   }
 
@@ -231,42 +350,22 @@ export class WalliChatComposerElement extends LitElement {
     this.attachments = [];
   }
 
-  private revokeAttachments(attachments: readonly ImageAttachment[]): void {
+  private revokeAttachments(attachments: readonly ComposerAttachment[]): void {
     for (const attachment of attachments) URL.revokeObjectURL(attachment.url);
   }
 
   override render() {
+    const hasMenuItems = Boolean(this.onUploadImages) || this.menuItems.length > 0;
     return html`<div
-      class="relative box-border min-h-[52px] cursor-text rounded-[28px] bg-card px-2 py-[5px] text-card-foreground [box-shadow:0_0_0_1px_var(--border),0_2px_8px_rgb(0_0_0_/_8%),0_4px_40px_8px_rgb(0_0_0_/_5%)]"
-      @click=${this.handleSurfaceClick}
+      class="relative box-border min-h-[52px] rounded-[28px] bg-card px-2 py-[5px] text-card-foreground [box-shadow:0_0_0_1px_var(--border),0_2px_8px_rgb(0_0_0_/_8%),0_4px_40px_8px_rgb(0_0_0_/_5%)]"
     >
       ${
         this.attachments.length > 0
-          ? html`<div
-              class="flex gap-2 overflow-x-auto px-0.5 pb-2 pt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              aria-label="Selected images"
-            >
-              ${this.attachments.map(
-                (attachment) =>
-                  html`<div class="relative h-[72px] flex-[0_0_72px] overflow-hidden rounded-xl">
-                    <img
-                      class="h-full w-full object-cover"
-                      src=${attachment.url}
-                      alt=${attachment.file.name}
-                    />
-                    <button
-                      class=${clsx(
-                        "[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] absolute right-1 top-1 inline-flex h-[22px] w-[22px] cursor-pointer items-center justify-center rounded-full border-0 bg-black/70 p-0 text-white focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-                      )}
-                      type="button"
-                      aria-label=${`Remove ${attachment.file.name}`}
-                      @click=${() => this.removeAttachment(attachment.id)}
-                    >
-                      ${createIcon(X, 14)}
-                    </button>
-                  </div>`,
-              )}
-            </div>`
+          ? html`<walli-chat-composer-assets
+              class="block w-full"
+              .attachments=${this.attachments}
+              .onRemove=${(id: string) => this.removeAttachment(id)}
+            ></walli-chat-composer-assets>`
           : nothing
       }
 
@@ -277,40 +376,71 @@ export class WalliChatComposerElement extends LitElement {
         )}
       >
         <div class=${clsx("flex items-center", this.expanded && "col-start-1 row-start-2")}>
-          <button
-            class=${clsx(
-              "[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-foreground transition-colors duration-150 enabled:hover:bg-accent focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none",
-              this.menuOpen && "bg-accent",
-            )}
-            type="button"
-            aria-label="Add"
-            aria-expanded=${this.menuOpen ? "true" : "false"}
-            ?disabled=${this.disabled || this.running}
-            @click=${() => (this.menuOpen = !this.menuOpen)}
-          >
-            ${createIcon(Plus)}
-          </button>
           ${
-            this.menuOpen
-              ? html`<div
+            hasMenuItems
+              ? html`<button
                   class=${clsx(
-                    "absolute left-0 right-0 z-20 origin-bottom-left rounded-[20px] bg-popover px-2 py-2.5 text-popover-foreground [box-shadow:0_0_0_1px_var(--border),0_2px_8px_rgb(0_0_0_/_12%),0_4px_40px_8px_rgb(0_0_0_/_8%)]",
-                    this.expanded ? "bottom-[48px]" : "bottom-[56px]",
+                    "[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-foreground transition-colors duration-150 enabled:hover:bg-accent focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none",
+                    this.menuOpen && "bg-accent",
                   )}
+                  type="button"
+                  aria-label="Add"
+                  aria-expanded=${this.menuOpen ? "true" : "false"}
+                  ?disabled=${this.disabled || this.running}
+                  @click=${this.handleMenuToggle}
                 >
-                  <button
-                    class=${clsx(
-                      "[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-9 w-full cursor-pointer items-center justify-start gap-3 rounded-xl border-0 bg-transparent px-2 font-sans text-sm font-medium leading-5 text-inherit hover:bg-accent focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-                    )}
-                    type="button"
-                    @click=${this.openFilePicker}
-                  >
-                    ${createIcon(ImagePlus, 18)} Add photos
-                  </button>
+                  ${createIcon(Plus)}
+                </button>`
+              : nothing
+          }
+          ${
+            hasMenuItems && this.menuOpen
+              ? html`<div
+                  class="absolute inset-x-0 z-20 flex origin-bottom-left flex-col gap-1.5 overflow-hidden rounded-2xl bg-popover p-2 text-popover-foreground [bottom:calc(100%+10px)] [border:1px_solid_var(--border)] [box-shadow:0_4px_12px_rgb(0_0_0_/_5%),0_1px_2px_rgb(0_0_0_/_3%)]"
+                  role="menu"
+                  aria-label="Add to message"
+                >
+                  ${
+                    this.onUploadImages
+                      ? html`<button
+                          class=${clsx(
+                            "[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-11 w-full cursor-pointer items-center justify-start gap-4 rounded-xl border-0 bg-transparent px-3 font-sans text-sm font-medium leading-5 text-inherit transition-colors hover:bg-accent focus:outline-none focus-visible:bg-accent",
+                          )}
+                          type="button"
+                          role="menuitem"
+                          @click=${this.openFilePicker}
+                        >
+                          <span
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-foreground"
+                            >${createIcon(Paperclip, 18)}</span
+                          >
+                          <span>${this.uploadImagesTitle}</span>
+                        </button>`
+                      : nothing
+                  }
+                  ${this.menuItems.map(
+                    (item) =>
+                      html`<button
+                        class="[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-11 w-full cursor-pointer items-center justify-start gap-4 rounded-xl border-0 bg-transparent px-3 font-sans text-sm font-medium leading-5 text-inherit transition-colors hover:bg-accent focus:outline-none focus-visible:bg-accent"
+                        type="button"
+                        role="menuitem"
+                        @click=${() => this.handleMenuItemClick(item)}
+                      >
+                        <span
+                          class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-foreground"
+                          >${createIcon(item.icon, 18)}</span
+                        >
+                        <span>${item.title}</span>
+                      </button>`,
+                  )}
                 </div>`
               : nothing
           }
-          <input class="hidden" type="file" accept="image/*" multiple @change=${this.handleFiles} />
+          ${
+            this.onUploadImages
+              ? html`<input class="hidden" type="file" multiple @change=${this.handleFiles} />`
+              : nothing
+          }
         </div>
 
         <textarea
@@ -373,6 +503,24 @@ export class WalliChatComposerElement extends LitElement {
       </div>
     </div>`;
   }
+}
+
+function createSubmitMarkdown(
+  text: string,
+  assets: readonly { file: File; type: "file" | "image"; url: string }[],
+): string {
+  const assetBlocks = assets
+    .map((asset) =>
+      asset.type === "image"
+        ? `![${escapeMarkdownAlt(asset.file.name)}](<${asset.url}>)`
+        : `[${escapeMarkdownAlt(asset.file.name)}](<${asset.url}>)`,
+    )
+    .join("\n\n");
+  return [assetBlocks, text].filter(Boolean).join("\n\n");
+}
+
+function escapeMarkdownAlt(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll("]", "\\]");
 }
 
 declare global {

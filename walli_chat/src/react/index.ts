@@ -18,7 +18,15 @@ import {
 import type {
   WalliChatMessage,
   WalliChatComposerActionCallback,
+  WalliChatComposerAsset,
+  WalliChatComposerInsertedAssetsHandle,
+  WalliChatComposerInsertAsset,
+  WalliChatComposerMenuItem,
+  WalliChatComposerSetUploadProgress,
+  WalliChatComposerSetUploadResult,
   WalliChatComposerSubmitCallback,
+  WalliChatComposerUploadImagesCallback,
+  WalliChatComposerUploadResult,
   WalliChatComposerValueCallback,
   WalliChatFeedbackCallback,
   WalliChatMessageCallback,
@@ -35,19 +43,25 @@ export type WalliChatComposerProps = {
   className?: string;
   disabled?: boolean;
   maxHeight?: number;
+  menuItems?: readonly WalliChatComposerMenuItem[];
   onCancel?: WalliChatComposerActionCallback;
   onSubmit?: WalliChatComposerSubmitCallback;
+  onUploadImages?: WalliChatComposerUploadImagesCallback;
   onValueChange?: WalliChatComposerValueCallback;
   onVoice?: WalliChatComposerActionCallback;
   placeholder?: string;
   slot?: string;
   style?: CSSProperties;
+  uploadImagesTitle?: string;
   value: string;
 };
 
 export type WalliChatComposerRef = {
   readonly element: WalliChatComposerElement | null;
   focus: () => void;
+  insertAssets: (
+    assets: readonly WalliChatComposerInsertAsset[],
+  ) => WalliChatComposerInsertedAssetsHandle | undefined;
 };
 
 export const WalliChatComposer = forwardRef<WalliChatComposerRef, WalliChatComposerProps>(
@@ -56,13 +70,16 @@ export const WalliChatComposer = forwardRef<WalliChatComposerRef, WalliChatCompo
       className,
       disabled = false,
       maxHeight = 200,
+      menuItems = [],
       onCancel,
       onSubmit,
+      onUploadImages,
       onValueChange,
       onVoice,
       placeholder = "Message",
       slot,
       style,
+      uploadImagesTitle = "Add photos",
       value,
     },
     forwardedRef,
@@ -74,13 +91,16 @@ export const WalliChatComposer = forwardRef<WalliChatComposerRef, WalliChatCompo
       if (!element) return;
       element.disabled = disabled;
       element.maxHeight = maxHeight;
+      element.menuItems = menuItems;
       element.onCancel = onCancel;
       element.onSubmit = onSubmit;
+      element.onUploadImages = onUploadImages;
       element.onValueChange = onValueChange;
       element.onVoice = onVoice;
       element.placeholder = placeholder;
+      element.uploadImagesTitle = uploadImagesTitle;
       element.value = value;
-    }, [disabled, maxHeight, onCancel, onSubmit, onValueChange, onVoice, placeholder, value]);
+    }, [disabled, maxHeight, menuItems, onCancel, onSubmit, onUploadImages, onValueChange, onVoice, placeholder, uploadImagesTitle, value]);
 
     useImperativeHandle(
       forwardedRef,
@@ -90,6 +110,9 @@ export const WalliChatComposer = forwardRef<WalliChatComposerRef, WalliChatCompo
         },
         focus() {
           elementRef.current?.focus();
+        },
+        insertAssets(assets) {
+          return elementRef.current?.insertAssets(assets);
         },
       }),
       [],
@@ -216,7 +239,14 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
 
 export type {
   WalliChatComposerActionCallback,
+  WalliChatComposerAsset,
+  WalliChatComposerInsertedAssetsHandle,
+  WalliChatComposerInsertAsset,
+  WalliChatComposerSetUploadProgress,
+  WalliChatComposerSetUploadResult,
   WalliChatComposerSubmitCallback,
+  WalliChatComposerUploadImagesCallback,
+  WalliChatComposerUploadResult,
   WalliChatComposerValueCallback,
   WalliChatMessage,
   WalliChatFeedbackCallback,

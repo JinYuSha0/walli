@@ -1,3 +1,5 @@
+import type { IconNode } from "lucide";
+
 export type WalliChatMessage = {
   id: string;
   role: "assistant" | "user";
@@ -14,11 +16,45 @@ export type WalliChatMessageCallback = (id: string, markdown: string) => void;
 export type WalliChatRemoveMessages = () => void;
 
 export type WalliChatComposerSubmitCallback = (
-  value: string,
-  images: readonly File[],
+  markdown: string,
+  text: string,
+  assets: readonly WalliChatComposerAsset[],
 ) => void | Promise<void>;
+export type WalliChatComposerAsset = {
+  file: File;
+  type: "file" | "image";
+  url: string;
+};
+export type WalliChatComposerInsertAsset = Omit<WalliChatComposerAsset, "url"> & {
+  url?: string;
+};
+export type WalliChatComposerUploadResult =
+  { url: string; error?: never } | { error: Error; url?: never };
 export type WalliChatComposerValueCallback = (value: string) => void;
 export type WalliChatComposerActionCallback = () => void;
+export type WalliChatComposerRemoveImageCallback = (image: File) => void | Promise<void>;
+export type WalliChatComposerSetUploadProgress = (image: File, progress: number) => void;
+export type WalliChatComposerSetUploadResult = (
+  image: File,
+  result: WalliChatComposerUploadResult,
+) => void;
+export type WalliChatComposerInsertedAssetsHandle = {
+  setProgress: WalliChatComposerSetUploadProgress;
+  setResult: WalliChatComposerSetUploadResult;
+};
+export type WalliChatComposerUploadImagesCallback = (
+  images: readonly File[],
+  setProgress: WalliChatComposerSetUploadProgress,
+  setResult: WalliChatComposerSetUploadResult,
+) =>
+  | void
+  | WalliChatComposerRemoveImageCallback
+  | Promise<void | WalliChatComposerRemoveImageCallback>;
+export type WalliChatComposerMenuItem = {
+  icon: IconNode;
+  onClick: WalliChatComposerActionCallback;
+  title: string;
+};
 
 /** A UTF-8 Server-Sent Events stream containing start, delta, tool-call and tool-result events. */
 export type WalliChatTextStream = ReadableStream<string | Uint8Array>;

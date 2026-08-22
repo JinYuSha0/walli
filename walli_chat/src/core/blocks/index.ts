@@ -5,6 +5,7 @@ export { buildInlineBlocks, WalliInlineBlockElement } from "./inline-block";
 export { buildCodeBlock, WalliCodeBlockElement } from "./code-block";
 export { buildRuleBlock, WalliRuleBlockElement } from "./rule-block";
 export { buildImageBlock, WalliImageBlockElement } from "./image-block";
+export { WalliImageGroupBlockElement } from "./image-group-block";
 export { buildPlainTextBlocks } from "./plain-text-block";
 export { buildListBlocks } from "./list-block";
 export { buildTableBlock, WalliTableBlockElement } from "./table-block";
@@ -21,6 +22,10 @@ export function renderMessageBlockTemplate(
       return html`<walli-code-block .layout=${{ block, contentInsetX }}></walli-code-block>`;
     case "image":
       return html`<walli-image-block .layout=${{ block, contentInsetX }}></walli-image-block>`;
+    case "imageGroup":
+      return html`<walli-image-group-block
+        .layout=${{ block, contentInsetX }}
+      ></walli-image-group-block>`;
     case "rule":
       return html`<walli-rule-block .layout=${{ block, contentInsetX }}></walli-rule-block>`;
     case "table":

@@ -42,6 +42,11 @@ export type PreparedImageBlock = PreparedBlockBase & {
   targetWidth: number | null;
 };
 
+export type PreparedImageGroupBlock = PreparedBlockBase & {
+  images: PreparedImageBlock[];
+  kind: "imageGroup";
+};
+
 export type PreparedRuleBlock = PreparedBlockBase & {
   kind: "rule";
   height: number;
@@ -73,6 +78,7 @@ export type PreparedBlock =
   | PreparedInlineBlock
   | PreparedCodeBlock
   | PreparedImageBlock
+  | PreparedImageGroupBlock
   | PreparedRuleBlock
   | PreparedTableBlock
   | PreparedCustomBlock;
@@ -190,6 +196,29 @@ export type ImageBlockLayout = {
   width: number;
 };
 
+export type ImageGroupItemLayout = {
+  alt: string;
+  crop: boolean;
+  height: number;
+  left: number;
+  src: string;
+  top: number;
+  width: number;
+};
+
+export type ImageGroupBlockLayout = {
+  contentLeft: number;
+  height: number;
+  images: ImageGroupItemLayout[];
+  kind: "imageGroup";
+  markerClassName: string | null;
+  markerLeft: number | null;
+  markerText: string | null;
+  quoteRailLefts: number[];
+  top: number;
+  width: number;
+};
+
 export type RuleBlockLayout = {
   contentLeft: number;
   height: number;
@@ -249,6 +278,7 @@ export type BlockLayout =
   | InlineBlockLayout
   | CodeBlockLayout
   | ImageBlockLayout
+  | ImageGroupBlockLayout
   | RuleBlockLayout
   | TableBlockLayout
   | CustomBlockLayout;
@@ -280,6 +310,20 @@ export type ImageBlockFrame = BlockFrameBase & {
   width: number;
 };
 
+export type ImageGroupItemFrame = {
+  crop: boolean;
+  height: number;
+  left: number;
+  top: number;
+  width: number;
+};
+
+export type ImageGroupBlockFrame = BlockFrameBase & {
+  images: ImageGroupItemFrame[];
+  kind: "imageGroup";
+  width: number;
+};
+
 export type RuleBlockFrame = BlockFrameBase & {
   kind: "rule";
   width: number;
@@ -301,6 +345,7 @@ export type BlockFrame =
   | InlineBlockFrame
   | CodeBlockFrame
   | ImageBlockFrame
+  | ImageGroupBlockFrame
   | RuleBlockFrame
   | TableBlockFrame
   | CustomBlockFrame;

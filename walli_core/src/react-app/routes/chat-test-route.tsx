@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import {
   WalliChat,
   WalliChatComposer,
+  type WalliChatComposerAsset,
   type WalliChatMessage,
   type WalliChatRef,
   type WalliChatStreamingHandle,
@@ -31,11 +32,11 @@ export function ChatTestRoute() {
     if (nextMessages) setMessages(nextMessages.map((message) => ({ ...message })));
   };
 
-  const handleSubmit = async (value: string, images: readonly File[]) => {
-    const text = value.trim();
-    const imageLabels = images.map((image) => `[Image: ${image.name}]`).join("\n");
-    const markdown = [text, imageLabels].filter(Boolean).join("\n\n");
-
+  const handleSubmit = async (
+    markdown: string,
+    _text: string,
+    _assets: readonly WalliChatComposerAsset[],
+  ) => {
     if (!markdown || !trimmedUserId || isRunning) {
       return;
     }

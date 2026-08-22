@@ -1,4 +1,5 @@
 import "walli_chat/theme.css";
+import { FileSpreadsheet, ImagePlus, Search } from "lucide";
 import { registerCustomBlock } from "walli_chat";
 import type {
   WalliChatComposerElement,
@@ -30,9 +31,60 @@ if (chat) {
 }
 
 if (composer) {
-  composer.onSubmit = (value, images) => {
-    const imageLabels = images.map((image) => `[Image: ${image.name}]`).join("\n");
-    const markdown = [value, imageLabels].filter(Boolean).join("\n\n");
+  composer.uploadImagesTitle = "上传文件";
+  composer.menuItems = [
+    {
+      icon: Search,
+      onClick: () => {},
+      title: "网页搜索",
+    },
+    {
+      icon: ImagePlus,
+      onClick: () => {
+        const source = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#7c3aed"/><stop offset="1" stop-color="#38bdf8"/></linearGradient></defs><rect width="100%" height="100%" rx="32" fill="url(#g)"/><text x="50%" y="50%" fill="white" font-family="sans-serif" font-size="42" text-anchor="middle" dominant-baseline="middle">External asset</text></svg>`;
+        const file = new File([source], "external-asset.svg", { type: "image/svg+xml" });
+        const { setProgress, setResult } = composer.insertAssets([{ file, type: "image" }]);
+        let progress = 0;
+        const timer = window.setInterval(() => {
+          progress = Math.min(100, progress + 10);
+          setProgress(file, progress);
+          if (progress === 100) {
+            window.clearInterval(timer);
+            setResult(file, { url: URL.createObjectURL(file) });
+          }
+        }, 100);
+      },
+      title: "插入外部图片",
+    },
+    {
+      icon: FileSpreadsheet,
+      onClick: () => {
+        const spreadsheet = `<?xml version="1.0"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+  <Worksheet ss:Name="销售报表"><Table>
+    <Row><Cell><Data ss:Type="String">产品</Data></Cell><Cell><Data ss:Type="String">数量</Data></Cell><Cell><Data ss:Type="String">金额</Data></Cell></Row>
+    <Row><Cell><Data ss:Type="String">Walli Pro</Data></Cell><Cell><Data ss:Type="Number">12</Data></Cell><Cell><Data ss:Type="Number">2388</Data></Cell></Row>
+    <Row><Cell><Data ss:Type="String">Walli Team</Data></Cell><Cell><Data ss:Type="Number">8</Data></Cell><Cell><Data ss:Type="Number">3192</Data></Cell></Row>
+  </Table></Worksheet>
+</Workbook>`;
+        const file = new File([spreadsheet], "销售报表.xls", {
+          type: "application/vnd.ms-excel",
+        });
+        const { setProgress, setResult } = composer.insertAssets([{ file, type: "file" }]);
+        let progress = 0;
+        const timer = window.setInterval(() => {
+          progress = Math.min(100, progress + 20);
+          setProgress(file, progress);
+          if (progress === 100) {
+            window.clearInterval(timer);
+            setResult(file, { url: URL.createObjectURL(file) });
+          }
+        }, 100);
+      },
+      title: "插入 Excel 文件",
+    },
+  ];
+  composer.onSubmit = (markdown, text, assets) => {
     if (!markdown) return;
 
     chat?.insertMessagesAtBottom([
@@ -46,6 +98,27 @@ if (composer) {
     return startDemoStreaming();
   };
   composer.onCancel = stopDemoStreaming;
+  composer.onUploadImages = async (files, setProgress, setResult) => {
+    console.log("upload files", files);
+    await Promise.all(
+      files.map(
+        (file, index) =>
+          new Promise<void>((resolve) => {
+            let progress = 0;
+            const timer = window.setInterval(() => {
+              progress = Math.min(100, progress + 8 + index * 2);
+              setProgress(file, progress);
+              if (progress === 100) {
+                window.clearInterval(timer);
+                setResult(file, { url: URL.createObjectURL(file) });
+                resolve();
+              }
+            }, 160);
+          }),
+      ),
+    );
+    return (file) => console.log("remove uploaded file", file);
+  };
   composer.onVoice = () => console.log("voice input");
 }
 
