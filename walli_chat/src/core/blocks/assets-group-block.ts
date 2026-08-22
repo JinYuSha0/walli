@@ -19,13 +19,13 @@ export class WalliAssetsGroupBlockElement extends BlockShellElement<AssetsGroupB
   ): TemplateResult {
     this.renderedBlock = block;
     return html`<div
-      class="absolute right-0 top-0"
+      class="pointer-events-auto absolute right-0 top-0 touch-manipulation"
       style=${`width:${block.width}px;height:${block.height}px;`}
     >
       ${block.items.map((item, index) =>
         item.type === "image"
           ? html`<img
-              class="pointer-events-auto absolute block cursor-zoom-in rounded-[10px] bg-muted object-cover ring-1 ring-border"
+              class="pointer-events-auto absolute block cursor-zoom-in touch-manipulation select-none rounded-[10px] bg-muted object-cover ring-1 ring-border"
               src=${item.src}
               alt=${item.alt}
               loading="lazy"
@@ -33,6 +33,7 @@ export class WalliAssetsGroupBlockElement extends BlockShellElement<AssetsGroupB
               fetchpriority="low"
               role="button"
               tabindex="0"
+              draggable="false"
               data-index=${index}
               style=${`left:${item.left}px;top:${item.top}px;width:${item.width}px;height:${item.height}px;object-fit:${item.crop ? "cover" : "contain"};transform:translateZ(0);backface-visibility:hidden;`}
               @click=${this.handlePreviewClick}

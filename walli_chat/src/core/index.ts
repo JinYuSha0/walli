@@ -355,9 +355,13 @@ function layoutAssetsGroup(
 ): Extract<BlockFrame, { kind: "assetsGroup" }>["items"] {
   const maxWidth = getImageBlockStyle("imageBlockMaxWidth");
   if (assets.length === 1 && "kind" in assets[0]!) {
-    const availableWidth = Math.max(1, contentWidth - assets[0]!.contentLeft);
+    const image = assets[0]!;
+    const availableWidth = Math.max(1, contentWidth - image.contentLeft);
     const width = Math.max(1, Math.round(Math.min(maxWidth, availableWidth)));
-    const height = width * (getImageBlockStyle("imageBlockHeight") / maxWidth);
+    const height =
+      image.targetWidth !== null && image.targetHeight !== null
+        ? image.targetHeight * (width / image.targetWidth)
+        : width * (getImageBlockStyle("imageBlockHeight") / maxWidth);
     return [
       {
         crop: true,

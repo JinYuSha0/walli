@@ -26,7 +26,7 @@ export abstract class BlockShellElement<Block extends BlockLayout> extends HTMLE
     const { block, contentInsetX } = this.currentLayout;
     return html`<div
       class=${clsx("absolute left-0 w-full box-border", {
-        "pointer-events-none": block.kind === "image" || block.kind === "assetsGroup",
+        "pointer-events-none": block.kind === "image",
       })}
       style=${`top:${block.top}px;height:${block.height}px;`}
     >

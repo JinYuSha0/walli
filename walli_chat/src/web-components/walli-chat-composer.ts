@@ -254,7 +254,7 @@ export class WalliChatComposerElement extends LitElement {
         : [],
     );
     const text = this.value.trim();
-    const markdown = createSubmitMarkdown(text, assets);
+    const markdown = await createSubmitMarkdown(text, assets);
     this.dismissKeyboard();
     this.running = true;
     this.clearAttachments();
@@ -290,7 +290,6 @@ export class WalliChatComposerElement extends LitElement {
   }
 
   private openFilePicker(): void {
-    this.menuOpen = false;
     this.fileInputElement?.click();
   }
 
@@ -299,6 +298,7 @@ export class WalliChatComposerElement extends LitElement {
     const files = [...(input.files ?? [])];
     input.value = "";
     if (files.length === 0 || !this.onUploadImages) return;
+    this.menuOpen = false;
 
     const newAttachments: ComposerAttachment[] = files.map((file) => ({
       file,
@@ -512,18 +512,39 @@ export class WalliChatComposerElement extends LitElement {
   }
 }
 
-function createSubmitMarkdown(
-  text: string,
-  assets: readonly { file: File; type: "file" | "image"; url: string }[],
-): string {
-  const assetBlocks = assets
-    .map((asset) =>
-      asset.type === "image"
-        ? `![${escapeMarkdownAlt(asset.file.name)}](<${asset.url}>)`
-        : `[${escapeMarkdownAlt(asset.file.name)}](<${asset.url}>)`,
-    )
-    .join("\n\n");
+async function createSubmitMarkdown(text: string, assets: readonly SubmitAsset[]): Promise<string> {
+  const assetBlocks = (await Promise.all(assets.map(createAssetMarkdown))).join("\n\n");
   return [assetBlocks, text].filter(Boolean).join("\n\n");
+}
+
+type SubmitAsset = { file: File; type: "file" | "image"; url: string };
+
+async function createAssetMarkdown(asset: SubmitAsset): Promise<string> {
+  const name = escapeMarkdownAlt(asset.file.name);
+  if (asset.type === "file") return `[${name}](<${asset.url}>)`;
+
+  const dimensions = await readImageDimensions(asset.file);
+  const size = dimensions ? `{width="${dimensions.width}" height="${dimensions.height}"}` : "";
+  return `![${name}](<${asset.url}>)${size}`;
+}
+
+function readImageDimensions(file: File): Promise<{ height: number; width: number } | null> {
+  return new Promise((resolve) => {
+    const src = URL.createObjectURL(file);
+    const image = new Image();
+    const finish = (dimensions: { height: number; width: number } | null) => {
+      URL.revokeObjectURL(src);
+      resolve(dimensions);
+    };
+    image.onload = () =>
+      finish(
+        image.naturalWidth > 0 && image.naturalHeight > 0
+          ? { height: image.naturalHeight, width: image.naturalWidth }
+          : null,
+      );
+    image.onerror = () => finish(null);
+    image.src = src;
+  });
 }
 
 function escapeMarkdownAlt(value: string): string {
