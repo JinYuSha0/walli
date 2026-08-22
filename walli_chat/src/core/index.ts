@@ -11,6 +11,7 @@ import type {
   ConversationFrame,
   InlineFragmentLayout,
   MessageFrame,
+  PreparedAssetsGroupBlock,
   PreparedBlock,
   PreparedChatMessage,
 } from "./type";
@@ -28,7 +29,7 @@ export function createPreparedChatMessages(
   return messages.map((seed) => {
     const blocks = parseMarkdownBlocks(seed.markdown, options.streaming);
     return {
-      blocks: seed.role === "user" ? groupUserMessageImages(blocks) : blocks,
+      blocks: seed.role === "user" ? groupUserMessageAssets(blocks) : blocks,
       markdown: seed.markdown,
       id: seed.id,
       role: seed.role,
@@ -37,25 +38,29 @@ export function createPreparedChatMessages(
   });
 }
 
-function groupUserMessageImages(blocks: readonly PreparedBlock[]): PreparedBlock[] {
+function groupUserMessageAssets(blocks: readonly PreparedBlock[]): PreparedBlock[] {
   const grouped: PreparedBlock[] = [];
   for (let index = 0; index < blocks.length; index++) {
     const block = blocks[index]!;
-    if (block.kind !== "image") {
+    if (block.kind !== "image" && block.kind !== "assetsGroup") {
       grouped.push(block);
       continue;
     }
 
-    const images = [block];
-    while (blocks[index + images.length]?.kind === "image") {
-      images.push(blocks[index + images.length] as typeof block);
+    const assets = block.kind === "assetsGroup" ? [...block.assets] : [block];
+    let nextIndex = index + 1;
+    while (blocks[nextIndex]?.kind === "image" || blocks[nextIndex]?.kind === "assetsGroup") {
+      const next = blocks[nextIndex]!;
+      if (next.kind === "assetsGroup") assets.push(...next.assets);
+      else if (next.kind === "image") assets.push(next);
+      nextIndex++;
     }
     grouped.push({
       ...block,
-      images,
-      kind: "imageGroup",
+      assets,
+      kind: "assetsGroup",
     });
-    index += images.length - 1;
+    index = nextIndex - 1;
   }
   return grouped;
 }
@@ -136,7 +141,7 @@ export function getBlockUsedWidth(block: BlockFrame | BlockLayout): number {
       return block.contentLeft + block.usedWidth;
     case "code":
     case "image":
-    case "imageGroup":
+    case "assetsGroup":
     case "rule":
     case "table":
     case "custom":
@@ -236,20 +241,8 @@ function layoutBlockFrame(block: PreparedBlock, contentWidth: number, top: numbe
     case "image":
       return layoutImageFrame(block, contentWidth, top);
 
-    case "imageGroup": {
-      const images = layoutImageGroup(block.images, contentWidth);
-      return {
-        contentLeft: block.contentLeft,
-        height: Math.max(...images.map((image) => image.top + image.height)),
-        images,
-        kind: "imageGroup",
-        markerClassName: block.markerClassName,
-        markerLeft: block.markerLeft,
-        markerText: block.markerText,
-        quoteRailLefts: block.quoteRailLefts,
-        top,
-        width: Math.max(...images.map((image) => image.left + image.width)),
-      };
+    case "assetsGroup": {
+      return layoutAssetsGroupFrame(block.assets, contentWidth, top, block);
     }
 
     case "rule": {
@@ -332,30 +325,64 @@ function layoutImageFrame(
   };
 }
 
-function layoutImageGroup(
-  images: readonly Extract<PreparedBlock, { kind: "image" }>[],
+function layoutAssetsGroupFrame(
+  assets: readonly PreparedAssetsGroupBlock["assets"][number][],
   contentWidth: number,
-): Extract<BlockFrame, { kind: "imageGroup" }>["images"] {
+  top: number,
+  block: Pick<
+    PreparedBlock,
+    "contentLeft" | "markerClassName" | "markerLeft" | "markerText" | "quoteRailLefts"
+  >,
+): Extract<BlockFrame, { kind: "assetsGroup" }> {
+  const items = layoutAssetsGroup(assets, contentWidth);
+  return {
+    contentLeft: block.contentLeft,
+    height: Math.max(...items.map((item) => item.top + item.height)),
+    items,
+    kind: "assetsGroup",
+    markerClassName: block.markerClassName,
+    markerLeft: block.markerLeft,
+    markerText: block.markerText,
+    quoteRailLefts: block.quoteRailLefts,
+    top,
+    width: Math.max(...items.map((item) => item.left + item.width)),
+  };
+}
+
+function layoutAssetsGroup(
+  assets: readonly PreparedAssetsGroupBlock["assets"][number][],
+  contentWidth: number,
+): Extract<BlockFrame, { kind: "assetsGroup" }>["items"] {
   const maxWidth = getImageBlockStyle("imageBlockMaxWidth");
-  if (images.length === 1) {
-    const availableWidth = Math.max(1, contentWidth - images[0]!.contentLeft);
+  if (assets.length === 1 && "kind" in assets[0]!) {
+    const availableWidth = Math.max(1, contentWidth - assets[0]!.contentLeft);
     const width = Math.max(1, Math.round(Math.min(maxWidth, availableWidth)));
     const height = width * (getImageBlockStyle("imageBlockHeight") / maxWidth);
-    return [{ crop: true, height: Math.max(1, Math.round(height)), left: 0, top: 0, width }];
+    return [
+      {
+        crop: true,
+        height: Math.max(1, Math.round(height)),
+        type: "image",
+        left: 0,
+        top: 0,
+        width,
+      },
+    ];
   }
 
   const gap = getImageBlockStyle("imageBlockGap");
   const width = Math.min(contentWidth, maxWidth);
-  const columnCount = Math.min(3, images.length);
+  const columnCount = 3;
   const cell = (width - gap * (columnCount - 1)) / columnCount;
 
-  return images.map((_, index) => {
+  return assets.map((asset, index) => {
     const row = Math.floor(index / columnCount);
     const columnFromRight = index % columnCount;
     const column = columnCount - columnFromRight - 1;
     return {
       crop: true,
       height: Math.max(1, Math.round(cell)),
+      type: "kind" in asset ? "image" : "file",
       left: Math.round(column * (cell + gap)),
       top: Math.round(row * (cell + gap)),
       width: Math.max(1, Math.round(cell)),
@@ -455,17 +482,19 @@ function materializeBlockLayout(
       };
     }
 
-    case "imageGroup": {
-      if (block.kind !== "imageGroup") throw new Error("Image group block/frame mismatch");
+    case "assetsGroup": {
+      if (block.kind !== "assetsGroup") throw new Error("Assets group block/frame mismatch");
+      const assets = block.assets;
       return {
         contentLeft: frame.contentLeft,
         height: frame.height,
-        images: frame.images.map((imageFrame, index) => ({
-          ...imageFrame,
-          alt: block.images[index]!.alt,
-          src: block.images[index]!.src,
+        items: frame.items.map((itemFrame, index) => ({
+          ...itemFrame,
+          alt: "kind" in assets[index]! ? assets[index]!.alt : "",
+          name: "type" in assets[index]! ? assets[index]!.name : assets[index]!.alt,
+          src: assets[index]!.src,
         })),
-        kind: "imageGroup",
+        kind: "assetsGroup",
         markerClassName: frame.markerClassName,
         markerLeft: frame.markerLeft,
         markerText: frame.markerText,

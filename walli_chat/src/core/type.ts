@@ -42,9 +42,15 @@ export type PreparedImageBlock = PreparedBlockBase & {
   targetWidth: number | null;
 };
 
-export type PreparedImageGroupBlock = PreparedBlockBase & {
-  images: PreparedImageBlock[];
-  kind: "imageGroup";
+export type PreparedFileAsset = {
+  name: string;
+  src: string;
+  type: "file";
+};
+
+export type PreparedAssetsGroupBlock = PreparedBlockBase & {
+  assets: Array<PreparedFileAsset | PreparedImageBlock>;
+  kind: "assetsGroup";
 };
 
 export type PreparedRuleBlock = PreparedBlockBase & {
@@ -78,7 +84,7 @@ export type PreparedBlock =
   | PreparedInlineBlock
   | PreparedCodeBlock
   | PreparedImageBlock
-  | PreparedImageGroupBlock
+  | PreparedAssetsGroupBlock
   | PreparedRuleBlock
   | PreparedTableBlock
   | PreparedCustomBlock;
@@ -196,21 +202,23 @@ export type ImageBlockLayout = {
   width: number;
 };
 
-export type ImageGroupItemLayout = {
+export type AssetsGroupItemLayout = {
   alt: string;
   crop: boolean;
   height: number;
+  type: "file" | "image";
   left: number;
+  name: string;
   src: string;
   top: number;
   width: number;
 };
 
-export type ImageGroupBlockLayout = {
+export type AssetsGroupBlockLayout = {
   contentLeft: number;
   height: number;
-  images: ImageGroupItemLayout[];
-  kind: "imageGroup";
+  items: AssetsGroupItemLayout[];
+  kind: "assetsGroup";
   markerClassName: string | null;
   markerLeft: number | null;
   markerText: string | null;
@@ -278,7 +286,7 @@ export type BlockLayout =
   | InlineBlockLayout
   | CodeBlockLayout
   | ImageBlockLayout
-  | ImageGroupBlockLayout
+  | AssetsGroupBlockLayout
   | RuleBlockLayout
   | TableBlockLayout
   | CustomBlockLayout;
@@ -310,17 +318,18 @@ export type ImageBlockFrame = BlockFrameBase & {
   width: number;
 };
 
-export type ImageGroupItemFrame = {
+export type AssetsGroupItemFrame = {
   crop: boolean;
   height: number;
+  type: "file" | "image";
   left: number;
   top: number;
   width: number;
 };
 
-export type ImageGroupBlockFrame = BlockFrameBase & {
-  images: ImageGroupItemFrame[];
-  kind: "imageGroup";
+export type AssetsGroupBlockFrame = BlockFrameBase & {
+  items: AssetsGroupItemFrame[];
+  kind: "assetsGroup";
   width: number;
 };
 
@@ -345,7 +354,7 @@ export type BlockFrame =
   | InlineBlockFrame
   | CodeBlockFrame
   | ImageBlockFrame
-  | ImageGroupBlockFrame
+  | AssetsGroupBlockFrame
   | RuleBlockFrame
   | TableBlockFrame
   | CustomBlockFrame;

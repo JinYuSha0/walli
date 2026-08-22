@@ -39,10 +39,10 @@ export class WalliMessageElement extends HTMLElement {
   }
 
   private renderLayout(message: ChatMessageInstance, blocks: BlockLayout[]): TemplateResult {
-    const imageGroups =
-      message.frame.role === "user" ? blocks.filter((block) => block.kind === "imageGroup") : [];
-    const hasImages = imageGroups.length > 0;
-    const textBlocks = hasImages ? blocks.filter((block) => block.kind !== "imageGroup") : [];
+    const assetsGroups =
+      message.frame.role === "user" ? blocks.filter((block) => block.kind === "assetsGroup") : [];
+    const hasAssets = assetsGroups.length > 0;
+    const textBlocks = hasAssets ? blocks.filter((block) => block.kind !== "assetsGroup") : [];
     const textBubbleStyle = getTextBubbleStyle(message.frame, textBlocks);
     const textContentInset = getTextContentInset(message.frame, textBlocks);
 
@@ -64,9 +64,9 @@ export class WalliMessageElement extends HTMLElement {
               message.frame.role === "assistant",
             "message-bubble relative max-w-full flex-none rounded-2xl text-secondary-foreground shadow-lg":
               message.frame.role === "user",
-            "bg-transparent shadow-none": hasImages,
+            "bg-transparent shadow-none": hasAssets,
           })}
-          style=${`width:${message.frame.frameWidth}px;height:${message.frame.bubbleHeight}px;${message.frame.role === "user" && !hasImages ? "background-color:var(--user-message-background);" : ""}`}
+          style=${`width:${message.frame.frameWidth}px;height:${message.frame.bubbleHeight}px;${message.frame.role === "user" && !hasAssets ? "background-color:var(--user-message-background);" : ""}`}
         >
           ${
             textBubbleStyle
@@ -74,7 +74,7 @@ export class WalliMessageElement extends HTMLElement {
               : null
           }
           ${blocks.map((block) =>
-            renderMessageBlockTemplate(block, block.kind === "imageGroup" ? 0 : textContentInset),
+            renderMessageBlockTemplate(block, block.kind === "assetsGroup" ? 0 : textContentInset),
           )}
         </div>
         ${

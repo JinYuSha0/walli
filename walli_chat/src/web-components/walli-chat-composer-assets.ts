@@ -1,21 +1,8 @@
 import { html, nothing, render } from "lit";
 import { customElement } from "lit/decorators.js";
-import {
-  CircleAlert,
-  File,
-  FileArchive,
-  FileAudio,
-  FileCode2,
-  FileImage,
-  FileSpreadsheet,
-  FileText,
-  FileVideo,
-  Presentation,
-  X,
-  createElement,
-  type IconNode,
-} from "lucide";
+import { CircleAlert, X, createElement, type IconNode } from "lucide";
 import clsx from "clsx";
+import { getFileIcon } from "../core/file-icon";
 import type { WalliChatComposerRemoveImageCallback } from "../types";
 
 export type ComposerAttachment = {
@@ -162,22 +149,6 @@ export class WalliChatComposerAssetsElement extends HTMLElement {
       </button>
     </div>`;
   }
-}
-
-function getFileIcon(file: globalThis.File): IconNode {
-  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-  if (file.type.startsWith("image/")) return FileImage;
-  if (file.type.startsWith("audio/")) return FileAudio;
-  if (file.type.startsWith("video/")) return FileVideo;
-  if (["xls", "xlsx", "csv", "ods"].includes(extension)) return FileSpreadsheet;
-  if (["ppt", "pptx", "odp", "key"].includes(extension)) return Presentation;
-  if (["doc", "docx", "odt", "pdf", "rtf", "txt"].includes(extension)) return FileText;
-  if (["zip", "rar", "7z", "gz", "tar"].includes(extension)) return FileArchive;
-  if (
-    ["js", "ts", "tsx", "jsx", "json", "html", "css", "py", "go", "rs", "java"].includes(extension)
-  )
-    return FileCode2;
-  return File;
 }
 
 declare global {

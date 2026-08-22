@@ -4,6 +4,7 @@ import type { ParseContext, PreparedBlock } from "./type";
 import {
   buildInlineBlocks,
   buildImageBlock,
+  buildFileBlock,
   buildCodeBlock,
   buildListBlocks,
   buildRuleBlock,
@@ -17,7 +18,7 @@ import { resolveCustomBlockToken } from "./blocks/custom-block";
 export function parseMarkdownBlocks(markdown: string, streaming = false): PreparedBlock[] {
   const source = streaming ? remend(markdown) : markdown;
   const tokens = lexMarkdown(source);
-  return parseBlockTokens(tokens, { listDepth: 0, quoteDepth: 0 });
+  return mergeAssetsGroups(parseBlockTokens(tokens, { listDepth: 0, quoteDepth: 0 }));
 }
 
 export class StreamingMarkdownParser {
@@ -39,14 +40,31 @@ export class StreamingMarkdownParser {
 
     let blocks = [...this.stableBlocks];
     for (let index = this.stableTokenKeys.length; index < tokens.length; index++) {
-      blocks = parseBlockTokens(tokens.slice(index, index + 1), { listDepth: 0, quoteDepth: 0 }, blocks);
+      blocks = parseBlockTokens(
+        tokens.slice(index, index + 1),
+        { listDepth: 0, quoteDepth: 0 },
+        blocks,
+      );
       if (index < stableTokenCount) {
         this.stableTokenKeys.push(tokenKey(tokens[index]!));
         this.stableBlocks = [...blocks];
       }
     }
-    return blocks;
+    return mergeAssetsGroups(blocks);
   }
+}
+
+function mergeAssetsGroups(blocks: readonly PreparedBlock[]): PreparedBlock[] {
+  const grouped: PreparedBlock[] = [];
+  for (const block of blocks) {
+    const previous = grouped[grouped.length - 1];
+    if (block.kind === "assetsGroup" && previous?.kind === "assetsGroup") {
+      grouped[grouped.length - 1] = { ...previous, assets: [...previous.assets, ...block.assets] };
+    } else {
+      grouped.push(block);
+    }
+  }
+  return grouped;
 }
 
 function lexMarkdown(markdown: string): Token[] {
@@ -62,7 +80,6 @@ export function parseBlockTokens(
   ctx: ParseContext,
   blocks: PreparedBlock[] = [],
 ): PreparedBlock[] {
-
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index];
 
@@ -72,17 +89,19 @@ export function parseBlockTokens(
     if (customBlock) {
       appendBlockGroup(
         blocks,
-        [{
-          contentLeft: 0,
-          data: customBlock.data,
-          definition: customBlock.definition,
-          kind: "custom",
-          marginTop: 0,
-          markerClassName: null,
-          markerLeft: null,
-          markerText: null,
-          quoteRailLefts: [],
-        }],
+        [
+          {
+            contentLeft: 0,
+            data: customBlock.data,
+            definition: customBlock.definition,
+            kind: "custom",
+            marginTop: 0,
+            markerClassName: null,
+            markerLeft: null,
+            markerText: null,
+            quoteRailLefts: [],
+          },
+        ],
         customBlock.definition.marginTop ?? getCommonStyle("richBlockGap"),
       );
       continue;
@@ -96,8 +115,11 @@ export function parseBlockTokens(
 
       case "paragraph": {
         const imageBlock = buildImageBlock(token.tokens, ctx);
+        const fileBlock = buildFileBlock(token.tokens, ctx);
         if (imageBlock) {
           appendBlockGroup(blocks, [imageBlock], getCommonStyle("blockGap"));
+        } else if (fileBlock) {
+          appendBlockGroup(blocks, [fileBlock], getCommonStyle("blockGap"));
         } else {
           appendBlockGroup(
             blocks,
