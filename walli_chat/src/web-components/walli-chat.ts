@@ -388,6 +388,7 @@ export class WalliChatElement extends LitElement {
         this.requestStreamingFollow();
       }
     } finally {
+      const shouldRestoreBottomAfterAbort = signal.aborted && this.isAtBottom;
       signal.removeEventListener("abort", handleAbort);
       if (renderRaf !== null) {
         cancelAnimationFrame(renderRaf);
@@ -407,6 +408,9 @@ export class WalliChatElement extends LitElement {
       this.invalidateFrame({ keepMountedRows: true });
       await this.updateComplete;
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      if (shouldRestoreBottomAfterAbort) {
+        this.handleScrollToBottom();
+      }
     }
   }
 

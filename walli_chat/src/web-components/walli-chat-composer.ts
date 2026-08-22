@@ -239,6 +239,7 @@ export class WalliChatComposerElement extends LitElement {
 
   private async submit(): Promise<void> {
     if (this.disabled || this.running || !this.canSubmit) return;
+    this.menuOpen = false;
     const assets = this.attachments.flatMap((attachment) =>
       attachment.status === "ready" && attachment.assetUrl
         ? [
@@ -274,12 +275,18 @@ export class WalliChatComposerElement extends LitElement {
   }
 
   private handlePrimaryAction(event: MouseEvent): void {
+    this.menuOpen = false;
     if (this.running) {
       this.onCancel?.();
       return;
     }
     (event.currentTarget as HTMLButtonElement).focus({ preventScroll: true });
     void this.submit();
+  }
+
+  private handleVoice(): void {
+    this.menuOpen = false;
+    this.onVoice?.();
   }
 
   private openFilePicker(): void {
@@ -474,7 +481,7 @@ export class WalliChatComposerElement extends LitElement {
             type="button"
             aria-label="Start voice input"
             ?disabled=${this.disabled || this.running}
-            @click=${() => this.onVoice?.()}
+            @click=${this.handleVoice}
           >
             ${createIcon(Mic)}
           </button>

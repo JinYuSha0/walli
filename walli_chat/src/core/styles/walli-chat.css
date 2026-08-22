@@ -22,6 +22,20 @@
   padding: 48px 16px max(24px, env(safe-area-inset-bottom));
 }
 
+.composer-shell {
+  isolation: isolate;
+  position: relative;
+}
+
+.composer-shell::after {
+  background: linear-gradient(to bottom, transparent, var(--background) 72%);
+  content: "";
+  inset: calc(100% - 12px) -16px calc(-1 * max(24px, env(safe-area-inset-bottom)));
+  pointer-events: none;
+  position: absolute;
+  z-index: -1;
+}
+
 .walli-table-scrollbar {
   scrollbar-color: var(--table-scrollbar-thumb) var(--table-scrollbar-track);
   scrollbar-width: thin;
