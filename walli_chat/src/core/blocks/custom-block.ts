@@ -53,7 +53,7 @@ export function registerCustomBlock<T>(
 ): WalliChatCustomBlockRegistration {
   const name = definition.name.trim();
   if (name.length === 0) throw new Error("Custom block name cannot be empty");
-  if (definitions.has(name)) throw new Error(`Custom block \"${name}\" is already registered`);
+  // if (definitions.has(name)) throw new Error(`Custom block \"${name}\" is already registered`);
 
   const stored = definition as AnyCustomBlockDefinition;
   definitions.set(name, stored);

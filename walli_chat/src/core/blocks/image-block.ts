@@ -1,5 +1,10 @@
 import type { Token } from "marked";
-import { createBlockBase, parseMarkdownImageSrc } from "../helper";
+import {
+  createBlockBase,
+  parseImageDimensions,
+  parseMarkdownImageSrc,
+  type ImageDimensions,
+} from "../helper";
 import type { BlockLayout, ParseContext, PreparedImageBlock } from "../type";
 import PhotoSwipe from "photoswipe";
 import "photoswipe/style.css";
@@ -13,9 +18,6 @@ const ImageBlockStyle = computed(() => ({
   imageBlockHeight: 240,
   imageBlockMaxWidth: 320,
 }));
-
-const WIDTH_ATTRIBUTE_RE = /\bwidth=["']?(\d+(?:\.\d+)?)(?:px)?["']?/;
-const HEIGHT_ATTRIBUTE_RE = /\bheight=["']?(\d+(?:\.\d+)?)(?:px)?["']?/;
 
 export function getImageBlockStyle(key: keyof (typeof ImageBlockStyle)["value"]) {
   return ImageBlockStyle.value[key];
@@ -43,11 +45,6 @@ export function buildImageBlock(
   });
 }
 
-type ImageDimensions = {
-  height?: number;
-  width?: number;
-};
-
 function createImageBlock({
   alt,
   ctx,
@@ -67,29 +64,6 @@ function createImageBlock({
     targetHeight: dimensions?.height ?? null,
     targetWidth: dimensions?.width ?? null,
   };
-}
-
-function parseImageDimensions(token: Token | undefined): ImageDimensions | null {
-  if (token === undefined) return null;
-  if (token.type !== "text") return null;
-
-  const source = token.text.trim();
-  if (!source.startsWith("{") || !source.endsWith("}")) return null;
-
-  const attributes = source.slice(1, -1);
-  const width = readDimension(attributes, WIDTH_ATTRIBUTE_RE);
-  const height = readDimension(attributes, HEIGHT_ATTRIBUTE_RE);
-
-  if (width === undefined && height === undefined) return null;
-
-  return { height, width };
-}
-
-function readDimension(source: string, pattern: RegExp): number | undefined {
-  const value = Number(pattern.exec(source)?.[1]);
-  if (!Number.isFinite(value) || value <= 0) return undefined;
-
-  return value;
 }
 
 type ImageBlockLayout = Extract<BlockLayout, { kind: "image" }>;

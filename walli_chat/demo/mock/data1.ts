@@ -70,7 +70,8 @@ const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
     "| inline | marks, links, code spans | width drift |",
     "| blocks | quote, list, table, hr | vertical overlap |",
     "| scripts | English, 日本語, العربية | line breaking |",
-    "| media | [docs link](https://example.com/docs) and ![chart](https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Fronalpstock_big.jpg/120px-Fronalpstock_big.jpg) | atomic sizing |",
+    "| media | [docs link](https://example.com/docs) and ![GitHub](https://github.githubassets.com/favicons/favicon.svg) | atomic sizing |",
+    "| fixed media | ![landscape](https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Fronalpstock_big.jpg/120px-Fronalpstock_big.jpg){width=120 height=80} | proportional sizing |",
     "",
     "```ts",
     "type NestedCase = {",
@@ -83,6 +84,7 @@ const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
     "```",
     "",
     "Final paragraph after code should return to normal body rhythm.",
+    "Emoji image wrapping starts with text ![grinning](https://github.githubassets.com/images/icons/emoji/unicode/1f600.png?v8) then more words ![rocket](https://github.githubassets.com/images/icons/emoji/unicode/1f680.png?v8) mixed through the sentence ![sparkles](https://github.githubassets.com/images/icons/emoji/unicode/2728.png?v8) followed by another section of text ![party](https://github.githubassets.com/images/icons/emoji/unicode/1f389.png?v8) and enough trailing words to verify that inline images and ordinary text wrap together naturally across multiple lines ![heart](https://github.githubassets.com/images/icons/emoji/unicode/2764.png?v8).",
   ),
   message(
     "user",

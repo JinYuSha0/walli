@@ -258,6 +258,8 @@ function materializeTableCellLines(
         alt: cell.imageAlts[fragment.itemIndex] ?? null,
         className: cell.classNames[fragment.itemIndex]!,
         href: cell.hrefs[fragment.itemIndex] ?? null,
+        imageHeight: cell.imageHeights[fragment.itemIndex] ?? null,
+        imageWidth: cell.imageWidths[fragment.itemIndex] ?? null,
         kind: cell.imageSrcs[fragment.itemIndex] === null ? "text" : "image",
         leadingGap: fragment.gapBefore,
         src: cell.imageSrcs[fragment.itemIndex] ?? null,
@@ -308,7 +310,9 @@ function buildTableCell(
     ),
     hrefs: pieces.map((piece) => piece.href ?? null),
     imageAlts: pieces.map((piece) => piece.imageAlt ?? null),
+    imageHeights: pieces.map((piece) => piece.imageHeight ?? null),
     imageSrcs: pieces.map((piece) => piece.imageSrc ?? null),
+    imageWidths: pieces.map((piece) => piece.imageWidth ?? null),
   };
 }
 
@@ -438,7 +442,7 @@ function renderTableFragment(fragment: InlineFragmentLayout): TemplateResult {
       alt=${fragment.alt ?? ""}
       loading="lazy"
       decoding="async"
-      style=${gapStyle}
+      style=${`${gapStyle}width:${fragment.imageWidth}px;height:${fragment.imageHeight}px;`}
     />`;
   }
 

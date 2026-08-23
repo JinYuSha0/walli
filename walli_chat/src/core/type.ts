@@ -22,7 +22,9 @@ export type PreparedInlineBlock = PreparedBlockBase & {
   flow: PreparedRichInline;
   hrefs: Array<string | null>;
   imageAlts: Array<string | null>;
+  imageHeights: Array<number | null>;
   imageSrcs: Array<string | null>;
+  imageWidths: Array<number | null>;
   lineHeight: number;
 };
 
@@ -77,7 +79,9 @@ export type PreparedTableCell = {
   flow: PreparedRichInline;
   hrefs: Array<string | null>;
   imageAlts: Array<string | null>;
+  imageHeights: Array<number | null>;
   imageSrcs: Array<string | null>;
+  imageWidths: Array<number | null>;
 };
 
 export type PreparedBlock =
@@ -107,7 +111,9 @@ export type InlinePiece = {
   extraWidth?: number;
   href?: string;
   imageAlt?: string;
+  imageHeight?: number;
   imageSrc?: string;
+  imageWidth?: number;
 };
 
 export type MarkState = {
@@ -150,6 +156,8 @@ export type InlineFragmentLayout = {
   className: string;
   href: string | null;
   kind: "image" | "text";
+  imageHeight: number | null;
+  imageWidth: number | null;
   leadingGap: number;
   src: string | null;
   text: string;

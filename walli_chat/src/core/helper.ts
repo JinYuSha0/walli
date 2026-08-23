@@ -2,6 +2,14 @@ import type { Token } from "marked";
 import type { InlineVariant, ParseContext, PreparedBlock, PreparedBlockBase } from "./type";
 import { getCommonStyle } from "./styles";
 
+export type ImageDimensions = {
+  height?: number;
+  width?: number;
+};
+
+const WIDTH_ATTRIBUTE_RE = /\bwidth=["']?(\d+(?:\.\d+)?)(?:px)?["']?/;
+const HEIGHT_ATTRIBUTE_RE = /\bheight=["']?(\d+(?:\.\d+)?)(?:px)?["']?/;
+
 export function parseMarkdownHref(href: string | null | undefined): string | undefined {
   if (href === undefined || href === null) return;
   try {
@@ -22,6 +30,23 @@ export function parseMarkdownImageSrc(src: string | null | undefined): string | 
   } catch {
     return;
   }
+}
+
+export function parseImageDimensions(token: Token | undefined): ImageDimensions | null {
+  if (token?.type !== "text") return null;
+
+  const source = token.text.trim();
+  if (!source.startsWith("{") || !source.endsWith("}")) return null;
+
+  const attributes = source.slice(1, -1);
+  const width = readDimension(attributes, WIDTH_ATTRIBUTE_RE);
+  const height = readDimension(attributes, HEIGHT_ATTRIBUTE_RE);
+  return width === undefined && height === undefined ? null : { height, width };
+}
+
+function readDimension(source: string, pattern: RegExp): number | undefined {
+  const value = Number(pattern.exec(source)?.[1]);
+  return Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
 export function fallbackTextForToken(token: Token): string {

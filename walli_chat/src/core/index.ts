@@ -417,6 +417,8 @@ function materializeBlockLayout(
             alt: block.imageAlts[fragment.itemIndex] ?? null,
             className: block.classNames[fragment.itemIndex]!,
             href: block.hrefs[fragment.itemIndex] ?? null,
+            imageHeight: block.imageHeights[fragment.itemIndex] ?? null,
+            imageWidth: block.imageWidths[fragment.itemIndex] ?? null,
             kind: block.imageSrcs[fragment.itemIndex] === null ? "text" : "image",
             leadingGap: fragment.gapBefore,
             src: block.imageSrcs[fragment.itemIndex] ?? null,

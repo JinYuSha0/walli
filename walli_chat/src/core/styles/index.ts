@@ -3,6 +3,7 @@ import type { InlineVariant, MarkState, InlinePiece } from "../type";
 import { getFontSize, getResponsiveValue, getSpace } from "./config";
 import { parseMarkdownImageSrc } from "../helper";
 import { computed } from "@preact/signals-core";
+import { measureNaturalWidth, prepareWithSegments } from "@chenglou/pretext";
 
 const fontFamilyMap = {
   "font-sans":
@@ -104,20 +105,33 @@ function code(text: string): InlinePiece {
   };
 }
 
-function image(src: string | null | undefined, alt: string): InlinePiece {
+function image(
+  src: string | null | undefined,
+  alt: string,
+  lineHeight: number,
+  dimensions: { height: number; width: number } | null,
+): InlinePiece {
   const safeSrc = parseMarkdownImageSrc(src);
   const label = alt.length > 0 ? alt : "image";
+  const width = dimensions ? lineHeight * (dimensions.width / dimensions.height) : lineHeight;
+  const font = getFont("body", null, "text-xs", "font-sans", 700);
+  const placeholder = "\uFFFC";
+  const placeholderWidth = safeSrc
+    ? measureNaturalWidth(prepareWithSegments(placeholder, font))
+    : 0;
 
   return {
     breakMode: "never",
     className: !safeSrc
       ? "inline-flex min-h-[18px] translate-y-px items-center rounded-full bg-accent px-[7px] font-sans text-xs font-bold leading-none text-accent-foreground align-baseline"
-      : "inline-block h-[18px] w-[48px] translate-y-px rounded-[6px] bg-muted object-cover align-baseline ring-1 ring-border",
+      : "inline-block bg-muted object-cover align-baseline ring-1 ring-inset ring-border",
     imageAlt: label,
+    imageHeight: safeSrc ? lineHeight : undefined,
     imageSrc: safeSrc,
-    text: "image",
-    font: getFont("body", null, "text-xs", "font-sans", 700),
-    extraWidth: 14,
+    imageWidth: safeSrc ? width : undefined,
+    text: safeSrc ? placeholder : "image",
+    font,
+    extraWidth: safeSrc ? width - placeholderWidth : 14,
   };
 }
 

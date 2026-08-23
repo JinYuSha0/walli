@@ -10,7 +10,12 @@ import type {
   PreparedInlineBlock,
 } from "../type";
 import { inlinePiece } from "../styles";
-import { createBlockBase, fallbackTextForToken, parseMarkdownHref } from "../helper";
+import {
+  createBlockBase,
+  fallbackTextForToken,
+  parseImageDimensions,
+  parseMarkdownHref,
+} from "../helper";
 import { getLineHeight, getSpace } from "../styles/config";
 import { prepareRichInline } from "@chenglou/pretext/rich-inline";
 import { computed } from "@preact/signals-core";
@@ -105,7 +110,13 @@ export function collectInlinePieceLines(
         }
 
         case "image": {
-          pushPiece(createImagePiece(token.href, token.text));
+          const parsedDimensions = parseImageDimensions(tokenList[index + 1]);
+          const dimensions =
+            parsedDimensions?.width !== undefined && parsedDimensions.height !== undefined
+              ? { height: parsedDimensions.height, width: parsedDimensions.width }
+              : null;
+          pushPiece(createImagePiece(token.href, token.text, variant, dimensions));
+          if (parsedDimensions !== null) index++;
           continue;
         }
 
@@ -157,7 +168,9 @@ function canMergeInlinePieces(a: InlinePiece, b: InlinePiece): boolean {
     a.font === b.font &&
     a.href === b.href &&
     a.imageAlt === b.imageAlt &&
-    a.imageSrc === b.imageSrc
+    a.imageHeight === b.imageHeight &&
+    a.imageSrc === b.imageSrc &&
+    a.imageWidth === b.imageWidth
   );
 }
 
@@ -177,8 +190,13 @@ function createCodePiece(text: string): InlinePiece | null {
   return inlinePiece.code(text);
 }
 
-function createImagePiece(src: string | null | undefined, alt: string): InlinePiece {
-  return inlinePiece.image(src, alt);
+function createImagePiece(
+  src: string | null | undefined,
+  alt: string,
+  variant: InlineVariant,
+  dimensions: { height: number; width: number } | null,
+): InlinePiece {
+  return inlinePiece.image(src, alt, lineHeightForVariant(variant), dimensions);
 }
 
 export function buildPreparedInlineBlocks(
@@ -220,7 +238,9 @@ function buildPreparedInlineBlock(
     ),
     hrefs: pieces.map((piece) => piece.href ?? null),
     imageAlts: pieces.map((piece) => piece.imageAlt ?? null),
+    imageHeights: pieces.map((piece) => piece.imageHeight ?? null),
     imageSrcs: pieces.map((piece) => piece.imageSrc ?? null),
+    imageWidths: pieces.map((piece) => piece.imageWidth ?? null),
     kind: "inline",
     lineHeight: lineHeightForVariant(variant),
   };
@@ -271,7 +291,7 @@ function renderInlineFragment(fragment: InlineFragmentLayout): TemplateResult {
       alt=${fragment.alt ?? ""}
       loading="lazy"
       decoding="async"
-      style=${gapStyle}
+      style=${`${gapStyle}width:${fragment.imageWidth}px;height:${fragment.imageHeight}px;`}
     />`;
   }
 
