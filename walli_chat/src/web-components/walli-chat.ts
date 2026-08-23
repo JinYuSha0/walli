@@ -31,7 +31,7 @@ import type {
 
 import type { WalliMessageElement } from "./walli-message";
 
-export { registerCustomBlock } from "../core/blocks/custom-block";
+export { registerBlock } from "../core/blocks";
 
 type Size = {
   width: number;

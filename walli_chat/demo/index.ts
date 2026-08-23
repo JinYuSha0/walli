@@ -1,6 +1,6 @@
 import "walli_chat/theme.css";
 import { FileSpreadsheet, ImagePlus, Search } from "lucide";
-import { registerCustomBlock } from "walli_chat";
+import { registerBlock } from "walli_chat";
 import type {
   WalliChatComposerElement,
   WalliChatElement,
@@ -14,7 +14,7 @@ import { TimeScheduler } from "../src/core/helper";
 
 const timeScheduler = new TimeScheduler();
 
-registerCustomBlock(noticeBlockDefinition);
+registerBlock(noticeBlockDefinition);
 
 const chat = document.querySelector<WalliChatElement>("walli-chat");
 const composer = document.querySelector<WalliChatComposerElement>("walli-chat-composer");

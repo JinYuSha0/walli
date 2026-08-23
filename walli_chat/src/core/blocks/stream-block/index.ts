@@ -7,7 +7,8 @@ import {
 } from "@chenglou/pretext";
 import { getFont } from "../../styles";
 import { getLineHeight, getSpace } from "../../styles/config";
-import { registerCustomBlock, type WalliChatCustomBlockDefinition } from "../custom-block";
+import { registerBlock } from "..";
+import type { WalliChatTokenizedBlockDefinition } from "../custom-block";
 import walliChatUnoCss from "virtual:walli-chat-uno-styles";
 
 type StartBlockData = Record<string, never>;
@@ -78,7 +79,7 @@ const startBlockDefinition = {
       ></span>
     </div>`;
   },
-} satisfies WalliChatCustomBlockDefinition<StartBlockData>;
+} satisfies WalliChatTokenizedBlockDefinition<StartBlockData>;
 
 const toolCallBlockDefinition = {
   name: "toolcall-block",
@@ -124,13 +125,13 @@ const toolCallBlockDefinition = {
       >
     </div>`;
   },
-} satisfies WalliChatCustomBlockDefinition<ToolCallBlockData>;
+} satisfies WalliChatTokenizedBlockDefinition<ToolCallBlockData>;
 
 let registered = false;
 
 export function registerStreamBlocks(): void {
   if (registered) return;
-  registerCustomBlock(startBlockDefinition);
-  registerCustomBlock(toolCallBlockDefinition);
+  registerBlock(startBlockDefinition);
+  registerBlock(toolCallBlockDefinition);
   registered = true;
 }

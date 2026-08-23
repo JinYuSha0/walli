@@ -10,11 +10,16 @@ import {
   type ReactNode,
 } from "react";
 import type { WalliChatComposerElement, WalliChatElement } from "../web-components";
+import type { WalliChatTokenizedBlockDefinition } from "../core/blocks/custom-block";
 import {
-  type WalliChatCustomBlockDefinition,
-  type WalliChatCustomBlockRegistration,
-  registerCustomBlock,
-} from "../core/blocks/custom-block";
+  builtInBlocks,
+  registerBlock,
+  type WalliChatBlockDefinition,
+  type WalliChatBlockName,
+  type WalliChatBlockRegistration,
+  type WalliChatBlockRenderContext,
+  type WalliChatBuiltInBlockName,
+} from "../core/blocks";
 import type {
   WalliChatMessage,
   WalliChatComposerActionCallback,
@@ -149,9 +154,12 @@ export type WalliChatRef = {
   ) => WalliChatStreamingHandle;
   scrollTo: (options: WalliChatScrollToOptions) => void;
   scrollToIndex: (options: WalliChatScrollToIndexOptions) => void;
-  registerCustomBlock: <T = unknown>(
-    definition: WalliChatCustomBlockDefinition<T>,
-  ) => WalliChatCustomBlockRegistration;
+  registerBlock: {
+    <Name extends WalliChatBlockName>(
+      definition: WalliChatBlockDefinition<Name>,
+    ): WalliChatBlockRegistration;
+    <T>(definition: WalliChatTokenizedBlockDefinition<T>): WalliChatBlockRegistration;
+  };
 };
 
 export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function WalliChat(
@@ -219,8 +227,10 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
       scrollToIndex(options) {
         elementRef.current?.scrollToIndex(options);
       },
-      registerCustomBlock(definition) {
-        return registerCustomBlock(definition);
+      registerBlock(
+        definition: WalliChatBlockDefinition | WalliChatTokenizedBlockDefinition,
+      ) {
+        return registerBlock(definition as WalliChatBlockDefinition);
       },
     }),
     [],
@@ -238,6 +248,12 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
 });
 
 export type {
+  WalliChatBlockDefinition,
+  WalliChatBlockName,
+  WalliChatBlockRegistration,
+  WalliChatBlockRenderContext,
+  WalliChatBuiltInBlockName,
+  WalliChatTokenizedBlockDefinition,
   WalliChatComposerActionCallback,
   WalliChatComposerAsset,
   WalliChatComposerInsertedAssetsHandle,
@@ -259,3 +275,5 @@ export type {
   WalliChatStreamingOptions,
   WalliChatTextStream,
 };
+
+export { builtInBlocks, registerBlock };
