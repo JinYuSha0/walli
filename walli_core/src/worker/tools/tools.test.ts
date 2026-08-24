@@ -2924,7 +2924,7 @@ describe("telegram webhook", () => {
     expect(sendVoice).not.toHaveBeenCalled();
   });
 
-  it("describes image files before one LLM response and sends text", async () => {
+  it("passes a Telegram image and its caption together to the LLM", async () => {
     const calls: string[] = [];
     const sendMessage = vi.fn();
     const sendVoice = vi.fn();
@@ -2935,25 +2935,21 @@ describe("telegram webhook", () => {
       calls.push("file");
       return "https://chat.test/api/telegram/file/photos/file_1.jpg?fileId=photo-file&expires=1&signature=test";
     });
-    const describeImage = vi.fn(async (context: ImageToTextContext) => {
-      calls.push("describe");
-      expect(context.file).toEqual([
-        "https://chat.test/api/telegram/file/photos/file_1.jpg?fileId=photo-file&expires=1&signature=test",
-      ]);
-      expect(context.prompt).toBe(
-        "Describe this Telegram image and extract any visible text. Additional message text/caption: what is this",
-      );
-      expect(context).not.toHaveProperty("caption");
-      expect(context).not.toHaveProperty("width");
-      return "A receipt image";
-    });
     const markMessageRead = vi.fn();
     const runLlm = vi.fn(async (_message, messages) => {
       calls.push("llm");
       const serializedMessages = JSON.stringify(messages);
+      const content = messages[0]?.content;
+      expect(typeof content).toBe("string");
+      if (typeof content !== "string") throw new Error("Expected text message content");
+      expect(content.indexOf("![image]")).toBeLessThan(
+        content.indexOf("Message caption/additional info"),
+      );
       expect(serializedMessages).toContain("Message caption/additional info: what is this");
-      expect(serializedMessages).toContain("Image recognition result");
-      expect(serializedMessages).toContain("A receipt image");
+      expect(serializedMessages).toContain("![image]");
+      expect(serializedMessages).toContain(
+        "https://chat.test/api/telegram/file/photos/file_1.jpg?fileId=photo-file&expires=1&signature=test",
+      );
       expect(serializedMessages).not.toContain("api.telegram.org/file/bot");
       return {
         type: "text" as const,
@@ -2985,27 +2981,26 @@ describe("telegram webhook", () => {
         sendChatAction,
         getFileUrl,
         markMessageRead,
-        describeImage,
         runLlm,
       },
     );
 
-    expect(calls).toEqual(["action", "file", "describe", "llm"]);
+    expect(calls).toEqual(["action", "file", "llm"]);
     expect(sendMessage).toHaveBeenCalledWith("123", "image reply");
     expect(sendVoice).not.toHaveBeenCalled();
   });
 
-  it("passes normalized image text content into the Telegram LLM context", async () => {
+  it("passes a captionless Telegram image into the LLM context", async () => {
     const sendMessage = vi.fn();
     const sendVoice = vi.fn();
     const sendChatAction = vi.fn();
     const getFileUrl = vi.fn(async () => "https://chat.test/file/photo.jpg");
-    const describeImage = vi.fn(async () => "### 图片内容说明\n- 可见文字");
     const markMessageRead = vi.fn();
     const runLlm = vi.fn(async (_message, messages) => {
       const serializedMessages = JSON.stringify(messages);
-      expect(serializedMessages).toContain("### 图片内容说明");
-      expect(serializedMessages).toContain("- 可见文字");
+      expect(serializedMessages).toContain(
+        "![image](<https://chat.test/file/photo.jpg>)",
+      );
 
       return {
         type: "text" as const,
@@ -3036,7 +3031,6 @@ describe("telegram webhook", () => {
         sendChatAction,
         getFileUrl,
         markMessageRead,
-        describeImage,
         runLlm,
       },
     );
@@ -3045,22 +3039,17 @@ describe("telegram webhook", () => {
     expect(sendVoice).not.toHaveBeenCalled();
   });
 
-  it("describes only the best Telegram photo size with shared additional text", async () => {
+  it("passes only the best Telegram photo size with shared additional text", async () => {
     const sendMessage = vi.fn();
     const sendVoice = vi.fn();
     const sendChatAction = vi.fn();
     const getFileUrl = vi.fn(async (fileId: string) => `https://chat.test/file/${fileId}.jpg`);
-    const describeImage = vi.fn(
-      async (context: ImageToTextContext) => `description for ${context.file}`,
-    );
     const markMessageRead = vi.fn();
     const runLlm = vi.fn(async (_message, messages) => {
       const serializedMessages = JSON.stringify(messages);
       expect(serializedMessages).toContain("Message caption/additional info: compare these");
-      expect(serializedMessages).toContain("The user sent an image message.");
-      expect(serializedMessages).toContain("Image recognition result");
       expect(serializedMessages).toContain(
-        "description for https://chat.test/file/photo-large.jpg",
+        "![image](<https://chat.test/file/photo-large.jpg>)",
       );
 
       return {
@@ -3100,19 +3089,12 @@ describe("telegram webhook", () => {
         sendChatAction,
         getFileUrl,
         markMessageRead,
-        describeImage,
         runLlm,
       },
     );
 
     expect(getFileUrl).toHaveBeenCalledOnce();
     expect(getFileUrl).toHaveBeenCalledWith("photo-large");
-    expect(describeImage).toHaveBeenCalledOnce();
-    expect(describeImage).toHaveBeenCalledWith({
-      file: ["https://chat.test/file/photo-large.jpg"],
-      prompt:
-        "Describe this Telegram image and extract any visible text. Additional message text/caption: compare these",
-    });
     expect(sendMessage).toHaveBeenCalledWith("123", "image reply");
     expect(sendVoice).not.toHaveBeenCalled();
   });

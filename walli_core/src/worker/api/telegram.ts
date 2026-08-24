@@ -39,10 +39,8 @@ import {
 import { parseResponse } from "./helper/validation";
 import {
   BUILT_IN_MEDIA_TOOL_NAMES,
-  describeImage,
   synthesizeVoice,
   transcribeVoice,
-  type ImageToTextContext,
   type VoiceOutput,
   type VoiceToTextContext,
 } from "@worker/tools/tool-media";
@@ -134,15 +132,8 @@ type TelegramWebhookDeps = {
   getFileUrl: (fileId: string) => Promise<string>;
   markMessageRead: (message: TelegramMessage) => Promise<void>;
   transcribeVoice?: (context: VoiceToTextContext) => Promise<unknown>;
-  describeImage?: (context: ImageToTextContext) => Promise<string>;
   synthesizeVoice?: (text: string) => Promise<TelegramVoiceOutput>;
   runLlm: (message: TelegramMessage, messages: ModelMessage[]) => Promise<TelegramReply>;
-};
-
-const getImagePrompt = (text: string) => {
-  const basePrompt = "Describe this Telegram image and extract any visible text.";
-
-  return text ? `${basePrompt} Additional message text/caption: ${text}` : basePrompt;
 };
 
 const inferTelegramFileContentType = (filePath: string) => {
@@ -282,7 +273,6 @@ const createTelegramDeps = async (
       });
     },
     transcribeVoice,
-    describeImage,
     synthesizeVoice,
     runLlm: async (message, messages): Promise<TelegramReply> => {
       const { userId, chatId, userName } = getTelegramMessageIdentity(message);
@@ -320,7 +310,9 @@ const createTelegramDeps = async (
             client: "telegram",
             sessionId: "telegram",
           },
-          excludeToolNames: [...BUILT_IN_MEDIA_TOOL_NAMES],
+          excludeToolNames: BUILT_IN_MEDIA_TOOL_NAMES.filter(
+            (toolName) => toolName !== "image_to_text",
+          ),
           output: Output.object({
             schema: telegramReplySchema,
             name: "telegram_reply",
@@ -389,6 +381,11 @@ export const handleTelegramWebhookUpdate = async (update: unknown, deps: Telegra
   try {
     const content: string[] = [];
 
+    if (parsedContent.type === "image") {
+      const imageFile = await deps.getFileUrl(parsedContent.photo.file_id);
+      content.push(`![image](<${imageFile}>)`);
+    }
+
     if (parsedContent.text) {
       content.push(
         parsedContent.textSource === "text"
@@ -413,24 +410,6 @@ export const handleTelegramWebhookUpdate = async (update: unknown, deps: Telegra
           "Preferred reply type: voice, unless the user explicitly asks for text.",
           `Voice transcription result: ${JSON.stringify(transcription)}`,
         ].join("\n"),
-      );
-    }
-
-    if (parsedContent.type === "image") {
-      const imageFile = await deps.getFileUrl(parsedContent.photo.file_id);
-      const imageDescription = await deps.describeImage?.({
-        file: [imageFile],
-        prompt: getImagePrompt(parsedContent.text),
-      });
-
-      if (imageDescription === undefined) {
-        throw new Error("Image recognition is not available");
-      }
-
-      content.push(
-        ["The user sent an image message.", `Image recognition result: ${imageDescription}`].join(
-          "\n",
-        ),
       );
     }
 
