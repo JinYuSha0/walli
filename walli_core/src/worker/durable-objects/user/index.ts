@@ -15,6 +15,7 @@ import userDoMigrations from "./migrations/migrations";
 import { memory, messages, messagesFts, scheduledTasks, sessions, userDoSchema } from "./schema";
 import { parseUserDoNotificationChannel } from "./types";
 import { sendNotificationText } from "@worker/lib/notification";
+import { runWithChatAsyncContext } from "../../lib/async-context";
 export { createUserDoName, parseUserDoNotificationChannel } from "./types";
 export type { UserDoClientPlatform, UserDoName, UserNotificationChannel } from "./types";
 
@@ -878,24 +879,32 @@ export class UserDO extends DurableObject<Env> {
 
     if (!notificationChannel || !taskObj.sessionId) return;
 
-    await runChatCompletion({
-      env: this.env,
-      ctx: this.ctx,
-      messages: createTaskMessages(task),
-      userInfo: createChatUserInfo({
-        userId: task.userId,
-        clientPlatform: notificationChannel.type,
-        notificationChannel,
-      }),
-      session: {
-        store: this,
-        client: notificationChannel.type,
-        sessionId: taskObj.sessionId,
-        summary: task.description,
-      },
-      excludeToolNames: ["scheduled_task"],
-      extraTools: createNotificationTools(this.env, notificationChannel),
+    const userInfo = createChatUserInfo({
+      userId: task.userId,
+      clientPlatform: notificationChannel.type,
+      notificationChannel,
     });
+    await runWithChatAsyncContext(
+      {
+        env: this.env,
+        origin: "https://internal.local",
+        ctx: this.ctx,
+        userInfo,
+      },
+      () =>
+        runChatCompletion({
+          messages: createTaskMessages(task),
+          userInfo,
+          session: {
+            store: this,
+            client: notificationChannel.type,
+            sessionId: taskObj.sessionId ?? undefined,
+            summary: task.description,
+          },
+          excludeToolNames: ["scheduled_task"],
+          extraTools: createNotificationTools(),
+        }),
+    );
   }
 
   private isSystemConversationCleanupTask(task: Pick<ScheduledTaskRow, "type" | "systemCreated">) {

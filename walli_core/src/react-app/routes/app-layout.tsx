@@ -85,6 +85,7 @@ export function AppLayout() {
     : location.pathname.startsWith("/clients/")
       ? t("routeKeys")
       : routeTitles[location.pathname] ?? t("routeConsole");
+  const isChatTest = location.pathname === "/chat-test";
 
   return (
     <SidebarProvider
@@ -98,8 +99,14 @@ export function AppLayout() {
     >
       <AppSidebar user={user} onSignOut={signOut} variant="inset" />
       <SidebarInset className="min-h-0 overflow-hidden">
-        <SiteHeader title={title} />
-        <div className={isForbidden ? "min-h-0 flex-1 overflow-hidden" : "min-h-0 flex-1 overflow-auto"}>
+        {!isChatTest && <SiteHeader title={title} />}
+        <div
+          className={
+            isForbidden || isChatTest
+              ? "min-h-0 flex-1 overflow-hidden"
+              : "min-h-0 flex-1 overflow-auto"
+          }
+        >
           {meQuery.isPending ? (
             <div className="grid h-full min-h-[calc(100svh-var(--header-height))] grid-rows-[auto_auto_1fr] gap-5 p-4 lg:p-6">
               <div className="grid gap-3">

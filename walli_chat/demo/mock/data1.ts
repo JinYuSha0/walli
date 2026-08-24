@@ -71,7 +71,7 @@ const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
     "| blocks | quote, list, table, hr | vertical overlap |",
     "| scripts | English, 日本語, العربية | line breaking |",
     "| media | [docs link](https://example.com/docs) and ![GitHub](https://github.githubassets.com/favicons/favicon.svg) | atomic sizing |",
-    "| fixed media | ![landscape](https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Fronalpstock_big.jpg/120px-Fronalpstock_big.jpg){width=120 height=80} | proportional sizing |",
+    "| fixed media | ![landscape](https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Fronalpstock_big.jpg/120px-Fronalpstock_big.jpg){width=120 height=54} | proportional sizing |",
     "",
     "```ts",
     "type NestedCase = {",
@@ -352,7 +352,6 @@ const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
     ":::",
   ),
 ];
-
 
 export function getMessages() {
   const message: MarkdownChatSeed[] = [];

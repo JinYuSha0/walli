@@ -28,6 +28,7 @@
   "chatTestPanelDescription": "基于 @ai-sdk/react 的最小对话页面。",
   "chatTestEmpty": "输入一句话开始测试",
   "chatTestInputPlaceholder": "输入测试消息",
+  "chatTestUploadImages": "上传图片",
   "chatTestSend": "发送",
   "chatTestStop": "停止",
   "chatTestClear": "清空",

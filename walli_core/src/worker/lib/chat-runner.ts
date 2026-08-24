@@ -3,11 +3,11 @@ import type { ModelMessage } from "ai";
 import type { DurableObject } from "cloudflare:workers";
 import type { ClientPlatform } from "@shared/client";
 import { BUILT_IN_TOOLS, type Settings, type ToolConfig } from "@shared/const";
-import { toolsRoute } from "../tools";
 import { getClientUsageLimit } from "../api/clients";
 import { getSettings } from "../api/settings";
 import { createGatewayFromEnv, normalizeGatewayModelId, unified } from "./llm";
 import { buildChatTools } from "./tool-runner";
+import { extendChatAsyncContext, getChatAsyncContext } from "./async-context";
 import {
   createMemoryContextInstructions,
   EMPTY_MEMORY_CONTEXT,
@@ -18,12 +18,17 @@ import {
   type UserNotificationChannel,
 } from "../durable-objects/user/types";
 import type { UserDO } from "../durable-objects/user";
-import { limitModelMessagesByTokens, sanitizeModelMessageHistory } from "../utils/llm";
 import {
-  createOutputTokenLimitOptions,
-  runBackgroundTask,
-  type BackgroundExecutionContext,
-} from "../utils/common";
+  createImageAttachmentInstructions,
+  createHistoricalAssetReferenceResolver,
+  hasHistoricalImageMessages,
+  hasImageMessages,
+  limitModelMessagesByTokens,
+  modelSupportsCapability,
+  prepareModelMessagesWithAssets,
+  sanitizeModelMessageHistory,
+} from "../utils/llm";
+import { createOutputTokenLimitOptions, runBackgroundTask } from "../utils/common";
 export { createOutputTokenLimitOptions } from "../utils/common";
 
 export type ChatUserInfo = {
@@ -46,11 +51,8 @@ export type CreateChatUserInfoInput = {
 };
 
 export type RunChatOptions = {
-  env: Env;
-  ctx?: BackgroundExecutionContext;
   messages: ModelMessage[];
   userInfo?: ChatUserInfo;
-  origin?: string;
   excludeToolNames?: string[];
   settings?: Settings;
   extraTools?: ToolSet;
@@ -199,7 +201,8 @@ const minDefinedTokenLimit = (...limits: Array<number | undefined>) => {
   return definedLimits.length > 0 ? Math.min(...definedLimits) : undefined;
 };
 
-const createBuiltInTools = (env: Env, origin: string, settings: Settings): ToolConfig[] => {
+const createBuiltInTools = (settings: Settings): ToolConfig[] => {
+  const { env, origin } = getChatAsyncContext();
   const configuredByName = new Map(settings.builtInTools.map((tool) => [tool.name, tool]));
 
   return BUILT_IN_TOOLS.map((tool) => {
@@ -230,58 +233,23 @@ const createBuiltInTools = (env: Env, origin: string, settings: Settings): ToolC
   });
 };
 
-const createInternalToolFetch =
-  (env: Env, origin: string): typeof fetch =>
-  async (input, init) => {
-    const url = new URL(input instanceof Request ? input.url : input.toString());
-
-    if (url.origin === origin && url.pathname.startsWith("/api/tools/")) {
-      return toolsRoute.fetch(
-        new Request(url, {
-          method: init?.method,
-          headers: init?.headers,
-          body: init?.body,
-        }),
-        env,
-      );
-    }
-
-    return fetch(input, init);
-  };
-
-const createToolConfigs = (
-  settings: Settings,
-  env: Env,
-  origin: string,
-  excludeToolNames: string[],
-) => {
+const createToolConfigs = (settings: Settings, excludeToolNames: string[]) => {
   const excludedToolNames = new Set(excludeToolNames);
 
-  return [...createBuiltInTools(env, origin, settings), ...settings.tools].filter(
+  return [...createBuiltInTools(settings), ...settings.tools].filter(
     (tool) => !excludedToolNames.has(tool.name),
   );
 };
 
-export const createChatRunnerTools = (
-  settings: Settings,
-  env: Env,
-  origin: string,
-  excludeToolNames: string[] = [],
-  chatSessionId?: string,
-) =>
-  buildChatTools(createToolConfigs(settings, env, origin, excludeToolNames), {
-    AI: env.AI,
-    fetch: createInternalToolFetch(env, origin),
-    chatSessionId,
-  });
+export const createChatRunnerTools = (settings: Settings, excludeToolNames: string[] = []) => {
+  return buildChatTools(createToolConfigs(settings, excludeToolNames));
+};
 
 export const createChatRunnerInstructions = createChatInstructions;
 
 export const prepareChatCompletion = async ({
-  env,
   messages,
   userInfo,
-  origin = "https://internal.local",
   excludeToolNames = [],
   settings,
   extraTools,
@@ -289,8 +257,8 @@ export const prepareChatCompletion = async ({
   toolsEnabled = true,
   maxOutputTokens,
   session,
-  ctx,
 }: Omit<RunChatOptions, "output">): Promise<PreparedChatCompletion> => {
+  const { env, origin, ctx } = getChatAsyncContext();
   const resolvedSettings = settings ?? (await getSettings(env.APP_KV));
   const usageLimitSettings = session
     ? await getClientUsageLimit(env.APP_KV, session.client)
@@ -385,10 +353,37 @@ export const prepareChatCompletion = async ({
   );
   const modelId = normalizeGatewayModelId(resolvedSettings.primaryModel);
   const gateway = createGatewayFromEnv(env);
+  const primaryModelSupportsImages = modelSupportsCapability(
+    resolvedSettings.models,
+    resolvedSettings.primaryModel,
+    "image-recognition",
+  );
+  const hasHistoricalImages = hasHistoricalImageMessages(limitedMessageResult.messages);
+  const hasCurrentMessageImages = hasImageMessages(messages);
+  const toolExclusions = primaryModelSupportsImages
+    ? [...new Set([...excludeToolNames, "image_to_text"])]
+    : excludeToolNames;
 
   const tools = toolsEnabled
-    ? createChatRunnerTools(resolvedSettings, env, origin, excludeToolNames, chatSession?.id)
+    ? extendChatAsyncContext({ sessionId: chatSession?.id, userInfo }, () => ({
+        ...createChatRunnerTools(resolvedSettings, toolExclusions),
+        ...extraTools,
+      }))
     : undefined;
+  const modelMessages = primaryModelSupportsImages
+    ? await prepareModelMessagesWithAssets(limitedMessageResult.messages, {
+        bucket: env.R2,
+        images: env.IMAGES,
+        origin,
+        userId: userInfo?.userId,
+        createHistoricalReferenceResolver: hasHistoricalImages
+          ? () =>
+              createHistoricalAssetReferenceResolver(
+                gateway(unified(normalizeGatewayModelId(resolvedSettings.toolPlannerModel))),
+              )
+          : undefined,
+      })
+    : limitedMessageResult.messages;
 
   return {
     sessionId: chatSession?.id,
@@ -397,15 +392,13 @@ export const prepareChatCompletion = async ({
     instructions: joinInstructions(
       createChatInstructions(resolvedSettings.globalPrompt, userInfo),
       createMemoryContextInstructions(memoryContext),
+      hasCurrentMessageImages && !primaryModelSupportsImages && tools?.image_to_text
+        ? createImageAttachmentInstructions(messages)
+        : undefined,
       extraInstructions,
     ),
-    messages: limitedMessageResult.messages,
-    tools: toolsEnabled
-      ? {
-          ...tools,
-          ...extraTools,
-        }
-      : undefined,
+    messages: modelMessages,
+    tools,
     outputTokenLimit,
     persistMessages: (responseMessages, usage) => {
       if (!session || !chatSession) {

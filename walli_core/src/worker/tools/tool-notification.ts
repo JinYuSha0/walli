@@ -7,12 +7,12 @@ import {
   sendNotificationVoice,
 } from "@worker/lib/notification";
 import { synthesizeVoice } from "./tool-media";
+import { bindChatAsyncContext, getChatAsyncContext } from "../lib/async-context";
 
-export const createNotificationTools = (
-  env: Env,
-  notificationChannel: UserNotificationChannel | null,
-  origin = "https://internal.local",
-): ToolSet => {
+export const createNotificationTools = (): ToolSet => {
+  const { userInfo } = getChatAsyncContext();
+  const notificationChannel: UserNotificationChannel | null =
+    userInfo?.notificationChannel ?? null;
   if (!notificationChannel) {
     return {};
   }
@@ -61,7 +61,7 @@ export const createNotificationTools = (
       description:
         "Send a notification message to the user's configured notification channel. Use this when the scheduled task asks you to remind, notify, send, push a message, reply with voice, or reply with an image.",
       inputSchema,
-      execute: async (input) => {
+      execute: bindChatAsyncContext(async (input) => {
         const notification = inputSchema.parse(input);
 
         switch (notification.type) {
@@ -72,9 +72,9 @@ export const createNotificationTools = (
               throw new Error("Text is required for voice notifications");
             }
 
-            const voice = await synthesizeVoice(env, origin, text);
+            const voice = await synthesizeVoice(text);
 
-            await sendNotificationVoice(env, notificationChannel, voice);
+            await sendNotificationVoice(getChatAsyncContext().env, notificationChannel, voice);
             break;
           }
           case "image": {
@@ -84,7 +84,7 @@ export const createNotificationTools = (
               throw new Error("Image is required for image notifications");
             }
 
-            await sendNotificationImage(env, notificationChannel, {
+            await sendNotificationImage(getChatAsyncContext().env, notificationChannel, {
               photo: image,
               caption: notification.text,
             });
@@ -97,7 +97,7 @@ export const createNotificationTools = (
               throw new Error("Text is required for text notifications");
             }
 
-            await sendNotificationText(env, notificationChannel, text);
+            await sendNotificationText(getChatAsyncContext().env, notificationChannel, text);
             break;
           }
         }
@@ -107,7 +107,7 @@ export const createNotificationTools = (
           channel: notificationChannel.type,
           type: notification.type,
         };
-      },
+      }),
     }),
   };
 };

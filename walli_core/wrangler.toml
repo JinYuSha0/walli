@@ -10,10 +10,17 @@ enabled = true
 [ai]
 binding = "AI"
 
+[images]
+binding = "IMAGES"
+
 [assets]
 directory = "./dist/client"
 not_found_handling = "single-page-application"
 run_worker_first = ["/api/*"]
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "walli"
 
 [[d1_databases]]
 binding = "DB"

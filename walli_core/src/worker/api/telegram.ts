@@ -50,7 +50,6 @@ import { createUserDoName } from "@worker/durable-objects/user/types";
 import {
   allSettledValues,
   hasNoPromiseSettledError,
-  type BackgroundExecutionContext,
 } from "@worker/utils/common";
 
 const telegramChatSchema = z
@@ -247,7 +246,6 @@ const getTelegramFilePath = async (token: string, fileId: string) => {
 const createTelegramDeps = async (
   env: Env,
   origin: string,
-  ctx: BackgroundExecutionContext,
 ): Promise<TelegramWebhookDeps> => {
   const token = await getTelegramBotToken(env.APP_KV, env);
 
@@ -283,9 +281,9 @@ const createTelegramDeps = async (
         message_id: message.message_id,
       });
     },
-    transcribeVoice: (context) => transcribeVoice(env, origin, context),
-    describeImage: (context) => describeImage(env, origin, context),
-    synthesizeVoice: (text) => synthesizeVoice(env, origin, text),
+    transcribeVoice,
+    describeImage,
+    synthesizeVoice,
     runLlm: async (message, messages): Promise<TelegramReply> => {
       const { userId, chatId, userName } = getTelegramMessageIdentity(message);
       const userDO = env.USER_DO.getByName(createUserDoName("telegram", chatId));
@@ -306,9 +304,6 @@ const createTelegramDeps = async (
 
       try {
         const result = await runChatCompletion({
-          env,
-          ctx,
-          origin,
           userInfo: createChatUserInfo({
             userId,
             name: userName || message.from?.username || userId,
@@ -697,7 +692,7 @@ export const telegramRoute = new Hono<AppBindings>()
     const origin = new URL(c.req.url).origin;
 
     c.executionCtx.waitUntil(
-      createTelegramDeps(c.env, origin, c.executionCtx)
+      createTelegramDeps(c.env, origin)
         .then((deps) => handleTelegramWebhookUpdate(update, deps))
         .catch(() => undefined),
     );

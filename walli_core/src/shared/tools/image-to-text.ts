@@ -3,7 +3,8 @@ import type { ToolConfig } from "../const";
 export const imageToTextTool = {
   enabled: true,
   name: "image_to_text",
-  description: "image-to-text model, output text",
+  description:
+    "Analyze one or more images and return text. When the latest user message includes image attachments, use this tool before answering even if the user does not explicitly ask to analyze the images. Use the text accompanying those images as the prompt and context.",
   invocation: {
     type: "model",
     model: "openai/gpt-5.4-mini",

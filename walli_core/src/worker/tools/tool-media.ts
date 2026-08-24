@@ -3,6 +3,7 @@ import { createGatewayFromEnv, normalizeGatewayModelId, unified } from "../lib/l
 import { runToolWithContext } from "../lib/tool-runner";
 import { getSettings } from "../api/settings";
 import { adaptBuiltInToolModelOutput } from "@shared/tools";
+import { getChatAsyncContext } from "../lib/async-context";
 
 export type VoiceOutput = {
   type: "blob";
@@ -114,17 +115,16 @@ export const extractVoiceOutput = async (result: unknown): Promise<VoiceOutput> 
 };
 
 export const runBuiltInMediaTool = async <ToolName extends BuiltInMediaToolName>(
-  env: Env,
-  origin: string,
   toolName: ToolName,
   taskContext: BuiltInMediaToolContextMap[ToolName],
 ) => {
   try {
+    const { env } = getChatAsyncContext();
     const settings = await getSettings(env.APP_KV);
     const toolConfig = [...settings.builtInTools, ...settings.tools].find(
       (configuredTool) => configuredTool.name === toolName,
     );
-    const tool = createChatRunnerTools(settings, env, origin)[toolName];
+    const tool = createChatRunnerTools(settings)[toolName];
 
     if (!tool?.execute) {
       throw new Error(`${toolName} is not available`);
@@ -151,29 +151,23 @@ export const runBuiltInMediaTool = async <ToolName extends BuiltInMediaToolName>
   }
 };
 
-export const transcribeVoice = (env: Env, origin: string, context: VoiceToTextContext) =>
-  runBuiltInMediaTool(env, origin, "voice_to_text", context);
+export const transcribeVoice = (context: VoiceToTextContext) =>
+  runBuiltInMediaTool("voice_to_text", context);
 
-export const describeImage = async (
-  env: Env,
-  origin: string,
-  context: ImageToTextContext,
-): Promise<string> => {
+export const describeImage = async (context: ImageToTextContext): Promise<string> => {
   const output = adaptBuiltInToolModelOutput(
     "image_to_text",
-    await runBuiltInMediaTool(env, origin, "image_to_text", context),
+    await runBuiltInMediaTool("image_to_text", context),
   );
 
   return typeof output === "string" ? output : JSON.stringify(output);
 };
 
 export const synthesizeVoice = async (
-  env: Env,
-  origin: string,
   text: string,
 ): Promise<VoiceOutput> =>
   extractVoiceOutput(
-    await runBuiltInMediaTool(env, origin, "text_to_voice", {
+    await runBuiltInMediaTool("text_to_voice", {
       text: `${AUTO_TTS_STYLE_PROMPT} ${text}`,
       output_format: "opus",
     }),

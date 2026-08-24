@@ -19,3 +19,13 @@ export const requireAdmin: MiddlewareHandler<AppBindings> = async (c, next) => {
 
   await next();
 };
+
+export const requireUser: MiddlewareHandler<AppBindings> = async (c, next) => {
+  const user = c.get("user");
+
+  if (!user) {
+    return c.json(parseResponse(errorResponseSchema, { error: "Unauthorized" }), 401);
+  }
+
+  await next();
+};

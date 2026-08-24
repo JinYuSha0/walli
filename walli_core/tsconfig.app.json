@@ -15,7 +15,7 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "resolveJsonModule": true,
-    "types": ["vite/client", "./worker-configuration.d.ts"],
+    "types": ["vite/client", "node", "./worker-configuration.d.ts"],
     "paths": {
       "@/*": ["./src/react-app/*"],
       "@shared/*": ["./src/shared/*"],

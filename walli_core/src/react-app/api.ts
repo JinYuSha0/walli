@@ -65,6 +65,43 @@ export const getApiInfo = query(() => apiClient.api.index.$get());
 
 export const getMe = query(() => apiClient.api.me.$get());
 
+export type UploadedAsset = {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  url: string;
+};
+
+export const uploadAsset = async (file: File): Promise<UploadedAsset> => {
+  const formData = new FormData();
+  formData.set("file", file);
+  const kind = file.type.startsWith("image/") ? "image" : "file";
+
+  const response = await fetch(`/api/upload/${kind}`, {
+    body: formData,
+    credentials: "include",
+    method: "POST",
+  });
+  const payload = (await response.json().catch(() => undefined)) as
+    | UploadedAsset
+    | { error?: unknown }
+    | undefined;
+
+  if (!response.ok) {
+    throw new Error(
+      payload && "error" in payload && typeof payload.error === "string"
+        ? payload.error
+        : `Upload failed (${response.status})`,
+    );
+  }
+  if (!payload || !("url" in payload) || typeof payload.url !== "string") {
+    throw new Error("Upload response did not include a file URL");
+  }
+
+  return payload as UploadedAsset;
+};
+
 export const getSettings = async (): Promise<SettingsResponse> =>
   parseResponse(apiClient.api.settings.$get());
 

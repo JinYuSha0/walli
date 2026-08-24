@@ -7,12 +7,9 @@ import {
   type ToolSchemaFieldType,
 } from "../../shared/const";
 import { adaptBuiltInToolModelInput, adaptBuiltInToolModelOutput } from "../../shared/tools";
-
-type ToolRuntime = {
-  AI: Ai;
-  fetch?: typeof fetch;
-  chatSessionId?: string;
-};
+import { createTemporaryAssetUrl } from "../utils/llm";
+import { toolsRoute } from "../tools";
+import { bindChatAsyncContext, getChatAsyncContext } from "./async-context";
 
 type ToolExecutionOptions = Parameters<NonNullable<ToolSet[string]["execute"]>>[1];
 
@@ -121,11 +118,11 @@ const createApiInvocationInput = (toolConfig: ToolConfig, input: unknown) => {
 const withToolRuntimeContext = (
   toolConfig: ToolConfig,
   input: unknown,
-  runtime: ToolRuntime,
 ) => {
+  const { sessionId } = getChatAsyncContext();
   if (
     toolConfig.name !== "scheduled_task" ||
-    !runtime.chatSessionId ||
+    !sessionId ||
     typeof input !== "object" ||
     input === null
   ) {
@@ -140,7 +137,7 @@ const withToolRuntimeContext = (
 
   return {
     ...inputRecord,
-    sessionId: inputRecord.sessionId ?? runtime.chatSessionId,
+    sessionId: inputRecord.sessionId ?? sessionId,
   };
 };
 
@@ -161,13 +158,14 @@ const createToolPlanningContext = (taskContext: unknown) => {
 const runConfiguredTool = async (
   toolConfig: ToolConfig,
   input: unknown,
-  runtime: ToolRuntime,
 ): Promise<unknown> => {
+  const { env, origin } = getChatAsyncContext();
   const parsedInput = createToolInputSchema(toolConfig).parse(input);
 
   if (toolConfig.invocation.type === "model") {
-    const modelInput = adaptBuiltInToolModelInput(toolConfig.name, parsedInput);
-    const output = await runtime.AI.run(toolConfig.invocation.model, modelInput);
+    const resolvedInput = await addTemporaryImageAccess(toolConfig.name, parsedInput);
+    const modelInput = adaptBuiltInToolModelInput(toolConfig.name, resolvedInput);
+    const output = await env.AI.run(toolConfig.invocation.model, modelInput);
 
     return adaptBuiltInToolModelOutput(toolConfig.name, output);
   }
@@ -175,7 +173,7 @@ const runConfiguredTool = async (
   const url = new URL(toolConfig.invocation.url);
   const apiInput = createApiInvocationInput(
     toolConfig,
-    withToolRuntimeContext(toolConfig, parsedInput, runtime),
+    withToolRuntimeContext(toolConfig, parsedInput),
   );
   const headers = Object.fromEntries(
     toolConfig.invocation.headers.map((header) => [header.name, header.defaultValue]),
@@ -199,7 +197,7 @@ const runConfiguredTool = async (
     init.body = JSON.stringify(apiInput);
   }
 
-  const response = await (runtime.fetch ?? fetch)(url, init);
+  const response = await fetchToolRequest(url, init, env, origin);
   const contentType = response.headers.get("content-type") ?? "";
   const body = contentType.includes("application/json")
     ? await response.json()
@@ -216,7 +214,38 @@ const runConfiguredTool = async (
   return body;
 };
 
-export const buildChatTools = (toolConfigs: ToolConfig[], runtime: ToolRuntime): ToolSet => {
+async function addTemporaryImageAccess(
+  toolName: string,
+  input: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  if (toolName !== "image_to_text" || !Array.isArray(input.file)) return input;
+  const { env, origin } = getChatAsyncContext();
+
+  return {
+    ...input,
+    file: await Promise.all(
+      input.file.map((value) =>
+        typeof value === "string"
+          ? createTemporaryAssetUrl(value, origin, env.API_TOKEN)
+          : value),
+    ),
+  };
+}
+
+const fetchToolRequest = (
+  url: URL,
+  init: RequestInit,
+  env: Env,
+  origin: string,
+): Promise<Response> => {
+  if (url.origin === origin && url.pathname.startsWith("/api/tools/")) {
+    return Promise.resolve(toolsRoute.fetch(new Request(url, init), env));
+  }
+
+  return fetch(url, init);
+};
+
+export const buildChatTools = (toolConfigs: ToolConfig[]): ToolSet => {
   const entries = toolConfigs
     .filter((toolConfig) => toolConfig.enabled !== false && isValidChatToolName(toolConfig.name))
     .map((toolConfig) => [
@@ -224,7 +253,7 @@ export const buildChatTools = (toolConfigs: ToolConfig[], runtime: ToolRuntime):
       dynamicTool({
         description: toolConfig.description,
         inputSchema: createToolInputSchema(toolConfig),
-        execute: (input) => runConfiguredTool(toolConfig, input, runtime),
+        execute: bindChatAsyncContext((input) => runConfiguredTool(toolConfig, input)),
       }),
     ]);
 

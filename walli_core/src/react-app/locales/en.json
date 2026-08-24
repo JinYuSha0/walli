@@ -28,6 +28,7 @@
   "chatTestPanelDescription": "A minimal chat page powered by @ai-sdk/react.",
   "chatTestEmpty": "Send a message to start testing",
   "chatTestInputPlaceholder": "Type a test message",
+  "chatTestUploadImages": "Upload images",
   "chatTestSend": "Send",
   "chatTestStop": "Stop",
   "chatTestClear": "Clear",

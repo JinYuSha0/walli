@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { aroundEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import {
   BUILT_IN_TOOLS,
@@ -15,6 +15,7 @@ import {
 } from "../../shared/client";
 import { handleTelegramWebhookUpdate, telegramRoute } from "../api/telegram";
 import { getSettings, settingsRoute } from "../api/settings";
+import { uploadRoute } from "../api/upload";
 import type { AppBindings } from "../api/types";
 import { createDb } from "../db/client";
 import {
@@ -30,6 +31,13 @@ import {
   isValidChatToolName,
   runToolWithContext,
 } from "../lib/tool-runner";
+import {
+  createImageAttachmentInstructions,
+  createTemporaryAssetUrl,
+  limitModelMessagesByTokens,
+  prepareModelMessagesWithAssets,
+  sanitizeModelMessageHistory,
+} from "../utils/llm";
 import { normalizeGatewayModelId } from "../lib/llm";
 import { renderTelegramHtmlFromMarkdown } from "../utils/telegram-format";
 import {
@@ -41,11 +49,21 @@ import {
 import { toolsRoute } from ".";
 import { createNotificationTools } from "./tool-notification";
 import { getNextCronScheduledAt } from "../utils/cron";
-import { limitModelMessagesByTokens, sanitizeModelMessageHistory } from "../utils/llm";
+import { extendChatAsyncContext, runWithChatAsyncContext } from "../lib/async-context";
 
 const env = {
   API_TOKEN: "test-token",
 } as Env;
+const createImagesBinding = (bytes: Uint8Array) =>
+  ({
+    input: vi.fn(() => ({
+      transform: vi.fn(() => ({
+        output: vi.fn(async () => ({
+          response: () => new Response(bytes, { headers: { "content-type": "image/webp" } }),
+        })),
+      })),
+    })),
+  }) as unknown as ImagesBinding;
 const voiceToTextTool = BUILT_IN_TOOLS.find((tool) => tool.name === "voice_to_text")!;
 const textToVoiceTool = BUILT_IN_TOOLS.find((tool) => tool.name === "text_to_voice")!;
 const imageToTextTool = BUILT_IN_TOOLS.find((tool) => tool.name === "image_to_text")!;
@@ -57,7 +75,16 @@ const fakeRuntime = {
   AI: {
     run: aiRun,
   },
-} as unknown as Parameters<typeof buildChatTools>[1];
+} as unknown as { AI: Ai };
+
+aroundEach((runTest) =>
+  runWithChatAsyncContext(
+    {
+      env: { ...env, AI: fakeRuntime.AI } as Env,
+      origin: "https://example.com",
+    },
+    runTest,
+  ));
 
 const signTelegramFileUrl = async (
   secret: string,
@@ -86,6 +113,159 @@ const signTelegramFileUrl = async (
 };
 
 describe("chat tools", () => {
+  it("requires image analysis when the latest user message includes an image", () => {
+    const instructions = createImageAttachmentInstructions([
+      {
+        role: "user",
+        content: "这是什么？\n\n![photo](https://example.com/private-image)",
+      },
+    ]);
+
+    expect(instructions).toContain("must call image_to_text");
+    expect(instructions).toContain("text accompanying the images");
+  });
+
+  it("keeps prior images available to a vision model during follow-up questions", async () => {
+    const optimizedImageBytes = new Uint8Array([4, 5]);
+    const images = createImagesBinding(optimizedImageBytes);
+    const r2Get = vi.fn(async () => ({
+      body: new ReadableStream<Uint8Array>(),
+      customMetadata: { userId: "user-1" },
+      httpMetadata: { contentType: "image/png" },
+    }));
+    const messages = await prepareModelMessagesWithAssets(
+      [
+        {
+          role: "user",
+          content:
+            '这是我的桌面\n\n![desk](<https://example.com/api/assets/user-1/image/image-1>){width="100" height="80"}',
+        },
+        { role: "assistant", content: "我看到了。" },
+        { role: "user", content: "这张图片里桌面上的杯子是什么颜色？" },
+      ],
+      {
+        bucket: { get: r2Get } as unknown as R2Bucket,
+        images,
+        origin: "https://example.com",
+        createHistoricalReferenceResolver: () => async () => [0],
+        userId: "user-1",
+      },
+    );
+    const firstMessage = messages[0];
+    const imagePart = Array.isArray(firstMessage?.content) ? firstMessage.content[1] : undefined;
+
+    expect(firstMessage?.role).toBe("user");
+    expect(Array.isArray(firstMessage?.content) && firstMessage.content[0]).toEqual({
+      type: "text",
+      text: "这是我的桌面\n\n[Image: desk]",
+    });
+    expect(imagePart).toMatchObject({ type: "image", mediaType: "image/webp" });
+    expect(imagePart && "image" in imagePart && new Uint8Array(imagePart.image as ArrayBuffer))
+      .toEqual(optimizedImageBytes);
+    expect(r2Get).toHaveBeenCalledWith("uploads/user-1/images/image-1");
+    expect(images.input).toHaveBeenCalled();
+    expect(messages[2]).toEqual({
+      role: "user",
+      content: "这张图片里桌面上的杯子是什么颜色？",
+    });
+  });
+
+  it("does not resend historical images for unrelated follow-up messages", async () => {
+    const r2Get = vi.fn();
+    const messages = await prepareModelMessagesWithAssets(
+      [
+        {
+          role: "user",
+          content: "![desk](<https://example.com/api/assets/user-1/image/image-1>)",
+        },
+        { role: "assistant", content: "这是一张桌面照片。" },
+        { role: "user", content: "今天天气怎么样？" },
+      ],
+      {
+        bucket: { get: r2Get } as unknown as R2Bucket,
+        images: createImagesBinding(new Uint8Array()),
+        origin: "https://example.com",
+        createHistoricalReferenceResolver: () => async () => [],
+        userId: "user-1",
+      },
+    );
+
+    expect(messages[0]).toEqual({ role: "user", content: "[Image: desk]" });
+    expect(r2Get).not.toHaveBeenCalled();
+  });
+
+  it("limits visual inputs even when one message contains many images", async () => {
+    const createHistoricalReferenceResolver = vi.fn();
+    const messages = await prepareModelMessagesWithAssets(
+      [
+        {
+          role: "user",
+          content: Array.from(
+            { length: 6 },
+            (_, index) => `![image-${index + 1}](https://example.net/${index + 1}.png)`,
+          ).join("\n"),
+        },
+      ],
+      {
+        bucket: { get: vi.fn() } as unknown as R2Bucket,
+        createHistoricalReferenceResolver,
+        images: createImagesBinding(new Uint8Array()),
+        origin: "https://example.com",
+        userId: "user-1",
+      },
+    );
+    const content = messages[0]?.content;
+
+    expect(Array.isArray(content) && content.filter((part) => part.type === "image"))
+      .toHaveLength(4);
+    expect(createHistoricalReferenceResolver).not.toHaveBeenCalled();
+  });
+
+  it("can reload multiple image messages selected from the full conversation", async () => {
+    const imageBytes = new Uint8Array([1]);
+    const r2Get = vi.fn(async () => ({
+      body: new ReadableStream<Uint8Array>(),
+      customMetadata: { userId: "user-1" },
+      httpMetadata: { contentType: "image/png" },
+    }));
+    const resolveHistoricalReference = vi.fn(async () => [0, 2]);
+
+    await prepareModelMessagesWithAssets(
+      [
+        {
+          role: "user",
+          content: "![first](<https://example.com/api/assets/user-1/image/image-1>)",
+        },
+        { role: "assistant", content: "第一张图片。" },
+        {
+          role: "user",
+          content: "![second](<https://example.com/api/assets/user-1/image/image-2>)",
+        },
+        { role: "assistant", content: "第二张图片。" },
+        { role: "user", content: "比较它们的不同。" },
+      ],
+      {
+        bucket: { get: r2Get } as unknown as R2Bucket,
+        images: createImagesBinding(imageBytes),
+        origin: "https://example.com",
+        createHistoricalReferenceResolver: () => resolveHistoricalReference,
+        userId: "user-1",
+      },
+    );
+
+    expect(resolveHistoricalReference).toHaveBeenCalledWith(
+      expect.objectContaining({
+        candidates: [
+          expect.objectContaining({ messageIndex: 0 }),
+          expect.objectContaining({ messageIndex: 2 }),
+        ],
+        latestUserMessage: "比较它们的不同。",
+      }),
+    );
+    expect(r2Get).toHaveBeenCalledWith("uploads/user-1/images/image-1");
+    expect(r2Get).toHaveBeenCalledWith("uploads/user-1/images/image-2");
+  });
+
   it("normalizes bare Workers AI model ids for AI Gateway", () => {
     expect(normalizeGatewayModelId("@cf/zai-org/glm-4.7-flash")).toBe(
       "workers-ai/@cf/zai-org/glm-4.7-flash",
@@ -199,10 +379,15 @@ describe("chat tools", () => {
   });
 
   it("creates notification tools for non-Telegram channels with TODO delivery", async () => {
-    const tools = createNotificationTools(env, {
-      type: "web",
-      userId: "web-user",
-    });
+    const tools = extendChatAsyncContext(
+      {
+        userInfo: createChatUserInfo({
+          userId: "web-user",
+          clientPlatform: "web",
+        }),
+      },
+      () => createNotificationTools(),
+    );
 
     await expect(tools.send_notification.execute?.({ text: "hello" }, {})).rejects.toThrow(
       "TODO: Web notification delivery is not implemented",
@@ -222,18 +407,22 @@ describe("chat tools", () => {
       }),
     );
     aiRun.mockResolvedValueOnce("data:audio/ogg;base64,AAAA");
-    const tools = createNotificationTools(
-      {
+    const notificationEnv = {
         ...env,
         APP_KV: appKv,
         AI: fakeRuntime.AI,
         TELEGRAM_BOT_TOKEN: "test-token",
-      } as Env,
+      } as Env;
+    const tools = extendChatAsyncContext(
       {
-        type: "telegram",
-        userId: "123",
+        env: notificationEnv,
+        origin: "https://chat.test",
+        userInfo: createChatUserInfo({
+          userId: "123",
+          clientPlatform: "telegram",
+        }),
       },
-      "https://chat.test",
+      () => createNotificationTools(),
     );
 
     try {
@@ -276,16 +465,19 @@ describe("chat tools", () => {
         },
       }),
     );
-    const tools = createNotificationTools(
+    const tools = extendChatAsyncContext(
       {
+        env: {
         ...env,
         APP_KV: appKv,
         TELEGRAM_BOT_TOKEN: "test-token",
-      } as Env,
-      {
-        type: "telegram",
-        userId: "123",
+        } as Env,
+        userInfo: createChatUserInfo({
+          userId: "123",
+          clientPlatform: "telegram",
+        }),
       },
+      () => createNotificationTools(),
     );
 
     try {
@@ -469,7 +661,7 @@ describe("chat tools", () => {
   });
 
   it("keeps built-in tools before configured tools", () => {
-    const tools = buildChatTools([...BUILT_IN_TOOLS, ...DEFAULT_SETTINGS.tools], fakeRuntime);
+    const tools = buildChatTools([...BUILT_IN_TOOLS, ...DEFAULT_SETTINGS.tools]);
 
     expect(Object.keys(tools)).toEqual([
       "timestamp",
@@ -485,11 +677,6 @@ describe("chat tools", () => {
   it("can exclude the scheduled task tool from generated runner tools", () => {
     const tools = createChatRunnerTools(
       DEFAULT_SETTINGS,
-      {
-        AI: fakeRuntime.AI,
-        API_TOKEN: "test-token",
-      } as Env,
-      "https://example.com",
       ["scheduled_task"],
     );
 
@@ -516,11 +703,6 @@ describe("chat tools", () => {
             : tool,
         ),
       },
-      {
-        AI: fakeRuntime.AI,
-        API_TOKEN: "test-token",
-      } as Env,
-      "https://example.com",
     );
 
     expect(Object.keys(tools)).toEqual([
@@ -650,7 +832,7 @@ describe("chat tools", () => {
   });
 
   it("builds chat tools from default built-in tools", () => {
-    const tools = buildChatTools(DEFAULT_SETTINGS.builtInTools, fakeRuntime);
+    const tools = buildChatTools(DEFAULT_SETTINGS.builtInTools);
 
     expect(Object.keys(tools)).toEqual([
       "timestamp",
@@ -672,14 +854,13 @@ describe("chat tools", () => {
         },
         textToVoiceTool,
       ],
-      fakeRuntime,
     );
 
     expect(Object.keys(tools)).toEqual(["text_to_voice"]);
   });
 
   it("keeps default tool descriptions on generated chat tools", () => {
-    const tools = buildChatTools(DEFAULT_SETTINGS.builtInTools, fakeRuntime);
+    const tools = buildChatTools(DEFAULT_SETTINGS.builtInTools);
 
     expect(tools.voice_to_text.description).toBe(voiceToTextTool.description);
     expect(tools.text_to_voice.description).toBe(textToVoiceTool.description);
@@ -687,7 +868,7 @@ describe("chat tools", () => {
   });
 
   it("executes default model tools through env.AI.run", async () => {
-    const tools = buildChatTools(DEFAULT_SETTINGS.builtInTools, fakeRuntime);
+    const tools = buildChatTools(DEFAULT_SETTINGS.builtInTools);
     const executionOptions = {} as Parameters<NonNullable<typeof tools.voice_to_text.execute>>[1];
 
     await expect(
@@ -784,7 +965,7 @@ describe("chat tools", () => {
   });
 
   it("adapts multiple image_to_text files to model messages", async () => {
-    const tools = buildChatTools([imageToTextTool], fakeRuntime);
+    const tools = buildChatTools([imageToTextTool]);
     const executionOptions = {} as Parameters<NonNullable<typeof tools.image_to_text.execute>>[1];
 
     await expect(
@@ -825,8 +1006,70 @@ describe("chat tools", () => {
     });
   });
 
+  it("gives image_to_text temporary access to private images", async () => {
+    const imageBytes = new Uint8Array([1, 2, 3]);
+    const r2Get = vi.fn(async () => ({
+      body: new Blob([imageBytes]).stream(),
+      customMetadata: { userId: "user-1", name: "image.png" },
+      httpEtag: '"etag"',
+      size: imageBytes.byteLength,
+      writeHttpMetadata(headers: Headers) {
+        headers.set("content-type", "image/png");
+      },
+    }));
+    const testEnv = {
+      AI: fakeRuntime.AI,
+      API_TOKEN: "test-token",
+      R2: { get: r2Get },
+    } as unknown as Env;
+    const tools = createChatRunnerTools(DEFAULT_SETTINGS);
+    const executionOptions = {} as Parameters<NonNullable<typeof tools.image_to_text.execute>>[1];
+    const result = (await tools.image_to_text.execute?.(
+      { file: ["https://example.com/api/assets/user-1/image/image-1"] },
+      executionOptions,
+    )) as { input: { messages: Array<{ content: Array<{ image_url?: { url: string } }> }> } };
+    const temporaryUrl = result.input.messages[0]!.content[1]!.image_url!.url;
+
+    expect(new URL(temporaryUrl).searchParams.get("expires")).toMatch(/^\d+$/);
+    expect(new URL(temporaryUrl).searchParams.get("signature")).toMatch(/^[a-f\d]{64}$/);
+
+    const response = await uploadRoute.fetch(new Request(temporaryUrl), testEnv);
+
+    expect(response.status).toBe(200);
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(imageBytes);
+    expect(r2Get).toHaveBeenCalledWith("uploads/user-1/images/image-1");
+  });
+
+  it("allows temporary signed access to private files", async () => {
+    const fileBytes = new TextEncoder().encode("report");
+    const r2Get = vi.fn(async () => ({
+      body: new Blob([fileBytes]).stream(),
+      customMetadata: { userId: "user-1", name: "report.txt" },
+      httpEtag: '"etag"',
+      size: fileBytes.byteLength,
+      writeHttpMetadata(headers: Headers) {
+        headers.set("content-type", "text/plain");
+      },
+    }));
+    const testEnv = {
+      API_TOKEN: "test-token",
+      R2: { get: r2Get },
+    } as unknown as Env;
+    const temporaryUrl = await createTemporaryAssetUrl(
+      "https://example.com/api/assets/user-1/file/file-1",
+      "https://example.com",
+      "test-token",
+    );
+
+    const response = await uploadRoute.fetch(new Request(temporaryUrl), testEnv);
+
+    expect(response.status).toBe(200);
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(fileBytes);
+    expect(r2Get).toHaveBeenCalledWith("uploads/user-1/files/file-1");
+  });
+
   it("normalizes tool input before execution", async () => {
-    const tools = buildChatTools([voiceToTextTool], fakeRuntime);
+    const tools = buildChatTools([voiceToTextTool]);
 
     await expect(
       runToolWithContext({
@@ -851,7 +1094,7 @@ describe("chat tools", () => {
   });
 
   it("normalizes model tool input before adapting provider payload", async () => {
-    const tools = buildChatTools([imageToTextTool], fakeRuntime);
+    const tools = buildChatTools([imageToTextTool]);
 
     await expect(
       runToolWithContext({
@@ -917,7 +1160,6 @@ describe("chat tools", () => {
           },
         },
       ],
-      fakeRuntime,
     );
     const executionOptions = {} as Parameters<NonNullable<typeof tools.voice_to_text.execute>>[1];
 
@@ -944,7 +1186,7 @@ describe("chat tools", () => {
       },
     };
     aiRun.mockResolvedValueOnce(modelResult);
-    const tools = buildChatTools([imageToTextTool], fakeRuntime);
+    const tools = buildChatTools([imageToTextTool]);
     const executionOptions = {} as Parameters<NonNullable<typeof tools.image_to_text.execute>>[1];
 
     await expect(
@@ -1001,7 +1243,6 @@ describe("chat tools", () => {
           },
         },
       ],
-      fakeRuntime,
     );
     const executionOptions = {} as Parameters<NonNullable<typeof tools.voice_to_text.execute>>[1];
 
@@ -1029,15 +1270,7 @@ describe("chat tools", () => {
     fetchMock.mockRestore();
   });
 
-  it("executes api tools through the runtime fetch when provided", async () => {
-    const runtimeFetch = vi.fn(
-      async () =>
-        new Response(JSON.stringify({ timestamp: 123 }), {
-          headers: {
-            "content-type": "application/json",
-          },
-        }),
-    );
+  it("executes internal api tools through the async runtime context", async () => {
     const tools = buildChatTools(
       [
         {
@@ -1058,22 +1291,12 @@ describe("chat tools", () => {
           },
         },
       ],
-      {
-        ...fakeRuntime,
-        fetch: runtimeFetch,
-      },
     );
     const executionOptions = {} as Parameters<NonNullable<typeof tools.voice_to_text.execute>>[1];
 
-    await expect(tools.voice_to_text.execute?.({}, executionOptions)).resolves.toEqual({
-      timestamp: 123,
-    });
-    expect(runtimeFetch).toHaveBeenCalledWith(new URL("https://example.com/api/tools/timestamp"), {
-      method: "GET",
-      headers: {
-        authorization: "Bearer test-token",
-      },
-    });
+    await expect(tools.voice_to_text.execute?.({}, executionOptions)).resolves.toEqual(
+      expect.objectContaining({ timestamp: expect.any(Number) }),
+    );
   });
 });
 
@@ -1792,7 +2015,7 @@ describe("settings tool migration", () => {
       put: vi.fn(),
     } as unknown as KVNamespace;
     const settings = await getSettings(appKv);
-    const tools = buildChatTools(settings.builtInTools, fakeRuntime);
+    const tools = buildChatTools(settings.builtInTools);
     const executionOptions = {} as Parameters<NonNullable<typeof tools.image_to_text.execute>>[1];
 
     await tools.image_to_text.execute?.(
@@ -2096,14 +2319,16 @@ describe("telegram webhook", () => {
       return "data:audio/ogg;base64,AAAA";
     });
 
-    await synthesizeVoice(
+    await extendChatAsyncContext(
       {
+        env: {
         ...env,
         APP_KV: appKv,
         AI: fakeRuntime.AI,
-      } as Env,
-      "https://chat.test",
-      "voice reply",
+        } as Env,
+        origin: "https://chat.test",
+      },
+      () => synthesizeVoice("voice reply"),
     );
 
     expect(aiRun).toHaveBeenCalledWith("inworld/tts-2", {

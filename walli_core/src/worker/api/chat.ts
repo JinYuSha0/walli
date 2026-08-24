@@ -163,7 +163,6 @@ const streamChat = async (
   additionalSystemPrompt = "",
 ) => {
   const settings = await getSettings(c.env.APP_KV);
-  const origin = new URL(c.req.url).origin;
   const userDO = c.env.USER_DO.getByName(
     createUserDoName(userInfo.clientPlatform, userInfo.userId),
   );
@@ -171,9 +170,6 @@ const streamChat = async (
 
   try {
     prepared = await prepareChatCompletion({
-      env: c.env,
-      ctx: c.executionCtx,
-      origin,
       userInfo,
       messages: body.messages as ModelMessage[],
       settings,
