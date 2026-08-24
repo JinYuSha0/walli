@@ -44,13 +44,12 @@ export function ChatTestRoute() {
     };
     const requestMessages = [...messages, userMessage];
     chatRef.current?.insertMessagesAtBottom([userMessage]);
-    setMessages(requestMessages);
 
     const abortController = new AbortController();
     requestAbortControllerRef.current = abortController;
 
     try {
-      const response = await fetch("/api/internal/chat", {
+      const responseBody = fetch("/api/internal/chat", {
         body: JSON.stringify({
           messages: requestMessages.map((message) => ({
             content: message.markdown,
@@ -60,18 +59,19 @@ export function ChatTestRoute() {
         headers: { "content-type": "application/json" },
         method: "POST",
         signal: abortController.signal,
+      }).then(async (response) => {
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => undefined)) as
+            { error?: unknown } | undefined;
+          throw new Error(
+            typeof payload?.error === "string" ? payload.error : `Chat failed (${response.status})`,
+          );
+        }
+        if (!response.body) throw new Error("Chat response did not include a stream");
+        return response.body;
       });
 
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => undefined)) as
-          { error?: unknown } | undefined;
-        throw new Error(
-          typeof payload?.error === "string" ? payload.error : `Chat failed (${response.status})`,
-        );
-      }
-      if (!response.body) throw new Error("Chat response did not include a stream");
-
-      const streamingHandle = chatRef.current?.insertStreamingMessageAtBottom(response.body, {
+      const streamingHandle = chatRef.current?.insertStreamingMessageAtBottom(responseBody, {
         messageId: crypto.randomUUID(),
         stickToBottom: true,
       });

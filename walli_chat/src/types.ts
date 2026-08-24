@@ -56,8 +56,9 @@ export type WalliChatComposerMenuItem = {
   title: string;
 };
 
-/** A UTF-8 Server-Sent Events stream containing start, delta, tool-call and tool-result events. */
-export type WalliChatTextStream = ReadableStream<string | Uint8Array>;
+/** A UTF-8 Server-Sent Events stream, or a promise for one, containing chat events. */
+export type WalliChatTextStream =
+  ReadableStream<string | Uint8Array> | PromiseLike<ReadableStream<string | Uint8Array>>;
 
 export type WalliChatStreamingOptions = {
   getToolLabel?: (toolName: string) => string;

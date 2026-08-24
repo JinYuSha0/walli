@@ -241,7 +241,6 @@ export class WalliChatElement extends LitElement {
     options: WalliChatStreamingOptions,
   ): WalliChatStreamingHandle {
     const abortController = new AbortController();
-    const reader = stream.getReader();
     const message: WalliChatMessage = {
       id: options.messageId,
       role: "assistant",
@@ -257,7 +256,7 @@ export class WalliChatElement extends LitElement {
 
     this.activeStreamingMessageCount++;
     const finished = this.consumeStreamingMessage(
-      reader,
+      stream,
       abortController.signal,
       options,
       message,
@@ -273,12 +272,13 @@ export class WalliChatElement extends LitElement {
   }
 
   private async consumeStreamingMessage(
-    reader: ReadableStreamDefaultReader<string | Uint8Array>,
+    stream: WalliChatTextStream,
     signal: AbortSignal,
     options: WalliChatStreamingOptions,
     message: WalliChatMessage,
     parser: StreamingMarkdownParser,
   ): Promise<void> {
+    let reader: ReadableStreamDefaultReader<string | Uint8Array> | null = null;
     const decoder = new TextDecoder();
     const eventParser = new ServerSentEventParser();
     const activeToolCalls = new Map<
@@ -287,7 +287,7 @@ export class WalliChatElement extends LitElement {
     >();
     const completedToolCallIds = new Set<string>();
     const handleAbort = () => {
-      void reader.cancel(signal.reason).catch(() => undefined);
+      void reader?.cancel(signal.reason).catch(() => undefined);
     };
     signal.addEventListener("abort", handleAbort, { once: true });
     let text = "";
@@ -368,6 +368,7 @@ export class WalliChatElement extends LitElement {
     scheduleRender();
 
     try {
+      reader = (await stream).getReader();
       while (true) {
         if (signal.aborted) {
           await reader.cancel(signal.reason);
@@ -400,7 +401,7 @@ export class WalliChatElement extends LitElement {
       completedToolCallIds.clear();
       markdown = text;
       message.markdown = markdown;
-      reader.releaseLock();
+      reader?.releaseLock();
       const completedMessageIndex = this._messages.indexOf(message);
       if (completedMessageIndex >= 0) {
         this.preparedMessages[completedMessageIndex] = createPreparedChatMessages([message])[0]!;
