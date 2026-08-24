@@ -22,6 +22,8 @@ export const normalizeGatewayModelId = (model: string) => {
   return value;
 };
 
-export const unified = createUnified({
-  includeUsage: true,
-});
+export const unified = (modelId: string) =>
+  createUnified({
+    includeUsage: true,
+    supportsStructuredOutputs: modelId.startsWith("openai/"),
+  })(modelId);

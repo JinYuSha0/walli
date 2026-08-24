@@ -130,6 +130,7 @@ type TelegramWebhookDeps = {
   sendVoice: (chatId: string, voice: TelegramVoiceOutput) => Promise<void>;
   sendChatAction: (chatId: string, action: "typing" | "record_voice") => Promise<void>;
   getFileUrl: (fileId: string) => Promise<string>;
+  storeImage?: (fileId: string, userId: string) => Promise<string>;
   markMessageRead: (message: TelegramMessage) => Promise<void>;
   transcribeVoice?: (context: VoiceToTextContext) => Promise<unknown>;
   synthesizeVoice?: (text: string) => Promise<TelegramVoiceOutput>;
@@ -157,6 +158,11 @@ const inferTelegramFileContentType = (filePath: string) => {
 
 const bytesToHex = (bytes: ArrayBuffer) =>
   [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+
+const createTelegramImageId = async (fileId: string) =>
+  `telegram-${bytesToHex(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fileId)),
+  )}`;
 
 const createTelegramFileSignature = async (
   secret: string,
@@ -261,6 +267,33 @@ const createTelegramDeps = async (
     },
     getFileUrl: async (fileId) =>
       createTelegramFileProxyUrl(origin, env, fileId, await getTelegramFilePath(token, fileId)),
+    storeImage: async (fileId, userId) => {
+      const imageId = await createTelegramImageId(fileId);
+      const objectKey = `uploads/${userId}/images/${imageId}`;
+      const assetUrl = new URL(
+        `/api/assets/${encodeURIComponent(userId)}/image/${imageId}`,
+        origin,
+      ).toString();
+      const existingObject = await env.R2.head(objectKey);
+      if (existingObject?.customMetadata?.userId === userId) {
+        return assetUrl;
+      }
+
+      const filePath = await getTelegramFilePath(token, fileId);
+      const response = await fetch(createTelegramFileUrl(token, filePath));
+      if (!response.ok || !response.body) {
+        throw new Error("Telegram image fetch failed");
+      }
+
+      const name = filePath.split("/").pop() || `${imageId}.jpg`;
+      const contentType = inferTelegramFileContentType(filePath);
+      await env.R2.put(objectKey, response.body, {
+        customMetadata: { kind: "image", name, userId },
+        httpMetadata: { contentType },
+      });
+
+      return assetUrl;
+    },
     markMessageRead: async (message) => {
       if (!message.business_connection_id || typeof message.chat.id !== "number") {
         return;
@@ -382,7 +415,10 @@ export const handleTelegramWebhookUpdate = async (update: unknown, deps: Telegra
     const content: string[] = [];
 
     if (parsedContent.type === "image") {
-      const imageFile = await deps.getFileUrl(parsedContent.photo.file_id);
+      const { userId } = getTelegramMessageIdentity(message);
+      const imageFile = deps.storeImage
+        ? await deps.storeImage(parsedContent.photo.file_id, userId)
+        : await deps.getFileUrl(parsedContent.photo.file_id);
       content.push(`![image](<${imageFile}>)`);
     }
 

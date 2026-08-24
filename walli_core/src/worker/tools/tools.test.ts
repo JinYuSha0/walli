@@ -159,8 +159,8 @@ describe("chat tools", () => {
       type: "text",
       text: "这是我的桌面\n\n[Image: desk]",
     });
-    expect(imagePart).toMatchObject({ type: "image", mediaType: "image/webp" });
-    expect(imagePart && "image" in imagePart && new Uint8Array(imagePart.image as ArrayBuffer))
+    expect(imagePart).toMatchObject({ type: "file", mediaType: "image/webp" });
+    expect(imagePart && "data" in imagePart && new Uint8Array(imagePart.data as ArrayBuffer))
       .toEqual(optimizedImageBytes);
     expect(r2Get).toHaveBeenCalledWith("uploads/user-1/images/image-1");
     expect(images.input).toHaveBeenCalled();
@@ -216,7 +216,7 @@ describe("chat tools", () => {
     );
     const content = messages[0]?.content;
 
-    expect(Array.isArray(content) && content.filter((part) => part.type === "image"))
+    expect(Array.isArray(content) && content.filter((part) => part.type === "file"))
       .toHaveLength(4);
     expect(createHistoricalReferenceResolver).not.toHaveBeenCalled();
   });
@@ -2931,9 +2931,10 @@ describe("telegram webhook", () => {
     const sendChatAction = vi.fn(async () => {
       calls.push("action");
     });
-    const getFileUrl = vi.fn(async () => {
+    const getFileUrl = vi.fn();
+    const storeImage = vi.fn(async () => {
       calls.push("file");
-      return "https://chat.test/api/telegram/file/photos/file_1.jpg?fileId=photo-file&expires=1&signature=test";
+      return "https://chat.test/api/assets/123/image/image-1";
     });
     const markMessageRead = vi.fn();
     const runLlm = vi.fn(async (_message, messages) => {
@@ -2948,7 +2949,7 @@ describe("telegram webhook", () => {
       expect(serializedMessages).toContain("Message caption/additional info: what is this");
       expect(serializedMessages).toContain("![image]");
       expect(serializedMessages).toContain(
-        "https://chat.test/api/telegram/file/photos/file_1.jpg?fileId=photo-file&expires=1&signature=test",
+        "https://chat.test/api/assets/123/image/image-1",
       );
       expect(serializedMessages).not.toContain("api.telegram.org/file/bot");
       return {
@@ -2980,12 +2981,15 @@ describe("telegram webhook", () => {
         sendVoice,
         sendChatAction,
         getFileUrl,
+        storeImage,
         markMessageRead,
         runLlm,
       },
     );
 
     expect(calls).toEqual(["action", "file", "llm"]);
+    expect(storeImage).toHaveBeenCalledWith("photo-file", "123");
+    expect(getFileUrl).not.toHaveBeenCalled();
     expect(sendMessage).toHaveBeenCalledWith("123", "image reply");
     expect(sendVoice).not.toHaveBeenCalled();
   });

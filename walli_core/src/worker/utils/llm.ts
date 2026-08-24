@@ -261,7 +261,7 @@ async function createModelImagePart(value: string, context: ModelAssetContext) {
   const url = new URL(value);
   const privatePath =
     url.origin === context.origin ? privateImagePathPattern.exec(url.pathname) : null;
-  if (!privatePath) return { type: "image" as const, image: url };
+  if (!privatePath) return { type: "file" as const, data: url, mediaType: "image" };
 
   const ownerId = decodeURIComponent(privatePath[1]!);
   const imageId = decodeURIComponent(privatePath[2]!);
@@ -289,8 +289,8 @@ async function createModelImagePart(value: string, context: ModelAssetContext) {
   if (!response.ok) throw new Error("Private image optimization failed");
 
   return {
-    type: "image" as const,
-    image: await response.arrayBuffer(),
+    type: "file" as const,
+    data: await response.arrayBuffer(),
     mediaType: "image/webp",
   };
 }
