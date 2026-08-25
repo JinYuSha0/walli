@@ -19,19 +19,67 @@ registerBlock(noticeBlockDefinition);
 const chat = document.querySelector<WalliChatElement>("walli-chat");
 const composer = document.querySelector<WalliChatComposerElement>("walli-chat-composer");
 let activeStreamingHandle: WalliChatStreamingHandle | null = null;
+const INITIAL_MESSAGE_COUNT = 5_000;
+const HISTORY_PAGE_SIZE = 3_000;
+const MAX_HISTORY_PAGE_COUNT = 2;
+const demoMessageCycle = getDemoMessages();
+let loadedHistoryPageCount = 0;
 
 if (chat) {
   chat.messages = [];
   chat.loading = true;
   window.setTimeout(() => {
     chat.loading = false;
-    chat.messages = getDemoMessages();
+    chat.messages = Array.from({ length: INITIAL_MESSAGE_COUNT }, (_, index) => {
+      const sequence = MAX_HISTORY_PAGE_COUNT * HISTORY_PAGE_SIZE + index;
+      return createCycledMessage(sequence, "initial");
+    });
   });
+  chat.onEndReachedThreshold = 0.2;
+  chat.onEndReached = loadMoreHistory;
   chat.onFeedback = (id, markdown, feedback) => {
     console.log("feedback", { id, markdown, feedback });
   };
   chat.onShare = (id, markdown) => {
     console.log("share", { id, markdown });
+  };
+}
+
+async function loadMoreHistory(): Promise<void> {
+  if (!chat || loadedHistoryPageCount >= MAX_HISTORY_PAGE_COUNT) return;
+
+  const page = loadedHistoryPageCount + 1;
+  const removeLoading = chat.insertMessagesAtTop([
+    {
+      id: `history-loading-${page}`,
+      markdown: ":::loading-block\n:::",
+      role: "assistant",
+      showActions: false,
+    },
+  ]);
+
+  await new Promise<void>((resolve) => window.setTimeout(resolve, 1_000));
+  removeLoading();
+  chat.insertMessagesAtTop(createHistoryPage(page));
+  loadedHistoryPageCount = page;
+
+  if (loadedHistoryPageCount >= MAX_HISTORY_PAGE_COUNT) {
+    chat.onEndReached = undefined;
+  }
+}
+
+function createHistoryPage(page: number): WalliChatMessage[] {
+  return Array.from({ length: HISTORY_PAGE_SIZE }, (_, index) => {
+    const sequence = (MAX_HISTORY_PAGE_COUNT - page) * HISTORY_PAGE_SIZE + index;
+    return createCycledMessage(sequence, `history-page-${page}`);
+  });
+}
+
+function createCycledMessage(sequence: number, group: string): WalliChatMessage {
+  const source = demoMessageCycle[sequence % demoMessageCycle.length]!;
+  return {
+    ...source,
+    id: `${group}-${sequence}`,
   };
 }
 
@@ -203,7 +251,7 @@ appendWithoutActionsButton.addEventListener("click", () => {
         showActions: false,
       },
     ],
-    { stickToBottom: true },
+    { stick: true },
   );
   window.setTimeout(() => removeLoadingBlock?.(), 2_000);
 });

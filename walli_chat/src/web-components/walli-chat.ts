@@ -21,9 +21,9 @@ import { getCommonStyle } from "../core/styles";
 import { timeScheduler } from "../core/helper";
 import type {
   WalliChatMessage,
+  WalliChatEndReachedCallback,
   WalliChatFeedbackCallback,
-  WalliChatInsertMessagesAtBottomOptions,
-  WalliChatInsertMessagesAtTopOptions,
+  WalliChatInsertMessagesOptions,
   WalliChatMessageCallback,
   WalliChatRemoveMessages,
   WalliChatScrollToIndexOptions,
@@ -54,6 +54,8 @@ export class WalliChatElement extends LitElement {
   @property({ attribute: false }) accessor emptyContent: unknown;
   @property({ type: Boolean, reflect: true }) accessor loading = false;
   @property({ attribute: false }) accessor onFeedback: WalliChatFeedbackCallback | undefined;
+  @property({ attribute: false }) accessor onEndReached: WalliChatEndReachedCallback | undefined;
+  @property({ attribute: false }) accessor onEndReachedThreshold = 0;
   @property({ attribute: false }) accessor onReply: WalliChatMessageCallback | undefined;
   @property({ attribute: false }) accessor onShare: WalliChatMessageCallback | undefined;
   @property({ attribute: false }) accessor bottomOcclusionHeight =
@@ -88,6 +90,8 @@ export class WalliChatElement extends LitElement {
   @state() private accessor composerBottomInsetHeight = 52 + 24;
   private isScrollingToBottom = false;
   private isUserScrolling = false;
+  private endReachedCallPending = false;
+  private endReachedContentWindow: string | null = null;
   private readonly scrollInteractionEndTaskType = "scroll-interaction-end";
   private mountedStart = 0;
   private mountedEnd = 0;
@@ -198,35 +202,35 @@ export class WalliChatElement extends LitElement {
 
   insertMessagesAtTop(
     messages: readonly WalliChatMessage[],
-    options: WalliChatInsertMessagesAtTopOptions = {},
+    options: WalliChatInsertMessagesOptions = {},
   ): WalliChatRemoveMessages {
     if (messages.length === 0) return () => undefined;
 
     const insertedMessages = [...messages];
     this.topInsertedMessageGroups.unshift(insertedMessages);
-    if (options.stickToTop) {
+    if (options.stick) {
       this.pendingScrollRequest = { animated: false, target: "top" };
     }
     this.applyMessagesInsertion("top", [...insertedMessages, ...this._messages], this._messages);
-    if (options.stickToTop) this.scheduleScrollRequest();
+    if (options.stick) this.scheduleScrollRequest();
     return this.createInsertedMessagesRemoval("top", insertedMessages);
   }
 
   insertMessagesAtBottom(
     messages: readonly WalliChatMessage[],
-    options: WalliChatInsertMessagesAtBottomOptions = {},
+    options: WalliChatInsertMessagesOptions = {},
   ): WalliChatRemoveMessages {
     if (messages.length === 0) return () => undefined;
 
     const insertedMessages = [...messages];
     this.bottomInsertedMessageGroups.push(insertedMessages);
-    if (options.stickToBottom) {
+    if (options.stick) {
       this.isScrollingToBottom = true;
       this.isAtBottom = true;
       this.pendingScrollRequest = { animated: false, target: "bottom" };
     }
     this.applyMessagesInsertion("bottom", [...this._messages, ...insertedMessages], this._messages);
-    if (options.stickToBottom) this.scheduleScrollRequest();
+    if (options.stick) this.scheduleScrollRequest();
     return this.createInsertedMessagesRemoval("bottom", insertedMessages);
   }
 
@@ -559,6 +563,12 @@ export class WalliChatElement extends LitElement {
     if (changedProperties.has("bottomOcclusionHeight")) {
       this.handleBottomOcclusionChange();
     }
+    if (
+      changedProperties.has("onEndReached") ||
+      changedProperties.has("onEndReachedThreshold")
+    ) {
+      this.scheduleProjection();
+    }
   }
 
   private handleFeedback(
@@ -752,6 +762,44 @@ export class WalliChatElement extends LitElement {
       }
     }
     this.projectVisibleRows(frame, start, end, forceProjection);
+    this.checkEndReached(scrollTop, viewportHeight);
+  }
+
+  private checkEndReached(scrollTop: number, viewportHeight: number): void {
+    const callback = this.onEndReached;
+    if (
+      callback === undefined ||
+      this._messages.length === 0 ||
+      viewportHeight <= 0 ||
+      this.pendingScrollRequest !== null
+    ) {
+      return;
+    }
+
+    const distanceFromEnd = Math.max(0, scrollTop);
+    const threshold = Math.max(0, this.onEndReachedThreshold) * viewportHeight;
+    if (distanceFromEnd > threshold || this.endReachedCallPending) return;
+
+    const firstMessage = this._messages[0];
+    const lastMessage = this._messages[this._messages.length - 1];
+    const contentWindow = `${this._messages.length}:${firstMessage?.id ?? ""}:${lastMessage?.id ?? ""}`;
+    if (contentWindow === this.endReachedContentWindow) return;
+
+    this.endReachedContentWindow = contentWindow;
+    const result = callback({ distanceFromEnd });
+    if (
+      result === null ||
+      (typeof result !== "object" && typeof result !== "function") ||
+      typeof result.then !== "function"
+    ) {
+      return;
+    }
+
+    this.endReachedCallPending = true;
+    void Promise.resolve(result).finally(() => {
+      this.endReachedCallPending = false;
+      this.scheduleProjection();
+    });
   }
 
   private scheduleScrollRequest(): void {
@@ -848,6 +896,7 @@ export class WalliChatElement extends LitElement {
       behavior: animated ? "smooth" : "auto",
       top: scrollTop,
     });
+    if (!animated) this.scheduleProjection();
   }
 
   private projectVisibleRows(

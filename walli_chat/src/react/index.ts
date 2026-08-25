@@ -26,6 +26,8 @@ import {
 } from "../core/blocks";
 import type {
   WalliChatMessage,
+  WalliChatEndReachedCallback,
+  WalliChatEndReachedInfo,
   WalliChatComposerActionCallback,
   WalliChatComposerAsset,
   WalliChatComposerInsertedAssetsHandle,
@@ -38,8 +40,7 @@ import type {
   WalliChatComposerUploadResult,
   WalliChatComposerValueCallback,
   WalliChatFeedbackCallback,
-  WalliChatInsertMessagesAtBottomOptions,
-  WalliChatInsertMessagesAtTopOptions,
+  WalliChatInsertMessagesOptions,
   WalliChatMessageCallback,
   WalliChatRemoveMessages,
   WalliChatScrollTarget,
@@ -163,6 +164,8 @@ export type WalliChatProps = {
   emptyContent?: ReactNode;
   loading?: boolean;
   messages: readonly WalliChatMessage[];
+  onEndReached?: WalliChatEndReachedCallback;
+  onEndReachedThreshold?: number;
   onFeedback?: WalliChatFeedbackCallback;
   onReply?: WalliChatMessageCallback;
   onShare?: WalliChatMessageCallback;
@@ -173,11 +176,11 @@ export type WalliChatRef = {
   readonly element: WalliChatElement | null;
   insertMessagesAtTop: (
     messages: readonly WalliChatMessage[],
-    options?: WalliChatInsertMessagesAtTopOptions,
+    options?: WalliChatInsertMessagesOptions,
   ) => WalliChatRemoveMessages;
   insertMessagesAtBottom: (
     messages: readonly WalliChatMessage[],
-    options?: WalliChatInsertMessagesAtBottomOptions,
+    options?: WalliChatInsertMessagesOptions,
   ) => WalliChatRemoveMessages;
   insertStreamingMessageAtBottom: (
     stream: WalliChatTextStream,
@@ -202,6 +205,8 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
     emptyContent,
     loading = false,
     messages,
+    onEndReached,
+    onEndReachedThreshold = 0,
     onFeedback,
     onReply,
     onShare,
@@ -232,11 +237,13 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
 
   useEffect(() => {
     if (elementRef.current) {
+      elementRef.current.onEndReached = onEndReached;
+      elementRef.current.onEndReachedThreshold = onEndReachedThreshold;
       elementRef.current.onFeedback = onFeedback;
       elementRef.current.onReply = onReply;
       elementRef.current.onShare = onShare;
     }
-  }, [onFeedback, onReply, onShare]);
+  }, [onEndReached, onEndReachedThreshold, onFeedback, onReply, onShare]);
 
   useImperativeHandle(
     forwardedRef,
@@ -303,10 +310,11 @@ export type {
   WalliChatComposerUploadImagesCallback,
   WalliChatComposerUploadResult,
   WalliChatComposerValueCallback,
+  WalliChatEndReachedCallback,
+  WalliChatEndReachedInfo,
   WalliChatMessage,
   WalliChatFeedbackCallback,
-  WalliChatInsertMessagesAtBottomOptions,
-  WalliChatInsertMessagesAtTopOptions,
+  WalliChatInsertMessagesOptions,
   WalliChatMessageCallback,
   WalliChatRemoveMessages,
   WalliChatScrollTarget,
