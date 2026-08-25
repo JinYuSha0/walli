@@ -563,6 +563,10 @@ export class WalliChatElement extends LitElement {
     if (changedProperties.has("bottomOcclusionHeight")) {
       this.handleBottomOcclusionChange();
     }
+    if (changedProperties.has("defaultScrollToBottom")) {
+      this.endReachedContentWindow = null;
+      this.scheduleProjection();
+    }
     if (
       changedProperties.has("onEndReached") ||
       changedProperties.has("onEndReachedThreshold")
@@ -762,10 +766,14 @@ export class WalliChatElement extends LitElement {
       }
     }
     this.projectVisibleRows(frame, start, end, forceProjection);
-    this.checkEndReached(scrollTop, viewportHeight);
+    this.checkEndReached(scrollTop, viewportHeight, frame.totalHeight);
   }
 
-  private checkEndReached(scrollTop: number, viewportHeight: number): void {
+  private checkEndReached(
+    scrollTop: number,
+    viewportHeight: number,
+    contentHeight: number,
+  ): void {
     const callback = this.onEndReached;
     if (
       callback === undefined ||
@@ -776,7 +784,9 @@ export class WalliChatElement extends LitElement {
       return;
     }
 
-    const distanceFromEnd = Math.max(0, scrollTop);
+    const distanceFromEnd = this.defaultScrollToBottom
+      ? Math.max(0, scrollTop)
+      : Math.max(0, contentHeight - viewportHeight - scrollTop);
     const threshold = Math.max(0, this.onEndReachedThreshold) * viewportHeight;
     if (distanceFromEnd > threshold || this.endReachedCallPending) return;
 
