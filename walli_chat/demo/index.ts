@@ -19,9 +19,12 @@ registerBlock(noticeBlockDefinition);
 const chat = document.querySelector<WalliChatElement>("walli-chat");
 const composer = document.querySelector<WalliChatComposerElement>("walli-chat-composer");
 let activeStreamingHandle: WalliChatStreamingHandle | null = null;
-const INITIAL_MESSAGE_COUNT = 5_000;
-const HISTORY_PAGE_SIZE = 3_000;
-const MAX_HISTORY_PAGE_COUNT = 2;
+const TOTAL_MESSAGE_COUNT = 100;
+const INITIAL_MESSAGE_COUNT = 50;
+const HISTORY_PAGE_SIZE = 30;
+const MAX_HISTORY_PAGE_COUNT = Math.ceil(
+  (TOTAL_MESSAGE_COUNT - INITIAL_MESSAGE_COUNT) / HISTORY_PAGE_SIZE,
+);
 const demoMessageCycle = getDemoMessages();
 let loadedHistoryPageCount = 0;
 
@@ -31,7 +34,7 @@ if (chat) {
   window.setTimeout(() => {
     chat.loading = false;
     chat.messages = Array.from({ length: INITIAL_MESSAGE_COUNT }, (_, index) => {
-      const sequence = MAX_HISTORY_PAGE_COUNT * HISTORY_PAGE_SIZE + index;
+      const sequence = TOTAL_MESSAGE_COUNT - INITIAL_MESSAGE_COUNT + index;
       return createCycledMessage(sequence, "initial");
     });
   });
@@ -49,16 +52,19 @@ async function loadMoreHistory(): Promise<void> {
   if (!chat || loadedHistoryPageCount >= MAX_HISTORY_PAGE_COUNT) return;
 
   const page = loadedHistoryPageCount + 1;
-  const removeLoading = chat.insertMessagesAtTop([
-    {
-      id: `history-loading-${page}`,
-      markdown: ":::loading-block\n:::",
-      role: "assistant",
-      showActions: false,
-    },
-  ]);
+  const removeLoading = chat.insertMessagesAtTop(
+    [
+      {
+        id: `history-loading-${page}`,
+        markdown: ":::loading-block\n:::",
+        role: "assistant",
+        showActions: false,
+      },
+    ],
+    { stick: true },
+  );
 
-  await new Promise<void>((resolve) => window.setTimeout(resolve, 1_000));
+  await new Promise<void>((resolve) => window.setTimeout(resolve, 1_500));
   removeLoading();
   chat.insertMessagesAtTop(createHistoryPage(page));
   loadedHistoryPageCount = page;
@@ -69,8 +75,10 @@ async function loadMoreHistory(): Promise<void> {
 }
 
 function createHistoryPage(page: number): WalliChatMessage[] {
-  return Array.from({ length: HISTORY_PAGE_SIZE }, (_, index) => {
-    const sequence = (MAX_HISTORY_PAGE_COUNT - page) * HISTORY_PAGE_SIZE + index;
+  const end = TOTAL_MESSAGE_COUNT - INITIAL_MESSAGE_COUNT - (page - 1) * HISTORY_PAGE_SIZE;
+  const start = Math.max(0, end - HISTORY_PAGE_SIZE);
+  return Array.from({ length: end - start }, (_, index) => {
+    const sequence = start + index;
     return createCycledMessage(sequence, `history-page-${page}`);
   });
 }
@@ -353,7 +361,7 @@ function stopDemoStreaming(): void {
 const indexInput = document.createElement("input");
 indexInput.type = "number";
 indexInput.min = "0";
-indexInput.value = "4520";
+indexInput.value = "20";
 indexInput.style.width = "100%";
 indexInput.style.boxSizing = "border-box";
 indexInput.style.border = "1px solid #d1d5db";
@@ -387,7 +395,7 @@ animatedScrollButton.addEventListener("click", () => {
 const topInput = document.createElement("input");
 topInput.type = "number";
 topInput.min = "0";
-topInput.value = "1200000";
+topInput.value = "2000";
 topInput.style.width = "100%";
 topInput.style.boxSizing = "border-box";
 topInput.style.border = "1px solid #d1d5db";

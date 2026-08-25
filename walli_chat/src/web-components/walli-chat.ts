@@ -42,6 +42,11 @@ type Size = {
   height: number;
 };
 
+type ScrollAnchor = {
+  id: string;
+  top: number;
+};
+
 type PendingScrollRequest = {
   animated: boolean;
   source?: "streaming";
@@ -73,6 +78,7 @@ export class WalliChatElement extends LitElement {
   private frame: ConversationFrame | null = null;
   private canvasElement: HTMLDivElement | null = null;
   private viewportElement: HTMLDivElement | null = null;
+  private activeTopInsertionScrollFloor: number | null = null;
   private composerOverlayElement: HTMLDivElement | null = null;
   private composerShellElement: HTMLDivElement | null = null;
   private mountedMessageElements = new Map<number, WalliMessageElement>();
@@ -121,12 +127,12 @@ export class WalliChatElement extends LitElement {
       let left = 0;
       let right = previousMessages.length - 1;
       while (left <= right && (isBottomInsertion || isTopInsertion)) {
-        if (isBottomInsertion && !Object.is(messages[left], previousMessages[left])) {
+        if (isBottomInsertion && !this.isSameMessage(messages[left], previousMessages[left])) {
           isBottomInsertion = false;
         }
         if (
           isTopInsertion &&
-          !Object.is(messages[insertedCount + right], previousMessages[right])
+          !this.isSameMessage(messages[insertedCount + right], previousMessages[right])
         ) {
           isTopInsertion = false;
         }
@@ -235,6 +241,15 @@ export class WalliChatElement extends LitElement {
     return this.createInsertedMessagesRemoval("bottom", insertedMessages);
   }
 
+  private isSameMessage(left: WalliChatMessage | undefined, right: WalliChatMessage | undefined) {
+    return (
+      left?.id === right?.id &&
+      left?.markdown === right?.markdown &&
+      left?.role === right?.role &&
+      left?.showActions === right?.showActions
+    );
+  }
+
   private createInsertedMessagesRemoval(
     kind: "top" | "bottom",
     insertedMessages: WalliChatMessage[],
@@ -257,10 +272,31 @@ export class WalliChatElement extends LitElement {
       groups.splice(groupIndex, 1);
       const end = start + insertedMessages.length;
       const nextMessages = [...previousMessages.slice(0, start), ...previousMessages.slice(end)];
+      const shouldMaintainAnchor = kind === "top" && this.pendingScrollRequest === null;
+      const viewportHeight = this.viewportElement?.clientHeight ?? this.containerSize.height;
+      const previousFrame =
+        shouldMaintainAnchor && viewportHeight > 0 ? this.prepareFrameForScroll() : null;
+      const previousScrollTop = this.viewportElement?.scrollTop ?? this.viewportScrollTop;
+      const anchor = previousFrame
+        ? this.captureScrollAnchor(
+            previousFrame,
+            previousScrollTop,
+            viewportHeight,
+            new Set(nextMessages.map((message) => message.id)),
+          )
+        : null;
       this._messages = nextMessages;
       this.preparedMessages.splice(start, insertedMessages.length);
       this.requestUpdate("messages", previousMessages);
       this.invalidateFrame({ keepMountedRows: true });
+      if (previousFrame) {
+        this.maintainScrollAnchor(
+          anchor,
+          previousFrame.totalHeight,
+          this.prepareFrameForScroll(),
+          viewportHeight,
+        );
+      }
     };
   }
 
@@ -572,10 +608,7 @@ export class WalliChatElement extends LitElement {
       this.endReachedContentWindow = null;
       this.scheduleEndReachedCheck();
     }
-    if (
-      changedProperties.has("onEndReached") ||
-      changedProperties.has("onEndReachedThreshold")
-    ) {
+    if (changedProperties.has("onEndReached") || changedProperties.has("onEndReachedThreshold")) {
       this.scheduleEndReachedCheck();
     }
   }
@@ -660,14 +693,25 @@ export class WalliChatElement extends LitElement {
   @eventOptions({ passive: true })
   private handleScroll(event: Event) {
     const viewport = event.currentTarget as HTMLDivElement | null;
-    this.viewportScrollTop = viewport?.scrollTop ?? 0;
+    let scrollTop = viewport?.scrollTop ?? 0;
+    if (
+      viewport !== null &&
+      this.isUserScrolling &&
+      this.activeTopInsertionScrollFloor !== null &&
+      scrollTop < this.activeTopInsertionScrollFloor
+    ) {
+      scrollTop = this.activeTopInsertionScrollFloor;
+      viewport.scrollTop = scrollTop;
+    }
+    this.viewportScrollTop = scrollTop;
     if (viewport !== null) {
       const distanceToBottom = Math.max(
         0,
-        viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop,
+        viewport.scrollHeight - viewport.clientHeight - scrollTop,
       );
       this.updateBottomState(distanceToBottom);
     }
+    if (this.isUserScrolling) this.handleScrollInteractionEnd();
     this.scheduleProjection();
     this.scheduleEndReachedCheck();
   }
@@ -693,7 +737,13 @@ export class WalliChatElement extends LitElement {
   private handleScrollInteractionEnd(): void {
     timeScheduler.scheduleByType(this.scrollInteractionEndTaskType, Date.now() + 160, () => {
       this.isUserScrolling = false;
+      this.activeTopInsertionScrollFloor = null;
+      this.scheduleEndReachedCheck();
     });
+  }
+
+  private handleScrollGestureEnd(): void {
+    this.handleScrollInteractionEnd();
   }
 
   @eventOptions({ passive: true })
@@ -710,6 +760,7 @@ export class WalliChatElement extends LitElement {
 
   private handleScrollEnd(): void {
     this.isScrollingToBottom = false;
+    if (this.isUserScrolling) this.handleScrollInteractionEnd();
   }
 
   private scheduleProjection(): void {
@@ -789,11 +840,7 @@ export class WalliChatElement extends LitElement {
     this.projectVisibleRows(frame, start, end, forceProjection);
   }
 
-  private checkEndReached(
-    scrollTop: number,
-    viewportHeight: number,
-    contentHeight: number,
-  ): void {
+  private checkEndReached(scrollTop: number, viewportHeight: number, contentHeight: number): void {
     const callback = this.onEndReached;
     if (
       callback === undefined ||
@@ -938,6 +985,82 @@ export class WalliChatElement extends LitElement {
     if (!animated) this.scheduleProjection();
   }
 
+  private captureScrollAnchor(
+    frame: ConversationFrame,
+    scrollTop: number,
+    viewportHeight: number,
+    nextMessageIds: ReadonlySet<string>,
+  ): ScrollAnchor | null {
+    const { start } = findVisibleRange(frame, scrollTop, viewportHeight, 0, 0);
+    for (let index = start; index < frame.messages.length; index++) {
+      const message = frame.messages[index]!;
+      if (nextMessageIds.has(message.prepared.id)) {
+        return { id: message.prepared.id, top: message.top };
+      }
+    }
+    return null;
+  }
+
+  private maintainScrollAnchor(
+    anchor: ScrollAnchor | null,
+    previousTotalHeight: number,
+    frame: ConversationFrame,
+    viewportHeight: number,
+  ): void {
+    const nextAnchor =
+      anchor === null
+        ? undefined
+        : frame.messages.find((message) => message.prepared.id === anchor.id);
+    const adjustment =
+      anchor !== null && nextAnchor !== undefined
+        ? nextAnchor.top - anchor.top
+        : frame.totalHeight - previousTotalHeight;
+    if (Math.abs(adjustment) < 1) return;
+    this.applyScrollAdjustment(adjustment, frame, viewportHeight);
+  }
+
+  private applyScrollAdjustment(
+    adjustment: number,
+    frame: ConversationFrame,
+    viewportHeight: number,
+  ): void {
+    this.contentSize = {
+      width: frame.chatWidth,
+      height: frame.totalHeight,
+    };
+    const canvas = this.canvasElement;
+    if (canvas !== null) {
+      canvas.style.width = `${frame.chatWidth}px`;
+      canvas.style.height = `${frame.totalHeight}px`;
+    }
+
+    const viewport = this.viewportElement;
+    const rawScrollTop = viewport?.scrollTop ?? this.viewportScrollTop;
+    if (viewport !== null && rawScrollTop < 0) {
+      viewport.scrollTop = 0;
+      void viewport.scrollTop;
+    }
+    const currentScrollTop = Math.max(0, rawScrollTop);
+    const scrollTop = Math.max(
+      0,
+      Math.min(Math.max(0, frame.totalHeight - viewportHeight), currentScrollTop + adjustment),
+    );
+    if (this.isUserScrolling && adjustment > 0) {
+      this.activeTopInsertionScrollFloor = Math.max(
+        this.activeTopInsertionScrollFloor ?? 0,
+        scrollTop,
+      );
+    }
+    this.viewportScrollTop = scrollTop;
+    if (viewport !== null) {
+      void viewport.scrollHeight;
+      viewport.scrollTop = scrollTop;
+    }
+    const { start, end } = findVisibleRange(frame, scrollTop, viewportHeight, 0, 0);
+    this.projectVisibleRows(frame, start, end, true);
+    this.scheduleEndReachedCheck();
+  }
+
   private projectVisibleRows(
     frame: ConversationFrame,
     start: number,
@@ -958,42 +1081,33 @@ export class WalliChatElement extends LitElement {
     const canvas = this.canvasElement;
     if (canvas === null) return;
 
-    const mountedElementsToCarry = new Map<number, WalliMessageElement>();
-    for (let index = this.mountedStart; index < this.mountedEnd; index++) {
-      const element = this.mountedMessageElements.get(index);
-      if (element === undefined) continue;
+    const elementsByMessageId = new Map<string, WalliMessageElement>();
+    for (const element of this.mountedMessageElements.values()) {
+      const id = element.message?.prepared.id;
+      if (id !== undefined) elementsByMessageId.set(id, element);
+    }
 
-      if (index < start || index >= end) {
-        element.remove();
-        continue;
+    const nextMountedElements = new Map<number, WalliMessageElement>();
+    let previousElement: WalliMessageElement | null = null;
+    for (let index = start; index < end; index++) {
+      const message = frame.messages[index]!;
+      const existingElement = elementsByMessageId.get(message.prepared.id);
+      const element =
+        existingElement ?? (document.createElement("walli-message") as WalliMessageElement);
+      elementsByMessageId.delete(message.prepared.id);
+      element.dataset.index = String(index);
+      element.message = message;
+      nextMountedElements.set(index, element);
+
+      if (existingElement === undefined) {
+        if (previousElement === null) canvas.insertBefore(element, canvas.firstChild);
+        else previousElement.after(element);
       }
-
-      element.dataset.index = String(index);
-      element.message = frame.messages[index]!;
-      mountedElementsToCarry.set(index, element);
+      previousElement = element;
     }
-    this.mountedMessageElements = mountedElementsToCarry;
+    for (const element of elementsByMessageId.values()) element.remove();
 
-    const appendFragment = document.createDocumentFragment();
-    for (let index = Math.max(this.mountedEnd, start); index < end; index++) {
-      const element = document.createElement("walli-message") as WalliMessageElement;
-      element.dataset.index = String(index);
-      element.message = frame.messages[index]!;
-      this.mountedMessageElements.set(index, element);
-      appendFragment.append(element);
-    }
-    canvas.append(appendFragment);
-
-    let beforeNode = canvas.firstChild;
-    for (let index = Math.min(this.mountedStart, end) - 1; index >= start; index--) {
-      const element = document.createElement("walli-message") as WalliMessageElement;
-      element.dataset.index = String(index);
-      element.message = frame.messages[index]!;
-      this.mountedMessageElements.set(index, element);
-      canvas.insertBefore(element, beforeNode);
-      beforeNode = element;
-    }
-
+    this.mountedMessageElements = nextMountedElements;
     this.mountedStart = start;
     this.mountedEnd = end;
   }
@@ -1004,10 +1118,19 @@ export class WalliChatElement extends LitElement {
     previousMessages: readonly WalliChatMessage[],
     preparationOptions?: { streaming?: boolean },
   ): void {
-    const shouldRestoreScrollTop = kind === "top" && this.pendingScrollRequest === null;
-    const previousFrame = shouldRestoreScrollTop ? this.prepareFrameForScroll() : null;
+    const shouldMaintainAnchor = kind === "top" && this.pendingScrollRequest === null;
+    const viewportHeight = this.viewportElement?.clientHeight ?? this.containerSize.height;
+    const previousFrame =
+      shouldMaintainAnchor && viewportHeight > 0 ? this.prepareFrameForScroll() : null;
     const previousScrollTop = this.viewportElement?.scrollTop ?? this.viewportScrollTop;
-    const previousTotalHeight = previousFrame?.totalHeight ?? 0;
+    const anchor = previousFrame
+      ? this.captureScrollAnchor(
+          previousFrame,
+          previousScrollTop,
+          viewportHeight,
+          new Set(nextMessages.map((message) => message.id)),
+        )
+      : null;
 
     this._messages = nextMessages;
     const insertedCount = nextMessages.length - previousMessages.length;
@@ -1026,22 +1149,13 @@ export class WalliChatElement extends LitElement {
     }
     this.requestUpdate("messages", previousMessages);
     this.invalidateFrame({ keepMountedRows: true });
-    if (shouldRestoreScrollTop) {
-      const viewportHeight = this.viewportElement?.clientHeight ?? this.containerSize.height;
-      if (viewportHeight <= 0) return;
-
-      const frame = this.prepareFrameForScroll();
-      const insertedHeight = frame.totalHeight - previousTotalHeight;
-      const scrollTop = Math.max(
-        0,
-        Math.min(
-          Math.max(0, frame.totalHeight - viewportHeight),
-          previousScrollTop + insertedHeight,
-        ),
+    if (previousFrame) {
+      this.maintainScrollAnchor(
+        anchor,
+        previousFrame.totalHeight,
+        this.prepareFrameForScroll(),
+        viewportHeight,
       );
-      const { start, end } = findVisibleRange(frame, scrollTop, viewportHeight, 0, 0);
-      this.projectVisibleRows(frame, start, end, true);
-      this.scrollViewportTo(scrollTop, false);
     }
   }
 
@@ -1054,29 +1168,33 @@ export class WalliChatElement extends LitElement {
         @walli-share=${this.handleShare}
       >
         <div
-          class="chat-viewport absolute inset-0 overflow-auto"
+          class="chat-viewport absolute inset-0 overflow-auto [overflow-anchor:none]"
           @pointerdown=${this.handleScrollInteractionStart}
-          @pointerup=${this.handleScrollInteractionEnd}
-          @pointercancel=${this.handleScrollInteractionEnd}
+          @pointerup=${this.handleScrollGestureEnd}
+          @pointercancel=${this.handleScrollGestureEnd}
           @touchstart=${this.handleScrollInteractionStart}
-          @touchend=${this.handleScrollInteractionEnd}
-          @touchcancel=${this.handleScrollInteractionEnd}
+          @touchend=${this.handleScrollGestureEnd}
+          @touchcancel=${this.handleScrollGestureEnd}
           @wheel=${this.handleWheel}
           @scroll=${this.handleScroll}
           @scrollend=${this.handleScrollEnd}
         >
           <div class="chat-canvas relative mx-auto min-h-full"></div>
         </div>
-        ${this._messages.length === 0
-          ? html`
-              <div class="empty-content absolute inset-0 flex items-center justify-center">
-                ${this.emptyContent ??
-                html`<slot name="empty-content">
-                  ${this.loading ? html`<walli-loading></walli-loading>` : nothing}
-                </slot>`}
-              </div>
-            `
-          : nothing}
+        ${
+          this._messages.length === 0
+            ? html`
+                <div class="empty-content absolute inset-0 flex items-center justify-center">
+                  ${
+                    this.emptyContent ??
+                    html`<slot name="empty-content">
+                      ${this.loading ? html`<walli-loading></walli-loading>` : nothing}
+                    </slot>`
+                  }
+                </div>
+              `
+            : nothing
+        }
         <walli-scroll-to-bottom-button
           class="absolute left-1/2 z-10 [transform:translateX(-50%)]"
           style=${`bottom:${
