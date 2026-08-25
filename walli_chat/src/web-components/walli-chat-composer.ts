@@ -1,7 +1,7 @@
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, query, state } from "lit/decorators.js";
 import { measureLineStats, prepareWithSegments } from "@chenglou/pretext";
-import { ArrowUp, Mic, Paperclip, Plus, Square, createElement } from "lucide";
+import { ArrowUp, Mic, Paperclip, Plus, Square, X, createElement } from "lucide";
 import clsx from "clsx";
 import walliChatUnoCss from "virtual:walli-chat-uno-styles";
 import type {
@@ -10,16 +10,32 @@ import type {
   WalliChatComposerInsertAsset,
   WalliChatComposerMenuItem,
   WalliChatComposerSubmitCallback,
+  WalliChatComposerTranscribeCallback,
+  WalliChatComposerTranscriptionResult,
   WalliChatComposerUploadImagesCallback,
   WalliChatComposerValueCallback,
 } from "../types";
 import type { ComposerAttachment } from "./walli-chat-composer-assets";
 import "./walli-chat-composer-assets";
+import "./walli-loading";
 
 const createIcon = (icon: Parameters<typeof createElement>[0], size = 20) =>
   createElement(icon, { "aria-hidden": "true", height: size, width: size });
 
 const singleLineTextareaHeight = 40;
+const transcriptionWaveformBarCount = 96;
+
+type TranscriptionSession = {
+  abortController: AbortController;
+  animationFrame?: number;
+  audioContext?: AudioContext;
+  baseValue: string;
+  finishedReject?: (reason?: unknown) => void;
+  finishedResolve?: (result: WalliChatComposerTranscriptionResult) => void;
+  promise?: Promise<string>;
+  recorder?: MediaRecorder;
+  stream?: MediaStream;
+};
 
 @customElement("walli-chat-composer")
 export class WalliChatComposerElement extends LitElement {
@@ -45,6 +61,7 @@ export class WalliChatComposerElement extends LitElement {
   @property({ attribute: "max-height", type: Number }) accessor maxHeight = 200;
   @property() accessor placeholder = "Message";
   @property({ attribute: "upload-images-title" }) accessor uploadImagesTitle = "Add files";
+  @property({ attribute: "transcribing-text" }) accessor transcribingText = "Transcribing";
   @property() accessor value = "";
   @property({ attribute: false }) accessor onCancel: WalliChatComposerActionCallback | undefined;
   @property({ attribute: false }) accessor onSubmit: WalliChatComposerSubmitCallback | undefined;
@@ -52,18 +69,22 @@ export class WalliChatComposerElement extends LitElement {
     WalliChatComposerUploadImagesCallback | undefined;
   @property({ attribute: false }) accessor onValueChange:
     WalliChatComposerValueCallback | undefined;
-  @property({ attribute: false }) accessor onVoice: WalliChatComposerActionCallback | undefined;
+  @property({ attribute: false }) accessor onTranscribe:
+    WalliChatComposerTranscribeCallback | undefined;
   @property({ attribute: false }) accessor menuItems: readonly WalliChatComposerMenuItem[] = [];
 
   @state() private accessor attachments: ComposerAttachment[] = [];
   @state() private accessor expanded = false;
   @state() private accessor menuOpen = false;
   @state() private accessor running = false;
+  @state() private accessor transcriptionState: "idle" | "starting" | "recording" | "transcribing" =
+    "idle";
   @query(".composer-grid") private accessor gridElement!: HTMLDivElement;
   @query("textarea") private accessor textareaElement!: HTMLTextAreaElement;
   @query('input[type="file"]') private accessor fileInputElement!: HTMLInputElement;
   private lastMeasuredValue: string | undefined;
   private resizeAnimationFrame: number | undefined;
+  private transcriptionSession: TranscriptionSession | undefined;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -88,6 +109,7 @@ export class WalliChatComposerElement extends LitElement {
       cancelAnimationFrame(this.resizeAnimationFrame);
       this.resizeAnimationFrame = undefined;
     }
+    this.cancelTranscription();
     this.revokeAttachments(this.attachments);
   }
 
@@ -286,7 +308,181 @@ export class WalliChatComposerElement extends LitElement {
 
   private handleVoice(): void {
     this.menuOpen = false;
-    this.onVoice?.();
+    void this.startTranscription();
+  }
+
+  private async startTranscription(): Promise<void> {
+    if (this.disabled || this.running || this.transcriptionState !== "idle" || !this.onTranscribe) {
+      return;
+    }
+
+    this.menuOpen = false;
+    this.dismissKeyboard();
+    this.transcriptionState = "starting";
+    const abortController = new AbortController();
+    const session: TranscriptionSession = {
+      abortController,
+      baseValue: this.value,
+    };
+    this.transcriptionSession = session;
+    const finished = new Promise<WalliChatComposerTranscriptionResult>((resolve, reject) => {
+      session.finishedResolve = resolve;
+      session.finishedReject = reject;
+    });
+    void finished.catch(() => undefined);
+    const streamPromise = Promise.resolve().then(() => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new DOMException("Audio recording is not supported", "NotSupportedError");
+      }
+      return navigator.mediaDevices.getUserMedia({ audio: true });
+    });
+    session.promise = Promise.resolve().then(() =>
+      this.onTranscribe!({ finished, signal: abortController.signal, stream: streamPromise }),
+    );
+    void session.promise.catch(() => undefined);
+
+    try {
+      const stream = await streamPromise;
+      if (abortController.signal.aborted) {
+        for (const track of stream.getTracks()) track.stop();
+        return;
+      }
+
+      const chunks: Blob[] = [];
+      const recorder = new MediaRecorder(stream);
+      recorder.addEventListener("dataavailable", (event) => {
+        if (event.data.size > 0) chunks.push(event.data);
+      });
+      recorder.addEventListener(
+        "stop",
+        () => {
+          session.finishedResolve?.({
+            audio: new Blob(chunks, { type: recorder.mimeType || "audio/webm" }),
+          });
+          session.finishedResolve = undefined;
+          session.finishedReject = undefined;
+        },
+        { once: true },
+      );
+
+      session.stream = stream;
+      session.recorder = recorder;
+      recorder.start(250);
+      this.transcriptionState = "recording";
+      await this.updateComplete;
+      this.startWaveform(session, stream);
+
+    } catch (cause) {
+      session.finishedReject?.(cause);
+      session.finishedResolve = undefined;
+      session.finishedReject = undefined;
+      this.finishTranscriptionSession(session);
+      if (!abortController.signal.aborted) console.error(cause);
+    }
+  }
+
+  private startWaveform(session: TranscriptionSession, stream: MediaStream): void {
+    const AudioContextConstructor = window.AudioContext;
+    const context = new AudioContextConstructor();
+    void context.resume();
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.65;
+    context.createMediaStreamSource(stream).connect(analyser);
+    session.audioContext = context;
+    const samples = new Uint8Array(analyser.fftSize);
+    const levels = Array.from({ length: transcriptionWaveformBarCount }, () => 0);
+    let previousLevel = 0;
+    let previousSampleTime = 0;
+
+    const renderWaveform = (time: number) => {
+      if (this.transcriptionState !== "recording") return;
+      if (time - previousSampleTime >= 72) {
+        analyser.getByteTimeDomainData(samples);
+        let sumOfSquares = 0;
+        for (const sample of samples) {
+          const centeredSample = (sample - 128) / 128;
+          sumOfSquares += centeredSample * centeredSample;
+        }
+        const rms = Math.sqrt(sumOfSquares / samples.length);
+        const measuredLevel = Math.min(1, Math.max(0, (rms - 0.01) * 8));
+        const smoothing = measuredLevel > previousLevel ? 0.58 : 0.24;
+        const level = previousLevel + (measuredLevel - previousLevel) * smoothing;
+        previousLevel = level;
+        levels.shift();
+        levels.push(level);
+        previousSampleTime = time;
+
+        const bars = this.renderRoot.querySelectorAll<HTMLElement>(".voice-wave-bar");
+        bars.forEach((bar, index) => {
+          const barLevel = levels[index] ?? 0;
+          const height = 2 + barLevel * 20;
+          bar.style.height = `${height.toFixed(1)}px`;
+          bar.style.opacity = `${Math.min(1, 0.3 + barLevel * 1.5).toFixed(2)}`;
+        });
+      }
+      session.animationFrame = requestAnimationFrame(renderWaveform);
+    };
+    session.animationFrame = requestAnimationFrame(renderWaveform);
+  }
+
+  private async stopTranscription(send: boolean): Promise<void> {
+    if (this.transcriptionState !== "recording") return;
+    const session = this.transcriptionSession;
+    if (!session) return;
+    this.transcriptionState = "transcribing";
+    this.stopWaveform(session);
+    const recorder = session.recorder;
+    if (recorder?.state !== "inactive") recorder?.stop();
+    for (const track of session.stream?.getTracks() ?? []) track.stop();
+
+    try {
+      const text = (await session.promise)?.trim() ?? "";
+      if (session.abortController.signal.aborted) return;
+      const baseValue = session.baseValue;
+      const separator = baseValue.length > 0 && !/\s$/.test(baseValue) && text.length > 0 ? " " : "";
+      const nextValue = `${baseValue}${separator}${text}`;
+      this.value = nextValue;
+      this.onValueChange?.(nextValue);
+      this.finishTranscriptionSession(session);
+      await this.updateComplete;
+      this.resizeTextarea();
+      if (send && text.length > 0) await this.submit();
+    } catch (cause) {
+      this.finishTranscriptionSession(session);
+      console.error(cause);
+    }
+  }
+
+  private cancelTranscription(): void {
+    if (this.transcriptionState === "idle") return;
+    const session = this.transcriptionSession;
+    if (!session) return;
+    const reason = new DOMException("Transcription cancelled", "AbortError");
+    session.abortController.abort(reason);
+    session.finishedReject?.(reason);
+    if (session.recorder?.state !== "inactive") session.recorder?.stop();
+    for (const track of session.stream?.getTracks() ?? []) track.stop();
+    this.finishTranscriptionSession(session);
+  }
+
+  private stopWaveform(session: TranscriptionSession): void {
+    if (session.animationFrame !== undefined) {
+      cancelAnimationFrame(session.animationFrame);
+      session.animationFrame = undefined;
+    }
+    void session.audioContext?.close();
+    session.audioContext = undefined;
+  }
+
+  private finishTranscriptionSession(session = this.transcriptionSession): void {
+    if (!session) return;
+    this.stopWaveform(session);
+    if (session.recorder?.state !== "inactive") session.recorder?.stop();
+    for (const track of session.stream?.getTracks() ?? []) track.stop();
+    if (this.transcriptionSession !== session) return;
+    this.transcriptionState = "idle";
+    this.transcriptionSession = undefined;
   }
 
   private openFilePicker(): void {
@@ -361,7 +557,75 @@ export class WalliChatComposerElement extends LitElement {
     for (const attachment of attachments) URL.revokeObjectURL(attachment.url);
   }
 
+  private renderTranscription() {
+    const recording = this.transcriptionState === "recording";
+    const capturing = this.transcriptionState === "starting" || recording;
+    return html`
+      <div
+        class="box-border flex min-h-[52px] items-center gap-3 rounded-[28px] bg-card px-2 py-[5px] text-card-foreground [box-shadow:0_0_0_1px_var(--border),0_2px_8px_rgb(0_0_0_/_8%),0_4px_40px_8px_rgb(0_0_0_/_5%)]"
+      >
+        <button
+          class="[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-9 w-9 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-foreground transition-colors [box-shadow:0_0_0_1px_var(--border)] enabled:hover:bg-accent focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          type="button"
+          aria-label="Cancel transcription"
+          @click=${this.cancelTranscription}
+        >
+          ${createIcon(X, 20)}
+        </button>
+
+        <div class="flex min-w-0 flex-1 items-center justify-center">
+          ${capturing
+            ? html`<div
+                class="flex h-7 w-full items-center justify-between overflow-hidden px-1"
+                role="img"
+                aria-label="Recording audio"
+              >
+                ${Array.from(
+                  { length: transcriptionWaveformBarCount },
+                  () => html`<i
+                    class="voice-wave-bar block h-0.5 w-0.5 flex-none rounded-full bg-muted-foreground opacity-35 transition-[height,opacity] duration-150 ease-out"
+                    aria-hidden="true"
+                  ></i>`,
+                )}
+              </div>`
+            : html`<span class="text-base text-muted-foreground">${this.transcribingText}</span>`}
+        </div>
+
+        <div class="flex flex-none items-center gap-1">
+          ${capturing
+            ? html`<button
+                class="[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-foreground transition-colors [box-shadow:0_0_0_1px_var(--border)] enabled:hover:bg-accent focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40"
+                type="button"
+                aria-label="Stop transcription"
+                ?disabled=${!recording}
+                @click=${() => void this.stopTranscription(false)}
+              >
+                ${createElement(Square, {
+                  "aria-hidden": "true",
+                  fill: "currentColor",
+                  height: 12,
+                  width: 12,
+                })}
+              </button>`
+            : html`<span class="inline-flex h-9 w-9 items-center justify-center"
+                ><walli-loading aria-label="Transcribing"></walli-loading
+              ></span>`}
+          <button
+            class="[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-9 w-9 items-center justify-center rounded-full border-0 bg-primary p-0 text-primary-foreground transition-[opacity,transform] enabled:cursor-pointer enabled:hover:scale-105 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-35"
+            type="button"
+            aria-label="Send transcription"
+            ?disabled=${!recording}
+            @click=${() => void this.stopTranscription(true)}
+          >
+            ${createIcon(ArrowUp, 19)}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
   override render() {
+    if (this.transcriptionState !== "idle") return this.renderTranscription();
     const hasMenuItems = Boolean(this.onUploadImages) || this.menuItems.length > 0;
     return html`<div
       class="relative box-border min-h-[52px] rounded-[28px] bg-card px-2 py-[5px] text-card-foreground [box-shadow:0_0_0_1px_var(--border),0_2px_8px_rgb(0_0_0_/_8%),0_4px_40px_8px_rgb(0_0_0_/_5%)]"
@@ -474,17 +738,19 @@ export class WalliChatComposerElement extends LitElement {
         ></textarea>
 
         <div class=${clsx("flex items-center gap-1", this.expanded && "col-start-2 row-start-2")}>
-          <button
-            class=${clsx(
-              "[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-foreground transition-colors duration-150 enabled:hover:bg-accent focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none",
-            )}
-            type="button"
-            aria-label="Start voice input"
-            ?disabled=${this.disabled || this.running}
-            @click=${this.handleVoice}
-          >
-            ${createIcon(Mic)}
-          </button>
+          ${this.onTranscribe
+            ? html`<button
+                class=${clsx(
+                  "[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-foreground transition-colors duration-150 enabled:hover:bg-accent focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none",
+                )}
+                type="button"
+                aria-label="Start transcription"
+                ?disabled=${this.disabled || this.running}
+                @click=${this.handleVoice}
+              >
+                ${createIcon(Mic)}
+              </button>`
+            : nothing}
           <button
             class=${clsx(
               "[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 p-0 transition-[opacity,transform] duration-150 enabled:hover:scale-105 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-30 motion-reduce:transition-none",

@@ -36,6 +36,9 @@ import type {
   WalliChatComposerSetUploadProgress,
   WalliChatComposerSetUploadResult,
   WalliChatComposerSubmitCallback,
+  WalliChatComposerTranscribeCallback,
+  WalliChatComposerTranscriptionContext,
+  WalliChatComposerTranscriptionResult,
   WalliChatComposerUploadImagesCallback,
   WalliChatComposerUploadResult,
   WalliChatComposerValueCallback,
@@ -60,10 +63,11 @@ export type WalliChatComposerProps = {
   onSubmit?: WalliChatComposerSubmitCallback;
   onUploadImages?: WalliChatComposerUploadImagesCallback;
   onValueChange?: WalliChatComposerValueCallback;
-  onVoice?: WalliChatComposerActionCallback;
+  onTranscribe?: WalliChatComposerTranscribeCallback;
   placeholder?: string;
   slot?: string;
   style?: CSSProperties;
+  transcribingText?: string;
   uploadImagesTitle?: string;
   value: string;
 };
@@ -104,10 +108,11 @@ export const WalliChatComposer = forwardRef<WalliChatComposerRef, WalliChatCompo
       onSubmit,
       onUploadImages,
       onValueChange,
-      onVoice,
+      onTranscribe,
       placeholder = "Message",
       slot,
       style,
+      transcribingText = "Transcribing",
       uploadImagesTitle = "Add photos",
       value,
     },
@@ -125,11 +130,12 @@ export const WalliChatComposer = forwardRef<WalliChatComposerRef, WalliChatCompo
       element.onSubmit = onSubmit;
       element.onUploadImages = onUploadImages;
       element.onValueChange = onValueChange;
-      element.onVoice = onVoice;
+      element.onTranscribe = onTranscribe;
       element.placeholder = placeholder;
+      element.transcribingText = transcribingText;
       element.uploadImagesTitle = uploadImagesTitle;
       element.value = value;
-    }, [disabled, maxHeight, menuItems, onCancel, onSubmit, onUploadImages, onValueChange, onVoice, placeholder, uploadImagesTitle, value]);
+    }, [disabled, maxHeight, menuItems, onCancel, onSubmit, onTranscribe, onUploadImages, onValueChange, placeholder, transcribingText, uploadImagesTitle, value]);
 
     useImperativeHandle(
       forwardedRef,
@@ -307,6 +313,9 @@ export type {
   WalliChatComposerSetUploadProgress,
   WalliChatComposerSetUploadResult,
   WalliChatComposerSubmitCallback,
+  WalliChatComposerTranscribeCallback,
+  WalliChatComposerTranscriptionContext,
+  WalliChatComposerTranscriptionResult,
   WalliChatComposerUploadImagesCallback,
   WalliChatComposerUploadResult,
   WalliChatComposerValueCallback,

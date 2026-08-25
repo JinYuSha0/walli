@@ -84,6 +84,7 @@ function createCycledMessage(sequence: number, group: string): WalliChatMessage 
 }
 
 if (composer) {
+  composer.transcribingText = "正在转写";
   composer.uploadImagesTitle = "上传文件";
   composer.menuItems = [
     {
@@ -172,7 +173,47 @@ if (composer) {
     );
     return (file) => console.log("remove uploaded file", file);
   };
-  composer.onVoice = () => console.log("voice input");
+  composer.onTranscribe = async ({ stream, finished, signal }) => {
+    try {
+      const mediaStream = await stream;
+      const { audio } = await finished;
+      await new Promise<void>((resolve, reject) => {
+        const timer = window.setTimeout(resolve, 800);
+        signal.addEventListener(
+          "abort",
+          () => {
+            window.clearTimeout(timer);
+            reject(signal.reason);
+          },
+          { once: true },
+        );
+      });
+      console.log("transcribed audio", { bytes: audio.size, type: audio.type });
+      return "这是 Demo 模拟返回的语音转写内容。";
+    } catch (error) {
+      if (error instanceof DOMException) {
+        switch (error.name) {
+          case "NotAllowedError":
+            console.error("Microphone permission was denied", error);
+            break;
+          case "NotFoundError":
+            console.error("No microphone was found", error);
+            break;
+          case "NotSupportedError":
+            console.error("Audio recording is not supported", error);
+            break;
+          case "AbortError":
+            console.error("Transcription was cancelled", error);
+            break;
+          default:
+            console.error(`Transcription failed with ${error.name}`, error);
+        }
+      } else {
+        console.error("Transcription failed", error);
+      }
+      throw error;
+    }
+  };
 }
 
 const controls = document.createElement("div");

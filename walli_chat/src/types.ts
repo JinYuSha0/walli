@@ -42,6 +42,17 @@ export type WalliChatComposerUploadResult =
   { url: string; error?: never } | { error: Error; url?: never };
 export type WalliChatComposerValueCallback = (value: string) => void;
 export type WalliChatComposerActionCallback = () => void;
+export type WalliChatComposerTranscriptionResult = {
+  audio: Blob;
+};
+export type WalliChatComposerTranscriptionContext = {
+  finished: Promise<WalliChatComposerTranscriptionResult>;
+  signal: AbortSignal;
+  stream: Promise<MediaStream>;
+};
+export type WalliChatComposerTranscribeCallback = (
+  context: WalliChatComposerTranscriptionContext,
+) => string | PromiseLike<string>;
 export type WalliChatComposerRemoveImageCallback = (image: File) => void | Promise<void>;
 export type WalliChatComposerSetUploadProgress = (image: File, progress: number) => void;
 export type WalliChatComposerSetUploadResult = (
