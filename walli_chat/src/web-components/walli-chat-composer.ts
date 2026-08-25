@@ -24,6 +24,12 @@ const createIcon = (icon: Parameters<typeof createElement>[0], size = 20) =>
 
 const singleLineTextareaHeight = 40;
 const transcriptionWaveformBarCount = 96;
+const mobileTranscriptionWaveformBarCount = 32;
+
+const getTranscriptionWaveformBarCount = () =>
+  typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches
+    ? mobileTranscriptionWaveformBarCount
+    : transcriptionWaveformBarCount;
 
 type TranscriptionSession = {
   abortController: AbortController;
@@ -391,7 +397,8 @@ export class WalliChatComposerElement extends LitElement {
     context.createMediaStreamSource(stream).connect(analyser);
     session.audioContext = context;
     const samples = new Uint8Array(analyser.fftSize);
-    const levels = Array.from({ length: transcriptionWaveformBarCount }, () => 0);
+    const bars = this.renderRoot.querySelectorAll<HTMLElement>(".voice-wave-bar");
+    const levels = Array.from({ length: bars.length }, () => 0);
     let previousLevel = 0;
     let previousSampleTime = 0;
 
@@ -413,7 +420,6 @@ export class WalliChatComposerElement extends LitElement {
         levels.push(level);
         previousSampleTime = time;
 
-        const bars = this.renderRoot.querySelectorAll<HTMLElement>(".voice-wave-bar");
         bars.forEach((bar, index) => {
           const barLevel = levels[index] ?? 0;
           const height = 2 + barLevel * 20;
@@ -581,9 +587,9 @@ export class WalliChatComposerElement extends LitElement {
                 aria-label="Recording audio"
               >
                 ${Array.from(
-                  { length: transcriptionWaveformBarCount },
+                  { length: getTranscriptionWaveformBarCount() },
                   () => html`<i
-                    class="voice-wave-bar block h-0.5 w-0.5 flex-none rounded-full bg-muted-foreground opacity-35 transition-[height,opacity] duration-150 ease-out"
+                    class="voice-wave-bar block h-0.5 w-0.5 flex-none rounded-full bg-muted-foreground opacity-35"
                     aria-hidden="true"
                   ></i>`,
                 )}
