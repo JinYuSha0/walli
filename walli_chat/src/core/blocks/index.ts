@@ -15,6 +15,7 @@ export { buildPlainTextBlocks } from "./plain-text-block";
 export { buildListBlocks } from "./list-block";
 export { buildTableBlock, WalliTableBlockElement } from "./table-block";
 export { WalliCustomBlockElement } from "./custom-block";
+export { loadingBlockDefinition } from "./loading-block";
 
 export const builtInBlocks = {
   assetsGroup: "assetsGroup",

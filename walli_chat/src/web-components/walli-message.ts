@@ -78,7 +78,7 @@ export class WalliMessageElement extends HTMLElement {
           )}
         </div>
         ${
-          message.prepared.streaming
+          message.prepared.streaming || !message.prepared.showActions
             ? null
             : message.frame.role === "assistant"
               ? html`<walli-assistant-message-actions

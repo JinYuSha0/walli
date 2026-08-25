@@ -21,7 +21,12 @@ const composer = document.querySelector<WalliChatComposerElement>("walli-chat-co
 let activeStreamingHandle: WalliChatStreamingHandle | null = null;
 
 if (chat) {
-  chat.messages = getDemoMessages();
+  chat.messages = [];
+  chat.loading = true;
+  window.setTimeout(() => {
+    chat.loading = false;
+    chat.messages = getDemoMessages();
+  });
   chat.onFeedback = (id, markdown, feedback) => {
     console.log("feedback", { id, markdown, feedback });
   };
@@ -184,6 +189,25 @@ appendButton.addEventListener("click", () => {
   chat?.insertMessagesAtBottom(nextMessages);
 });
 
+const appendWithoutActionsButton = document.createElement("button");
+appendWithoutActionsButton.textContent = "插入 Loading Block";
+applyButtonStyle(appendWithoutActionsButton);
+appendWithoutActionsButton.addEventListener("click", () => {
+  const batch = ++insertionSequence;
+  const removeLoadingBlock = chat?.insertMessagesAtBottom(
+    [
+      {
+        id: `loading-block-${batch}`,
+        role: "assistant",
+        markdown: ":::loading-block\n:::",
+        showActions: false,
+      },
+    ],
+    { stickToBottom: true },
+  );
+  window.setTimeout(() => removeLoadingBlock?.(), 2_000);
+});
+
 const themeButton = document.createElement("button");
 applyButtonStyle(themeButton);
 updateThemeButtonLabel();
@@ -319,6 +343,7 @@ hint.style.lineHeight = "20px";
 controlsContent.append(
   prependButton,
   appendButton,
+  appendWithoutActionsButton,
   themeButton,
   streamButton,
   indexInput,

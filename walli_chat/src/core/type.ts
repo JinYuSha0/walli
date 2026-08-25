@@ -98,6 +98,7 @@ export type PreparedChatMessage = {
   markdown: string;
   id: string;
   role: "assistant" | "user";
+  showActions: boolean;
   streaming?: boolean;
 };
 

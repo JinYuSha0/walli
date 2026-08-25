@@ -1,6 +1,7 @@
 import "./walli-message";
 import "./walli-scroll-to-bottom-button";
-import { html, LitElement } from "lit";
+import "./walli-loading";
+import { html, LitElement, nothing } from "lit";
 import { customElement, eventOptions, property, state } from "lit/decorators.js";
 import walliChatUnoCss from "virtual:walli-chat-uno-styles";
 import prismThemeCss from "../core/styles/prism-theme.css?inline";
@@ -15,11 +16,14 @@ import type { ConversationFrame, PreparedChatMessage } from "../core/type";
 import { StreamingMarkdownParser } from "../core/md-parse";
 import { parseEventData, ServerSentEventParser, type ServerSentEvent } from "../core/sse-parser";
 import { registerStreamBlocks } from "../core/blocks/stream-block";
+import { registerLoadingBlock } from "../core/blocks/loading-block";
 import { getCommonStyle } from "../core/styles";
 import { timeScheduler } from "../core/helper";
 import type {
   WalliChatMessage,
   WalliChatFeedbackCallback,
+  WalliChatInsertMessagesAtBottomOptions,
+  WalliChatInsertMessagesAtTopOptions,
   WalliChatMessageCallback,
   WalliChatRemoveMessages,
   WalliChatScrollToIndexOptions,
@@ -47,6 +51,8 @@ const STREAMING_START_MARKDOWN = ":::start-block\n";
 
 @customElement("walli-chat")
 export class WalliChatElement extends LitElement {
+  @property({ attribute: false }) accessor emptyContent: unknown;
+  @property({ type: Boolean, reflect: true }) accessor loading = false;
   @property({ attribute: false }) accessor onFeedback: WalliChatFeedbackCallback | undefined;
   @property({ attribute: false }) accessor onReply: WalliChatMessageCallback | undefined;
   @property({ attribute: false }) accessor onShare: WalliChatMessageCallback | undefined;
@@ -88,6 +94,7 @@ export class WalliChatElement extends LitElement {
 
   constructor() {
     super();
+    registerLoadingBlock();
     registerStreamBlocks();
   }
 
@@ -189,21 +196,37 @@ export class WalliChatElement extends LitElement {
     this.scheduleScrollRequest();
   }
 
-  insertMessagesAtTop(messages: readonly WalliChatMessage[]): WalliChatRemoveMessages {
+  insertMessagesAtTop(
+    messages: readonly WalliChatMessage[],
+    options: WalliChatInsertMessagesAtTopOptions = {},
+  ): WalliChatRemoveMessages {
     if (messages.length === 0) return () => undefined;
 
     const insertedMessages = [...messages];
     this.topInsertedMessageGroups.unshift(insertedMessages);
+    if (options.stickToTop) {
+      this.pendingScrollRequest = { animated: false, target: "top" };
+    }
     this.applyMessagesInsertion("top", [...insertedMessages, ...this._messages], this._messages);
+    if (options.stickToTop) this.scheduleScrollRequest();
     return this.createInsertedMessagesRemoval("top", insertedMessages);
   }
 
-  insertMessagesAtBottom(messages: readonly WalliChatMessage[]): WalliChatRemoveMessages {
+  insertMessagesAtBottom(
+    messages: readonly WalliChatMessage[],
+    options: WalliChatInsertMessagesAtBottomOptions = {},
+  ): WalliChatRemoveMessages {
     if (messages.length === 0) return () => undefined;
 
     const insertedMessages = [...messages];
     this.bottomInsertedMessageGroups.push(insertedMessages);
+    if (options.stickToBottom) {
+      this.isScrollingToBottom = true;
+      this.isAtBottom = true;
+      this.pendingScrollRequest = { animated: false, target: "bottom" };
+    }
     this.applyMessagesInsertion("bottom", [...this._messages, ...insertedMessages], this._messages);
+    if (options.stickToBottom) this.scheduleScrollRequest();
     return this.createInsertedMessagesRemoval("bottom", insertedMessages);
   }
 
@@ -429,6 +452,7 @@ export class WalliChatElement extends LitElement {
       markdown,
       id: message.id,
       role: "assistant",
+      showActions: message.showActions ?? true,
       streaming: true,
     };
     this.invalidateFrame({ keepMountedRows: true });
@@ -622,14 +646,18 @@ export class WalliChatElement extends LitElement {
         0,
         viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop,
       );
-      const isAtBottom = distanceToBottom <= getCommonStyle("bottomOcclusionHeight");
-      if (this.isScrollingToBottom) {
-        if (isAtBottom) this.isScrollingToBottom = false;
-      } else {
-        this.isAtBottom = isAtBottom;
-      }
+      this.updateBottomState(distanceToBottom);
     }
     this.scheduleProjection();
+  }
+
+  private updateBottomState(distanceToBottom: number): void {
+    const isAtBottom = distanceToBottom <= getCommonStyle("bottomOcclusionHeight");
+    if (this.isScrollingToBottom) {
+      if (isAtBottom) this.isScrollingToBottom = false;
+    } else {
+      this.isAtBottom = isAtBottom;
+    }
   }
 
   private handleScrollInteractionStart(): void {
@@ -704,6 +732,7 @@ export class WalliChatElement extends LitElement {
     const frame = this.frame!;
     const forceProjection = !canReuseFrame;
     const { start, end } = findVisibleRange(frame, scrollTop, viewportHeight, 0, 0);
+    this.updateBottomState(Math.max(0, frame.totalHeight - viewportHeight - scrollTop));
 
     if (
       this.contentSize.width !== frame.chatWidth ||
@@ -950,6 +979,16 @@ export class WalliChatElement extends LitElement {
         >
           <div class="chat-canvas relative mx-auto min-h-full"></div>
         </div>
+        ${this._messages.length === 0
+          ? html`
+              <div class="empty-content absolute inset-0 flex items-center justify-center">
+                ${this.emptyContent ??
+                html`<slot name="empty-content">
+                  ${this.loading ? html`<walli-loading></walli-loading>` : nothing}
+                </slot>`}
+              </div>
+            `
+          : nothing}
         <walli-scroll-to-bottom-button
           class="absolute left-1/2 z-10 [transform:translateX(-50%)]"
           style=${`bottom:${

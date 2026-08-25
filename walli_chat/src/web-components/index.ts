@@ -2,12 +2,14 @@ import { WalliChatElement } from "./walli-chat";
 import { WalliChatComposerElement } from "./walli-chat-composer";
 import { WalliChatComposerAssetsElement } from "./walli-chat-composer-assets";
 import { WalliMessageElement } from "./walli-message";
+import { WalliLoadingElement } from "./walli-loading";
 
 export {
   WalliChatComposerAssetsElement,
   WalliChatComposerElement,
   WalliChatElement,
   WalliMessageElement,
+  WalliLoadingElement,
 };
 export type {
   WalliChatComposerActionCallback,
@@ -25,6 +27,8 @@ export type {
   WalliChatMessage,
   WalliChatFeedback,
   WalliChatFeedbackCallback,
+  WalliChatInsertMessagesAtBottomOptions,
+  WalliChatInsertMessagesAtTopOptions,
   WalliChatMessageCallback,
   WalliChatRemoveMessages,
   WalliChatScrollTarget,
@@ -43,5 +47,6 @@ declare global {
     "walli-custom-block": HTMLElement;
     "walli-custom-block-content": HTMLElement;
     "walli-message": WalliMessageElement;
+    "walli-loading": WalliLoadingElement;
   }
 }

@@ -9,7 +9,11 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import type { WalliChatComposerElement, WalliChatElement } from "../web-components";
+import type {
+  WalliChatComposerElement,
+  WalliChatElement,
+  WalliLoadingElement,
+} from "../web-components";
 import type { WalliChatTokenizedBlockDefinition } from "../core/blocks/custom-block";
 import {
   builtInBlocks,
@@ -34,6 +38,8 @@ import type {
   WalliChatComposerUploadResult,
   WalliChatComposerValueCallback,
   WalliChatFeedbackCallback,
+  WalliChatInsertMessagesAtBottomOptions,
+  WalliChatInsertMessagesAtTopOptions,
   WalliChatMessageCallback,
   WalliChatRemoveMessages,
   WalliChatScrollTarget,
@@ -60,6 +66,23 @@ export type WalliChatComposerProps = {
   uploadImagesTitle?: string;
   value: string;
 };
+
+export type WalliLoadingProps = {
+  ariaLabel?: string;
+  className?: string;
+  style?: CSSProperties;
+};
+
+export const WalliLoading = forwardRef<WalliLoadingElement, WalliLoadingProps>(
+  function WalliLoading({ ariaLabel = "Loading", className, style }, forwardedRef) {
+    return createElement("walli-loading", {
+      "aria-label": ariaLabel,
+      className,
+      ref: forwardedRef,
+      style,
+    });
+  },
+);
 
 export type WalliChatComposerRef = {
   readonly element: WalliChatComposerElement | null;
@@ -137,6 +160,8 @@ export type WalliChatProps = {
   children?: ReactNode;
   className?: string;
   defaultScrollToBottom?: boolean;
+  emptyContent?: ReactNode;
+  loading?: boolean;
   messages: readonly WalliChatMessage[];
   onFeedback?: WalliChatFeedbackCallback;
   onReply?: WalliChatMessageCallback;
@@ -146,8 +171,14 @@ export type WalliChatProps = {
 
 export type WalliChatRef = {
   readonly element: WalliChatElement | null;
-  insertMessagesAtTop: (messages: readonly WalliChatMessage[]) => WalliChatRemoveMessages;
-  insertMessagesAtBottom: (messages: readonly WalliChatMessage[]) => WalliChatRemoveMessages;
+  insertMessagesAtTop: (
+    messages: readonly WalliChatMessage[],
+    options?: WalliChatInsertMessagesAtTopOptions,
+  ) => WalliChatRemoveMessages;
+  insertMessagesAtBottom: (
+    messages: readonly WalliChatMessage[],
+    options?: WalliChatInsertMessagesAtBottomOptions,
+  ) => WalliChatRemoveMessages;
   insertStreamingMessageAtBottom: (
     stream: WalliChatTextStream,
     options: WalliChatStreamingOptions,
@@ -168,6 +199,8 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
     children,
     className,
     defaultScrollToBottom = true,
+    emptyContent,
+    loading = false,
     messages,
     onFeedback,
     onReply,
@@ -187,8 +220,9 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
   useEffect(() => {
     if (elementRef.current) {
       elementRef.current.defaultScrollToBottom = defaultScrollToBottom;
+      elementRef.current.loading = loading;
     }
-  }, [defaultScrollToBottom]);
+  }, [defaultScrollToBottom, loading]);
 
   useEffect(() => {
     if (elementRef.current && bottomOcclusionHeight !== undefined) {
@@ -210,11 +244,13 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
       get element() {
         return elementRef.current;
       },
-      insertMessagesAtTop(nextMessages) {
-        return elementRef.current?.insertMessagesAtTop(nextMessages) ?? (() => undefined);
+      insertMessagesAtTop(nextMessages, options) {
+        return elementRef.current?.insertMessagesAtTop(nextMessages, options) ?? (() => undefined);
       },
-      insertMessagesAtBottom(nextMessages) {
-        return elementRef.current?.insertMessagesAtBottom(nextMessages) ?? (() => undefined);
+      insertMessagesAtBottom(nextMessages, options) {
+        return (
+          elementRef.current?.insertMessagesAtBottom(nextMessages, options) ?? (() => undefined)
+        );
       },
       insertStreamingMessageAtBottom(stream, options) {
         const element = elementRef.current;
@@ -243,6 +279,9 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
       ref: elementRef,
       style,
     },
+    emptyContent == null
+      ? null
+      : createElement("div", { slot: "empty-content" }, emptyContent),
     children,
   );
 });
@@ -266,6 +305,8 @@ export type {
   WalliChatComposerValueCallback,
   WalliChatMessage,
   WalliChatFeedbackCallback,
+  WalliChatInsertMessagesAtBottomOptions,
+  WalliChatInsertMessagesAtTopOptions,
   WalliChatMessageCallback,
   WalliChatRemoveMessages,
   WalliChatScrollTarget,

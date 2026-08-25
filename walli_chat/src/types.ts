@@ -4,6 +4,7 @@ export type WalliChatMessage = {
   id: string;
   role: "assistant" | "user";
   markdown: string;
+  showActions?: boolean;
 };
 
 export type WalliChatFeedback = "like" | "dislike";
@@ -14,6 +15,12 @@ export type WalliChatFeedbackCallback = (
 ) => void;
 export type WalliChatMessageCallback = (id: string, markdown: string) => void;
 export type WalliChatRemoveMessages = () => void;
+export type WalliChatInsertMessagesAtTopOptions = {
+  stickToTop?: boolean;
+};
+export type WalliChatInsertMessagesAtBottomOptions = {
+  stickToBottom?: boolean;
+};
 
 export type WalliChatComposerSubmitCallback = (
   markdown: string,

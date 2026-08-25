@@ -33,6 +33,7 @@ export function createPreparedChatMessages(
       markdown: seed.markdown,
       id: seed.id,
       role: seed.role,
+      showActions: seed.showActions ?? true,
       streaming: options.streaming || undefined,
     };
   });
@@ -169,7 +170,7 @@ function layoutMessageFrame(
   }
 
   const bubbleHeight = y + getCommonStyle("bubblePaddingY");
-  const actionHeight = preparedMessage.streaming
+  const actionHeight = preparedMessage.streaming || !preparedMessage.showActions
     ? 0
     : preparedMessage.role === "assistant"
       ? getCommonStyle("assistantMessageActionHeight")
