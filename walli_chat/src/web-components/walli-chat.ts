@@ -69,6 +69,7 @@ export class WalliChatElement extends LitElement {
   private composerResizeObserver?: ResizeObserver;
   private scheduledRaf: number | null = null;
   private scheduledScrollRaf: number | null = null;
+  private scheduledEndReachedRaf: number | null = null;
   private frame: ConversationFrame | null = null;
   private canvasElement: HTMLDivElement | null = null;
   private viewportElement: HTMLDivElement | null = null;
@@ -543,6 +544,10 @@ export class WalliChatElement extends LitElement {
       cancelAnimationFrame(this.scheduledScrollRaf);
       this.scheduledScrollRaf = null;
     }
+    if (this.scheduledEndReachedRaf !== null) {
+      cancelAnimationFrame(this.scheduledEndReachedRaf);
+      this.scheduledEndReachedRaf = null;
+    }
     timeScheduler.destroy();
     this.resizeObserver?.disconnect();
     this.resizeObserver = undefined;
@@ -565,13 +570,13 @@ export class WalliChatElement extends LitElement {
     }
     if (changedProperties.has("defaultScrollToBottom")) {
       this.endReachedContentWindow = null;
-      this.scheduleProjection();
+      this.scheduleEndReachedCheck();
     }
     if (
       changedProperties.has("onEndReached") ||
       changedProperties.has("onEndReachedThreshold")
     ) {
-      this.scheduleProjection();
+      this.scheduleEndReachedCheck();
     }
   }
 
@@ -635,6 +640,7 @@ export class WalliChatElement extends LitElement {
       this.canvasElement?.replaceChildren();
     }
     this.scheduleProjection();
+    this.scheduleEndReachedCheck();
   }
 
   override createRenderRoot() {
@@ -663,6 +669,7 @@ export class WalliChatElement extends LitElement {
       this.updateBottomState(distanceToBottom);
     }
     this.scheduleProjection();
+    this.scheduleEndReachedCheck();
   }
 
   private updateBottomState(distanceToBottom: number): void {
@@ -710,6 +717,20 @@ export class WalliChatElement extends LitElement {
     this.scheduledRaf = requestAnimationFrame(() => {
       this.scheduledRaf = null;
       this.projectFrame();
+    });
+  }
+
+  private scheduleEndReachedCheck(): void {
+    if (this.scheduledEndReachedRaf !== null) return;
+    this.scheduledEndReachedRaf = requestAnimationFrame(() => {
+      this.scheduledEndReachedRaf = null;
+      const viewport = this.viewportElement;
+      if (viewport === null) return;
+      this.checkEndReached(
+        viewport.scrollTop,
+        viewport.clientHeight,
+        this.frame?.totalHeight ?? viewport.scrollHeight,
+      );
     });
   }
 
@@ -766,7 +787,6 @@ export class WalliChatElement extends LitElement {
       }
     }
     this.projectVisibleRows(frame, start, end, forceProjection);
-    this.checkEndReached(scrollTop, viewportHeight, frame.totalHeight);
   }
 
   private checkEndReached(
@@ -796,19 +816,27 @@ export class WalliChatElement extends LitElement {
     if (contentWindow === this.endReachedContentWindow) return;
 
     this.endReachedContentWindow = contentWindow;
-    const result = callback({ distanceFromEnd });
+    this.endReachedCallPending = true;
+    let result: ReturnType<WalliChatEndReachedCallback>;
+    try {
+      result = callback({ distanceFromEnd });
+    } catch (cause) {
+      this.endReachedCallPending = false;
+      throw cause;
+    }
     if (
       result === null ||
       (typeof result !== "object" && typeof result !== "function") ||
       typeof result.then !== "function"
     ) {
+      this.endReachedCallPending = false;
+      this.scheduleEndReachedCheck();
       return;
     }
 
-    this.endReachedCallPending = true;
     void Promise.resolve(result).finally(() => {
       this.endReachedCallPending = false;
-      this.scheduleProjection();
+      this.scheduleEndReachedCheck();
     });
   }
 
@@ -906,6 +934,7 @@ export class WalliChatElement extends LitElement {
       behavior: animated ? "smooth" : "auto",
       top: scrollTop,
     });
+    this.scheduleEndReachedCheck();
     if (!animated) this.scheduleProjection();
   }
 
