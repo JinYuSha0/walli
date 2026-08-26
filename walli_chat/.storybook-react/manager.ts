@@ -6,7 +6,7 @@ addons.setConfig({
     base: "light",
     brandImage: "/walli-robot-icon.png",
     brandTarget: "_self",
-    brandTitle: "Walli Chat · React",
+    brandTitle: "Walli Chat",
     brandUrl: "/",
   }),
 });

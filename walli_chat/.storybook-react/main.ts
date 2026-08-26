@@ -17,7 +17,28 @@ const config: StorybookConfig = {
   },
   managerHead: (head) => `${head}
     <link rel="icon" type="image/png" href="/walli-robot-icon.png" />
-    <script>document.title = "Walli Chat · React";</script>`,
+    <style>
+      a:has(> img[alt="Walli Chat"]) {
+        display: inline-flex;
+        width: auto;
+        align-items: center;
+        gap: 10px;
+      }
+      a:has(> img[alt="Walli Chat"]) > img {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        object-fit: cover;
+      }
+      a:has(> img[alt="Walli Chat"])::after {
+        content: "Walli Chat";
+        color: #1e293b;
+        font: 700 19px/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        letter-spacing: -0.35px;
+        white-space: nowrap;
+      }
+    </style>
+    <script>document.title = "Walli Chat";</script>`,
   async viteFinal(config) {
     const viteConfigUrl = pathToFileURL(resolve(process.cwd(), "vite.config.ts")).href;
     const { walliChatUnoCss } = await import(viteConfigUrl);
