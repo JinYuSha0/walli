@@ -1,6 +1,6 @@
 import type { Token } from "marked";
 import type { InlinePiece, InlineVariant, MarkState } from "./blocks/inline-block";
-import { fallbackTextForToken, parseImageDimensions, parseMarkdownHref } from "./helper";
+import { fallbackTextForToken, parseInlineImageDimensions, parseMarkdownHref } from "./helper";
 import { inlinePiece } from "./styles";
 import { getLineHeight } from "./styles/config";
 
@@ -58,15 +58,18 @@ export function collectInlinePieceLines(
           walk(token.tokens ?? [], { ...marks, href: parseMarkdownHref(token.href) });
           break;
         case "image": {
-          const parsed = parseImageDimensions(tokenList[index + 1]);
+          const parsed = parseInlineImageDimensions(tokenList[index + 1]);
           const dimensions =
-            parsed?.width !== undefined && parsed.height !== undefined
-              ? { height: parsed.height, width: parsed.width }
+            parsed?.dimensions.width !== undefined && parsed.dimensions.height !== undefined
+              ? { height: parsed.dimensions.height, width: parsed.dimensions.width }
               : null;
           pushPiece(
             inlinePiece.image(token.href, token.text, lineHeightForVariant(variant), dimensions),
           );
-          if (parsed !== null) index++;
+          if (parsed !== null) {
+            index++;
+            pushPiece(createTextPiece(parsed.remainder, marks, variant));
+          }
           break;
         }
         case "br":

@@ -7,6 +7,8 @@ export {
   inlineBlockDefinition,
   ruleBlockDefinition,
   tableBlockDefinition,
+  startBlockDefinition,
+  toolCallBlockDefinition,
 } from "./core/blocks";
 export {
   builtInBlocks,

@@ -28,3 +28,5 @@ export { inlineBlockDefinition };
 export { loadingBlockDefinition };
 export { ruleBlockDefinition };
 export { tableBlockDefinition };
+export { startBlockDefinition };
+export { toolCallBlockDefinition };

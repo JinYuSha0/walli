@@ -45,6 +45,21 @@ export function parseImageDimensions(token: Token | undefined): ImageDimensions 
   return width === undefined && height === undefined ? null : { height, width };
 }
 
+export function parseInlineImageDimensions(
+  token: Token | undefined,
+): { dimensions: ImageDimensions; remainder: string } | null {
+  if (token?.type !== "text") return null;
+
+  const match = /^\s*(\{[^}]*\})([\s\S]*)$/.exec(token.text);
+  if (!match) return null;
+  const dimensions = parseImageDimensions({
+    raw: match[1]!,
+    text: match[1]!,
+    type: "text",
+  } as Token);
+  return dimensions === null ? null : { dimensions, remainder: match[2]! };
+}
+
 function readDimension(source: string, pattern: RegExp): number | undefined {
   const value = Number(pattern.exec(source)?.[1]);
   return Number.isFinite(value) && value > 0 ? value : undefined;
