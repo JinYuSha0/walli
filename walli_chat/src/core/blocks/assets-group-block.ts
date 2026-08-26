@@ -3,14 +3,149 @@ import "photoswipe/style.css";
 import { html, type TemplateResult } from "lit";
 import { customElement } from "lit/decorators.js";
 import { createElement } from "lucide";
-import type { BlockLayout } from "../type";
+import { createBlockFrameBase } from "../helper";
+import type { BlockFrameBase, CoreBlockDefinition, PreparedBlockBase } from "../types";
 import { getFileIcon } from "../file-icon";
-import { BlockShellElement } from "./block-shell";
+import { BlockShellElement } from "../block-shell";
+import type { PreparedImageBlock } from "./image-block";
+import { getMediaStyle } from "../styles";
 
-type AssetsGroupBlockLayout = Extract<BlockLayout, { kind: "assetsGroup" }>;
+type PreparedFileAsset = { name: string; src: string; type: "file" };
+export type PreparedAssetsGroupBlock = PreparedBlockBase & {
+  assets: Array<PreparedFileAsset | PreparedImageBlock>;
+  kind: "assetsGroup";
+};
+type AssetsGroupItemLayout = {
+  alt: string;
+  crop: boolean;
+  height: number;
+  type: "file" | "image";
+  left: number;
+  name: string;
+  src: string;
+  top: number;
+  width: number;
+};
+export type AssetsGroupBlockLayout = {
+  contentLeft: number;
+  height: number;
+  items: AssetsGroupItemLayout[];
+  kind: "assetsGroup";
+  markerClassName: string | null;
+  markerLeft: number | null;
+  markerText: string | null;
+  quoteRailLefts: number[];
+  top: number;
+  width: number;
+};
+type AssetsGroupItemFrame = {
+  crop: boolean;
+  height: number;
+  type: "file" | "image";
+  left: number;
+  top: number;
+  width: number;
+};
+export type AssetsGroupBlockFrame = BlockFrameBase & {
+  items: AssetsGroupItemFrame[];
+  kind: "assetsGroup";
+  width: number;
+};
+
+function layoutAssetsGroup(
+  assets: readonly PreparedAssetsGroupBlock["assets"][number][],
+  contentWidth: number,
+): AssetsGroupBlockFrame["items"] {
+  const maxWidth = getMediaStyle("imageMaxWidth");
+  if (assets.length === 1 && "kind" in assets[0]!) {
+    const image = assets[0]!;
+    const availableWidth = Math.max(1, contentWidth - image.contentLeft);
+    const width = Math.max(1, Math.round(Math.min(maxWidth, availableWidth)));
+    const height =
+      image.targetWidth !== null && image.targetHeight !== null
+        ? image.targetHeight * (width / image.targetWidth)
+        : width * (getMediaStyle("imageHeight") / maxWidth);
+    return [
+      {
+        crop: true,
+        height: Math.max(1, Math.round(height)),
+        type: "image",
+        left: 0,
+        top: 0,
+        width,
+      },
+    ];
+  }
+
+  const gap = getMediaStyle("imageGap");
+  const width = Math.min(contentWidth, maxWidth);
+  const columnCount = 3;
+  const cell = (width - gap * (columnCount - 1)) / columnCount;
+
+  return assets.map((asset, index) => {
+    const row = Math.floor(index / columnCount);
+    const columnFromRight = index % columnCount;
+    const column = columnCount - columnFromRight - 1;
+    return {
+      crop: true,
+      height: Math.max(1, Math.round(cell)),
+      type: "kind" in asset ? "image" : "file",
+      left: Math.round(column * (cell + gap)),
+      top: Math.round(row * (cell + gap)),
+      width: Math.max(1, Math.round(cell)),
+    };
+  });
+}
+
+export const assetsGroupBlockDefinition = {
+  name: "assetsGroup",
+  prepare: prepareAssetsGroupBlock,
+  measure(block, { contentWidth, top }) {
+    const items = layoutAssetsGroup(block.assets, contentWidth);
+    return {
+      ...createBlockFrameBase(block, top),
+      height: Math.max(...items.map((item) => item.top + item.height)),
+      items,
+      kind: "assetsGroup",
+      width: Math.max(...items.map((item) => item.left + item.width)),
+    };
+  },
+  materialize(block, frame) {
+    return {
+      contentLeft: frame.contentLeft,
+      height: frame.height,
+      items: frame.items.map((itemFrame, index) => ({
+        ...itemFrame,
+        alt: "kind" in block.assets[index]! ? block.assets[index]!.alt : "",
+        name: "type" in block.assets[index]! ? block.assets[index]!.name : block.assets[index]!.alt,
+        src: block.assets[index]!.src,
+      })),
+      kind: "assetsGroup",
+      markerClassName: frame.markerClassName,
+      markerLeft: frame.markerLeft,
+      markerText: frame.markerText,
+      quoteRailLefts: frame.quoteRailLefts,
+      top: frame.top,
+      width: frame.width,
+    };
+  },
+  render: ({ block, contentInsetX }) =>
+    html`<walli-assets-group-block .layout=${{ block, contentInsetX }}></walli-assets-group-block>`,
+} satisfies CoreBlockDefinition<"assetsGroup", typeof prepareAssetsGroupBlock>;
+
+function prepareAssetsGroupBlock(
+  assets: PreparedAssetsGroupBlock["assets"],
+  base: PreparedBlockBase,
+): PreparedAssetsGroupBlock {
+  return {
+    ...base,
+    assets,
+    kind: "assetsGroup",
+  };
+}
 
 @customElement("walli-assets-group-block")
-export class WalliAssetsGroupBlockElement extends BlockShellElement<AssetsGroupBlockLayout> {
+class WalliAssetsGroupBlockElement extends BlockShellElement<AssetsGroupBlockLayout> {
   private renderedBlock: AssetsGroupBlockLayout | null = null;
 
   protected override renderContent(
@@ -103,3 +238,5 @@ export class WalliAssetsGroupBlockElement extends BlockShellElement<AssetsGroupB
     }).init();
   }
 }
+
+void WalliAssetsGroupBlockElement;

@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import type { InlineVariant, MarkState, InlinePiece } from "../type";
+import type { InlinePiece, InlineVariant, MarkState } from "../blocks/inline-block";
 import { getFontSize, getResponsiveValue, getSpace } from "./config";
 import { parseMarkdownImageSrc } from "../helper";
 import { computed } from "@preact/signals-core";
@@ -153,6 +153,18 @@ export const inlinePiece = {
   image,
   mark,
 } as const;
+
+const MediaStyle = computed(() => ({
+  imageGap: 2,
+  imageHeight: 240,
+  imageMaxWidth: 320,
+}));
+
+export function getMediaStyle<Key extends keyof (typeof MediaStyle)["value"]>(
+  key: Key,
+): (typeof MediaStyle)["value"][Key] {
+  return MediaStyle.value[key];
+}
 
 const CommonStyle = computed(() => ({
   blockGap: getSpace(4),

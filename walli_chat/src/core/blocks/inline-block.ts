@@ -1,37 +1,145 @@
 import type { Token } from "marked";
+import type { PreparedRichInline } from "@chenglou/pretext/rich-inline";
 import type {
-  BlockLayout,
-  InlineFragmentLayout,
-  InlinePiece,
-  InlineVariant,
-  MarkState,
+  BlockFrameBase,
+  CoreBlockDefinition,
   ParseContext,
   PreparedBlock,
-  PreparedInlineBlock,
-} from "../type";
-import { inlinePiece } from "../styles";
+  PreparedBlockBase,
+} from "../types";
+import { createBlockBase, createBlockFrameBase } from "../helper";
+import { getSpace } from "../styles/config";
+import { collectInlinePieceLines, lineHeightForVariant } from "../inline-content";
 import {
-  createBlockBase,
-  fallbackTextForToken,
-  parseImageDimensions,
-  parseMarkdownHref,
-} from "../helper";
-import { getLineHeight, getSpace } from "../styles/config";
-import { prepareRichInline } from "@chenglou/pretext/rich-inline";
+  materializeRichInlineLineRange,
+  measureRichInlineStats,
+  prepareRichInline,
+  walkRichInlineLineRanges,
+} from "@chenglou/pretext/rich-inline";
 import { computed } from "@preact/signals-core";
 import { customElement } from "lit/decorators.js";
-import { BlockShellElement } from "./block-shell";
+import { BlockShellElement } from "../block-shell";
 import { html, type TemplateResult } from "lit";
+
+export type InlineVariant = "body" | "h1" | "h2";
+export type InlinePiece = {
+  breakMode: "normal" | "never";
+  className: string;
+  font: string;
+  text: string;
+  extraWidth?: number;
+  href?: string;
+  imageAlt?: string;
+  imageHeight?: number;
+  imageSrc?: string;
+  imageWidth?: number;
+};
+export type MarkState = { bold: boolean; italic: boolean; strike: boolean; href?: string };
+export type PreparedInlineItem = {
+  className: string;
+  href: string | null;
+  image: { alt: string; height: number | null; src: string | null; width: number | null } | null;
+};
+export type PreparedInlineBlock = PreparedBlockBase & {
+  kind: "inline";
+  flow: PreparedRichInline;
+  items: PreparedInlineItem[];
+  lineHeight: number;
+};
+export type InlineFragmentLayout = {
+  alt: string | null;
+  className: string;
+  href: string | null;
+  kind: "image" | "text";
+  imageHeight: number | null;
+  imageWidth: number | null;
+  leadingGap: number;
+  src: string | null;
+  text: string;
+};
+export type InlineBlockLayout = {
+  contentLeft: number;
+  height: number;
+  kind: "inline";
+  lineHeight: number;
+  lines: Array<{ fragments: InlineFragmentLayout[]; width: number }>;
+  markerClassName: string | null;
+  markerLeft: number | null;
+  markerText: string | null;
+  quoteRailLefts: number[];
+  top: number;
+  usedWidth: number;
+};
+export type InlineBlockFrame = BlockFrameBase & {
+  kind: "inline";
+  lineHeight: number;
+  usedWidth: number;
+};
 
 const InlineBlockStyle = computed(() => ({
   hardBreakGap: getSpace(1),
 }));
 
-export function getInlineBlockStyle(key: keyof (typeof InlineBlockStyle)["value"]) {
+function getInlineBlockStyle(key: keyof (typeof InlineBlockStyle)["value"]) {
   return InlineBlockStyle.value[key];
 }
 
-export function buildInlineBlocks(
+export const inlineBlockDefinition = {
+  name: "inline",
+  prepare: buildInlineBlocks,
+  measure(block, { availableWidth, top }) {
+    const lineWidth = Math.max(1, availableWidth);
+    const { lineCount, maxLineWidth } = measureRichInlineStats(block.flow, lineWidth);
+    return {
+      ...createBlockFrameBase(block, top),
+      height: lineCount * block.lineHeight,
+      kind: "inline",
+      lineHeight: block.lineHeight,
+      usedWidth: maxLineWidth,
+    };
+  },
+  materialize(block, frame, { contentWidth }) {
+    const lineWidth = Math.max(1, contentWidth - frame.contentLeft);
+    const lines: Array<{ fragments: InlineFragmentLayout[]; width: number }> = [];
+    walkRichInlineLineRanges(block.flow, lineWidth, (range) => {
+      const line = materializeRichInlineLineRange(block.flow, range);
+      lines.push({
+        fragments: line.fragments.map((fragment) => {
+          const item = block.items[fragment.itemIndex]!;
+          return {
+            alt: item.image?.alt ?? null,
+            className: item.className,
+            href: item.href,
+            imageHeight: item.image?.height ?? null,
+            imageWidth: item.image?.width ?? null,
+            kind: item.image === null ? "text" : "image",
+            leadingGap: fragment.gapBefore,
+            src: item.image?.src ?? null,
+            text: fragment.text,
+          };
+        }),
+        width: line.width,
+      });
+    });
+    return {
+      contentLeft: frame.contentLeft,
+      height: frame.height,
+      kind: "inline",
+      lineHeight: frame.lineHeight,
+      lines,
+      markerClassName: frame.markerClassName,
+      markerLeft: frame.markerLeft,
+      markerText: frame.markerText,
+      quoteRailLefts: frame.quoteRailLefts,
+      top: frame.top,
+      usedWidth: frame.usedWidth,
+    };
+  },
+  render: ({ block, contentInsetX }) =>
+    html`<walli-inline-block .layout=${{ block, contentInsetX }}></walli-inline-block>`,
+} satisfies CoreBlockDefinition<"inline", typeof buildInlineBlocks>;
+
+function buildInlineBlocks(
   tokens: readonly Token[],
   variant: InlineVariant,
   ctx: ParseContext,
@@ -40,166 +148,7 @@ export function buildInlineBlocks(
   return buildPreparedInlineBlocks(lines, variant, ctx);
 }
 
-export function collectInlinePieceLines(
-  tokens: readonly Token[],
-  variant: InlineVariant,
-): InlinePiece[][] {
-  const lines: InlinePiece[][] = [[]];
-
-  function currentLine(): InlinePiece[] {
-    return lines[lines.length - 1]!;
-  }
-
-  function pushLineBreak(): void {
-    lines.push([]);
-  }
-
-  function pushPiece(piece: InlinePiece | null): void {
-    if (piece === null) return;
-    const line = currentLine();
-    const previous = line[line.length - 1];
-    if (previous !== undefined && canMergeInlinePieces(previous, piece)) {
-      previous.text += piece.text;
-      return;
-    }
-    line.push(piece);
-  }
-
-  function walk(tokenList: readonly Token[], marks: MarkState): void {
-    for (let index = 0; index < tokenList.length; index++) {
-      const token = tokenList[index]!;
-
-      switch (token.type) {
-        case "text": {
-          if (Array.isArray(token.tokens) && token.tokens.length > 0) {
-            walk(token.tokens, marks);
-          } else {
-            pushPiece(createTextPiece(token.text, marks, variant));
-          }
-          continue;
-        }
-
-        case "escape": {
-          pushPiece(createTextPiece(token.text, marks, variant));
-          continue;
-        }
-
-        case "strong": {
-          walk(token.tokens ?? [], { ...marks, bold: true });
-          continue;
-        }
-
-        case "em": {
-          walk(token.tokens ?? [], { ...marks, italic: true });
-          continue;
-        }
-
-        case "del": {
-          walk(token.tokens ?? [], { ...marks, strike: true });
-          continue;
-        }
-
-        case "codespan": {
-          pushPiece(createCodePiece(token.text));
-          continue;
-        }
-
-        case "link": {
-          walk(token.tokens ?? [], { ...marks, href: parseMarkdownHref(token.href) });
-          continue;
-        }
-
-        case "image": {
-          const parsedDimensions = parseImageDimensions(tokenList[index + 1]);
-          const dimensions =
-            parsedDimensions?.width !== undefined && parsedDimensions.height !== undefined
-              ? { height: parsedDimensions.height, width: parsedDimensions.width }
-              : null;
-          pushPiece(createImagePiece(token.href, token.text, variant, dimensions));
-          if (parsedDimensions !== null) index++;
-          continue;
-        }
-
-        case "br": {
-          pushLineBreak();
-          continue;
-        }
-
-        case "checkbox": {
-          pushPiece(createTextPiece(token.checked ? "[x] " : "[ ] ", marks, variant));
-          continue;
-        }
-
-        case "html": {
-          pushPiece(createTextPiece(token.text, marks, variant));
-          continue;
-        }
-
-        default: {
-          const fallback = fallbackTextForToken(token);
-          if (fallback.length > 0) {
-            pushPiece(createTextPiece(fallback, marks, variant));
-          }
-        }
-      }
-    }
-  }
-
-  walk(tokens, EMPTY_MARK_STATE);
-
-  while (lines.length > 0 && lines[lines.length - 1]!.length === 0) {
-    lines.pop();
-  }
-
-  return lines;
-}
-
-export const EMPTY_MARK_STATE: MarkState = {
-  bold: false,
-  italic: false,
-  strike: false,
-};
-
-function canMergeInlinePieces(a: InlinePiece, b: InlinePiece): boolean {
-  return (
-    a.breakMode === b.breakMode &&
-    a.className === b.className &&
-    a.extraWidth === b.extraWidth &&
-    a.font === b.font &&
-    a.href === b.href &&
-    a.imageAlt === b.imageAlt &&
-    a.imageHeight === b.imageHeight &&
-    a.imageSrc === b.imageSrc &&
-    a.imageWidth === b.imageWidth
-  );
-}
-
-export function createTextPiece(
-  text: string,
-  marks: MarkState,
-  variant: InlineVariant,
-): InlinePiece | null {
-  if (text.length === 0) return null;
-
-  return inlinePiece[variant](text, marks);
-}
-
-function createCodePiece(text: string): InlinePiece | null {
-  if (text.length === 0) return null;
-
-  return inlinePiece.code(text);
-}
-
-function createImagePiece(
-  src: string | null | undefined,
-  alt: string,
-  variant: InlineVariant,
-  dimensions: { height: number; width: number } | null,
-): InlinePiece {
-  return inlinePiece.image(src, alt, lineHeightForVariant(variant), dimensions);
-}
-
-export function buildPreparedInlineBlocks(
+function buildPreparedInlineBlocks(
   lines: InlinePiece[][],
   variant: InlineVariant,
   ctx: ParseContext,
@@ -227,7 +176,6 @@ function buildPreparedInlineBlock(
 
   return {
     ...createBlockBase(ctx),
-    classNames: pieces.map((piece) => piece.className),
     flow: prepareRichInline(
       pieces.map((piece) => ({
         text: piece.text,
@@ -236,31 +184,26 @@ function buildPreparedInlineBlock(
         extraWidth: piece.extraWidth,
       })),
     ),
-    hrefs: pieces.map((piece) => piece.href ?? null),
-    imageAlts: pieces.map((piece) => piece.imageAlt ?? null),
-    imageHeights: pieces.map((piece) => piece.imageHeight ?? null),
-    imageSrcs: pieces.map((piece) => piece.imageSrc ?? null),
-    imageWidths: pieces.map((piece) => piece.imageWidth ?? null),
+    items: pieces.map((piece) => ({
+      className: piece.className,
+      href: piece.href ?? null,
+      image:
+        piece.imageSrc === undefined
+          ? null
+          : {
+              alt: piece.imageAlt ?? "",
+              height: piece.imageHeight ?? null,
+              src: piece.imageSrc ?? null,
+              width: piece.imageWidth ?? null,
+            },
+    })),
     kind: "inline",
     lineHeight: lineHeightForVariant(variant),
   };
 }
 
-function lineHeightForVariant(variant: InlineVariant): number {
-  switch (variant) {
-    case "h1":
-      return getLineHeight("text-xl");
-    case "h2":
-      return getLineHeight("text-lg");
-    case "body":
-      return getLineHeight("text-base");
-  }
-}
-
-type InlineBlockLayout = Extract<BlockLayout, { kind: "inline" }>;
-
 @customElement("walli-inline-block")
-export class WalliInlineBlockElement extends BlockShellElement<InlineBlockLayout> {
+class WalliInlineBlockElement extends BlockShellElement<InlineBlockLayout> {
   protected override markerTop(block: InlineBlockLayout): number {
     return Math.max(0, Math.round((block.lineHeight - 12) / 2));
   }
@@ -312,3 +255,5 @@ function renderInlineFragment(fragment: InlineFragmentLayout): TemplateResult {
     .textContent=${fragment.text}
   ></span>`;
 }
+
+void WalliInlineBlockElement;

@@ -1,8 +1,7 @@
 import { html } from "lit";
-import type { WalliChatTokenizedBlockDefinition } from "./custom-block";
-import { registerTokenizedBlock } from "./custom-block";
+import type { WalliChatTokenizedBlockDefinition } from "../block-registry";
 
-const loadingBlockDefinition = {
+export const loadingBlockDefinition = {
   name: "loading-block",
   measure: (_data, { availableWidth }) => ({
     height: 48,
@@ -26,13 +25,3 @@ const loadingBlockDefinition = {
     },
   },
 } satisfies WalliChatTokenizedBlockDefinition<undefined>;
-
-let registered = false;
-
-export function registerLoadingBlock(): void {
-  if (registered) return;
-  registered = true;
-  registerTokenizedBlock(loadingBlockDefinition);
-}
-
-export { loadingBlockDefinition };

@@ -33,7 +33,7 @@
 - 代码块高度可以提前算出来：
 
 ```ts
-lineCount * CODE_LINE_HEIGHT + CODE_BLOCK_PADDING_Y * 2
+lineCount * CODE_LINE_HEIGHT + CODE_BLOCK_PADDING_Y * 2;
 ```
 
 - 虚拟列表可以在渲染 DOM 之前知道消息高度。

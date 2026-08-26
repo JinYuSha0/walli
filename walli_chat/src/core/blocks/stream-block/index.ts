@@ -7,8 +7,7 @@ import {
 } from "@chenglou/pretext";
 import { getFont } from "../../styles";
 import { getLineHeight, getSpace } from "../../styles/config";
-import { registerBlock } from "..";
-import type { WalliChatTokenizedBlockDefinition } from "../custom-block";
+import type { WalliChatTokenizedBlockDefinition } from "../../block-registry";
 import walliChatUnoCss from "virtual:walli-chat-uno-styles";
 
 type StartBlockData = Record<string, never>;
@@ -34,7 +33,7 @@ const StreamBlockStyle = computed(() => {
   };
 });
 
-export function getStreamBlockStyle<Key extends keyof (typeof StreamBlockStyle)["value"]>(
+function getStreamBlockStyle<Key extends keyof (typeof StreamBlockStyle)["value"]>(
   key: Key,
 ): (typeof StreamBlockStyle)["value"][Key] {
   return StreamBlockStyle.value[key];
@@ -54,14 +53,14 @@ function getPreparedToolLabel(data: ToolCallBlockData): PreparedTextWithSegments
   return prepared;
 }
 
-const startBlockDefinition = {
+export const startBlockDefinition = {
   name: "start-block",
   styles: walliChatUnoCss,
   tokenizer: {
     tokenize(source) {
       const match = /^:::start-block[ \t]*(?:\n|$)/.exec(source);
       if (!match) return undefined;
-      return { data: {}, raw: match[0] };
+      return { data: {} as StartBlockData, raw: match[0] };
     },
   },
   measure(_data, { availableWidth }) {
@@ -81,7 +80,7 @@ const startBlockDefinition = {
   },
 } satisfies WalliChatTokenizedBlockDefinition<StartBlockData>;
 
-const toolCallBlockDefinition = {
+export const toolCallBlockDefinition = {
   name: "toolcall-block",
   styles: walliChatUnoCss,
   tokenizer: {
@@ -126,12 +125,3 @@ const toolCallBlockDefinition = {
     </div>`;
   },
 } satisfies WalliChatTokenizedBlockDefinition<ToolCallBlockData>;
-
-let registered = false;
-
-export function registerStreamBlocks(): void {
-  if (registered) return;
-  registerBlock(startBlockDefinition);
-  registerBlock(toolCallBlockDefinition);
-  registered = true;
-}

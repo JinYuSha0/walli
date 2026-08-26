@@ -1,19 +1,17 @@
 import { marked, type Token, type Tokens } from "marked";
 import remend from "remend";
-import type { ParseContext, PreparedBlock } from "./type";
+import type { ParseContext, PreparedBlock } from "./types";
+import "./blocks/index";
 import {
-  buildInlineBlocks,
-  buildImageBlock,
-  buildFileBlock,
-  buildCodeBlock,
-  buildListBlocks,
-  buildRuleBlock,
-  buildPlainTextBlocks,
-  buildTableBlock,
-} from "./blocks/index";
-import { appendBlockGroup, fallbackTextForToken, headingVariant } from "./helper";
-import { getCommonStyle } from "./styles";
-import { resolveCustomBlockToken } from "./blocks/custom-block";
+  appendBlockGroup,
+  createBlockBase,
+  fallbackTextForToken,
+  headingVariant,
+  parseMarkdownImageSrc,
+} from "./helper";
+import { getCommonStyle, inlinePiece } from "./styles";
+import { resolveBuiltInBlockDefinition, resolveCustomBlockToken } from "./block-registry";
+import { getSpace } from "./styles/config";
 
 export function parseMarkdownBlocks(markdown: string, streaming = false): PreparedBlock[] {
   const source = streaming ? remend(markdown) : markdown;
@@ -80,6 +78,13 @@ export function parseBlockTokens(
   ctx: ParseContext,
   blocks: PreparedBlock[] = [],
 ): PreparedBlock[] {
+  const code = resolveBuiltInBlockDefinition("code");
+  const custom = resolveBuiltInBlockDefinition("custom");
+  const image = resolveBuiltInBlockDefinition("image");
+  const inline = resolveBuiltInBlockDefinition("inline");
+  const rule = resolveBuiltInBlockDefinition("rule");
+  const table = resolveBuiltInBlockDefinition("table");
+
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index];
 
@@ -90,17 +95,14 @@ export function parseBlockTokens(
       appendBlockGroup(
         blocks,
         [
-          {
+          custom.prepare(customBlock.data, customBlock.definition, {
             contentLeft: 0,
-            data: customBlock.data,
-            definition: customBlock.definition,
-            kind: "custom",
             marginTop: 0,
             markerClassName: null,
             markerLeft: null,
             markerText: null,
             quoteRailLefts: [],
-          },
+          }),
         ],
         customBlock.definition.marginTop ?? getCommonStyle("richBlockGap"),
       );
@@ -114,7 +116,7 @@ export function parseBlockTokens(
       }
 
       case "paragraph": {
-        const imageBlock = buildImageBlock(token.tokens, ctx);
+        const imageBlock = image.prepare(token.tokens, ctx);
         const fileBlock = buildFileBlock(token.tokens, ctx);
         if (imageBlock) {
           appendBlockGroup(blocks, [imageBlock], getCommonStyle("blockGap"));
@@ -123,7 +125,7 @@ export function parseBlockTokens(
         } else {
           appendBlockGroup(
             blocks,
-            buildInlineBlocks(token.tokens ?? [], "body", ctx),
+            inline.prepare(token.tokens ?? [], "body", ctx),
             getCommonStyle("blockGap"),
           );
         }
@@ -133,7 +135,7 @@ export function parseBlockTokens(
       case "heading": {
         appendBlockGroup(
           blocks,
-          buildInlineBlocks(token.tokens ?? [], headingVariant(token.depth), ctx),
+          inline.prepare(token.tokens ?? [], headingVariant(token.depth), ctx),
           getCommonStyle("headingGap"),
         );
         continue;
@@ -142,7 +144,7 @@ export function parseBlockTokens(
       case "code": {
         appendBlockGroup(
           blocks,
-          [buildCodeBlock(token.text, ctx, token.lang)],
+          [code.prepare(token.text, ctx, token.lang)],
           getCommonStyle("richBlockGap"),
         );
         continue;
@@ -170,14 +172,14 @@ export function parseBlockTokens(
       }
 
       case "hr": {
-        appendBlockGroup(blocks, [buildRuleBlock(ctx)], getCommonStyle("blockGap"));
+        appendBlockGroup(blocks, [rule.prepare(ctx)], getCommonStyle("blockGap"));
         continue;
       }
 
       case "table": {
         appendBlockGroup(
           blocks,
-          [buildTableBlock(token as Tokens.Table, ctx)],
+          [table.prepare(token as Tokens.Table, ctx)],
           getCommonStyle("richBlockGap"),
         );
         continue;
@@ -189,7 +191,7 @@ export function parseBlockTokens(
         if (token.block || isPre) {
           appendBlockGroup(
             blocks,
-            [buildCodeBlock(htmlText, ctx, "markup")],
+            [code.prepare(htmlText, ctx, "markup")],
             getCommonStyle("richBlockGap"),
           );
         } else {
@@ -206,7 +208,7 @@ export function parseBlockTokens(
         if (Array.isArray(token.tokens) && token.tokens.length > 0) {
           appendBlockGroup(
             blocks,
-            buildInlineBlocks(token.tokens, "body", ctx),
+            inline.prepare(token.tokens, "body", ctx),
             getCommonStyle("blockGap"),
           );
         } else {
@@ -233,4 +235,151 @@ export function parseBlockTokens(
   }
 
   return blocks;
+}
+
+const listMarkerClassName = inlinePiece.mark().className;
+
+function buildPlainTextBlocks(
+  text: string,
+  variant: "body" | "h1" | "h2",
+  ctx: ParseContext,
+): PreparedBlock[] {
+  if (text.length === 0) return [];
+  const token = { raw: text, text, type: "text" } as Token;
+  return resolveBuiltInBlockDefinition("inline").prepare([token], variant, ctx);
+}
+
+function buildFileBlock(
+  tokens: readonly Token[] | undefined,
+  ctx: ParseContext,
+): PreparedBlock | null {
+  if (tokens?.length !== 1) return null;
+  const token = tokens[0]!;
+  if (token.type !== "link") return null;
+
+  const src = parseMarkdownImageSrc(token.href);
+  const name = token.text.trim();
+  if (src === undefined || !isFileName(name)) return null;
+
+  return resolveBuiltInBlockDefinition("assetsGroup").prepare(
+    [{ name, src, type: "file" }],
+    createBlockBase(ctx),
+  );
+}
+
+const fileExtensions = new Set([
+  "7z",
+  "aac",
+  "avi",
+  "css",
+  "csv",
+  "doc",
+  "docx",
+  "gz",
+  "html",
+  "java",
+  "js",
+  "json",
+  "key",
+  "m4a",
+  "mkv",
+  "mov",
+  "mp3",
+  "mp4",
+  "odf",
+  "odp",
+  "ods",
+  "odt",
+  "ogg",
+  "pdf",
+  "ppt",
+  "pptx",
+  "py",
+  "rar",
+  "rs",
+  "rtf",
+  "tar",
+  "ts",
+  "tsx",
+  "txt",
+  "wav",
+  "webm",
+  "xls",
+  "xlsx",
+  "zip",
+]);
+
+function isFileName(name: string): boolean {
+  const extension = name.split(".").pop()?.toLowerCase();
+  return extension !== undefined && fileExtensions.has(extension);
+}
+
+function buildListBlocks(token: Tokens.List, ctx: ParseContext): PreparedBlock[] {
+  const blocks: PreparedBlock[] = [];
+  const itemCtx: ParseContext = {
+    listDepth: ctx.listDepth,
+    quoteDepth: ctx.quoteDepth,
+  };
+
+  for (let index = 0; index < token.items.length; index++) {
+    const item = token.items[index]!;
+    let itemBlocks = parseBlockTokens(getListItemContentTokens(item), itemCtx);
+    if (itemBlocks.length === 0) {
+      itemBlocks = buildPlainTextBlocks(item.text, "body", itemCtx);
+    }
+
+    decorateListItemBlocks(
+      itemBlocks,
+      resolveListMarkerText(token, item, index),
+      listMarkerClassName,
+      item.task,
+    );
+    appendBlockGroup(blocks, itemBlocks, getSpace(1));
+  }
+
+  return blocks;
+}
+
+function getListItemContentTokens(item: Tokens.ListItem): Tokens.ListItem["tokens"] {
+  if (!item.task) return item.tokens;
+  return item.tokens.filter((token) => token.type !== "checkbox");
+}
+
+function decorateListItemBlocks(
+  blocks: PreparedBlock[],
+  markerText: string,
+  markerClassName: string,
+  isTask: boolean,
+): void {
+  if (blocks.length === 0) return;
+
+  const markerArea = isTask ? getSpace(6) : getSpace(4);
+  for (let index = 0; index < blocks.length; index++) {
+    blocks[index] = shiftBlock(blocks[index]!, markerArea);
+  }
+
+  const firstBlock = blocks[0]!;
+  blocks[0] = {
+    ...firstBlock,
+    markerClassName,
+    markerLeft: firstBlock.contentLeft - markerArea,
+    markerText,
+  } satisfies PreparedBlock;
+}
+
+function shiftBlock(block: PreparedBlock, delta: number): PreparedBlock {
+  if (block.markerText !== null) return block;
+  return {
+    ...block,
+    contentLeft: block.contentLeft + delta,
+  } satisfies PreparedBlock;
+}
+
+function resolveListMarkerText(list: Tokens.List, item: Tokens.ListItem, index: number): string {
+  if (item.task) return item.checked ? "✅" : "⬜";
+  if (list.ordered) {
+    const start = typeof list.start === "number" ? list.start : 1;
+    return `${start + index}.`;
+  }
+  return "•";
 }

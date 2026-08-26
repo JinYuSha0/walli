@@ -1,5 +1,6 @@
 import type { Token } from "marked";
-import type { InlineVariant, ParseContext, PreparedBlock, PreparedBlockBase } from "./type";
+import type { BlockFrameBase, ParseContext, PreparedBlock, PreparedBlockBase } from "./types";
+import type { InlineVariant } from "./blocks/inline-block";
 import { getCommonStyle } from "./styles";
 
 export type ImageDimensions = {
@@ -78,6 +79,20 @@ export function createBlockBase(ctx: ParseContext): PreparedBlockBase {
     markerLeft: null,
     markerText: null,
     quoteRailLefts,
+  };
+}
+
+export function createBlockFrameBase(
+  block: PreparedBlockBase,
+  top: number,
+): Omit<BlockFrameBase, "height"> {
+  return {
+    contentLeft: block.contentLeft,
+    markerClassName: block.markerClassName,
+    markerLeft: block.markerLeft,
+    markerText: block.markerText,
+    quoteRailLefts: block.quoteRailLefts,
+    top,
   };
 }
 

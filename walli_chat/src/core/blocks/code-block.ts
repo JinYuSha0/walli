@@ -1,14 +1,49 @@
-import { prepareWithSegments } from "@chenglou/pretext";
-import { createBlockBase } from "../helper";
-import type { BlockLayout, ParseContext, PreparedCodeBlock } from "../type";
+import {
+  layoutWithLines,
+  measureLineStats,
+  prepareWithSegments,
+  type LayoutLine,
+  type PreparedTextWithSegments,
+} from "@chenglou/pretext";
+import { createBlockBase, createBlockFrameBase } from "../helper";
+import type {
+  BlockFrameBase,
+  CoreBlockDefinition,
+  ParseContext,
+  PreparedBlockBase,
+} from "../types";
 import { inlinePiece } from "../styles";
 import { getLineHeight, getSpace } from "../styles/config";
 import { customElement } from "lit/decorators.js";
-import { BlockShellElement, type BlockRenderLayout } from "./block-shell";
+import { BlockShellElement, type BlockRenderLayout } from "../block-shell";
 import { html, type TemplateResult } from "lit";
 import { computed } from "@preact/signals-core";
 import Prism from "prismjs";
 import "../components/action-button";
+
+export type PreparedCodeBlock = PreparedBlockBase & {
+  kind: "code";
+  language: string | null;
+  lineHeight: number;
+  prepared: PreparedTextWithSegments;
+  text: string;
+};
+export type CodeBlockLayout = {
+  contentLeft: number;
+  height: number;
+  kind: "code";
+  language: string | null;
+  lines: LayoutLine[];
+  markerClassName: string | null;
+  markerLeft: number | null;
+  markerText: string | null;
+  quoteRailLefts: number[];
+  top: number;
+  text: string;
+  usedWidth: number;
+  width: number;
+};
+export type CodeBlockFrame = BlockFrameBase & { kind: "code"; lineHeight: number; width: number };
 
 const languageLoaders: Record<string, () => Promise<unknown>> = {
   bash: () => import("prismjs/components/prism-bash"),
@@ -60,15 +95,64 @@ const CodeBlockStyle = computed(() => ({
   lineHeight: getLineHeight("text-sm"),
 }));
 
-export function getCodeBlockStyle(key: keyof (typeof CodeBlockStyle)["value"]) {
+function getCodeBlockStyle(key: keyof (typeof CodeBlockStyle)["value"]) {
   return CodeBlockStyle.value[key];
 }
 
-export function buildCodeBlock(
-  text: string,
-  ctx: ParseContext,
-  language?: string,
-): PreparedCodeBlock {
+export const codeBlockDefinition = {
+  name: "code",
+  prepare: buildCodeBlock,
+  measure(block, { availableWidth, top }) {
+    const width = Math.max(1, availableWidth);
+    const innerWidth = Math.max(
+      1,
+      width -
+        getCodeBlockStyle("paddingLeft") -
+        getCodeBlockStyle("paddingRight") -
+        getCodeBlockStyle("actionWidth"),
+    );
+    const { lineCount } = measureLineStats(block.prepared, innerWidth);
+    return {
+      ...createBlockFrameBase(block, top),
+      height:
+        lineCount * block.lineHeight +
+        getCodeBlockStyle("paddingTop") +
+        getCodeBlockStyle("paddingBottom"),
+      kind: "code",
+      lineHeight: block.lineHeight,
+      width,
+    };
+  },
+  materialize(block, frame) {
+    const innerWidth = Math.max(
+      1,
+      frame.width -
+        getCodeBlockStyle("paddingLeft") -
+        getCodeBlockStyle("paddingRight") -
+        getCodeBlockStyle("actionWidth"),
+    );
+    const layout = layoutWithLines(block.prepared, innerWidth, frame.lineHeight);
+    return {
+      contentLeft: frame.contentLeft,
+      height: frame.height,
+      kind: "code",
+      language: block.language,
+      lines: layout.lines,
+      markerClassName: frame.markerClassName,
+      markerLeft: frame.markerLeft,
+      markerText: frame.markerText,
+      quoteRailLefts: frame.quoteRailLefts,
+      text: block.text,
+      top: frame.top,
+      usedWidth: frame.width,
+      width: frame.width,
+    };
+  },
+  render: ({ block, contentInsetX }) =>
+    html`<walli-code-block .layout=${{ block, contentInsetX }}></walli-code-block>`,
+} satisfies CoreBlockDefinition<"code">;
+
+function buildCodeBlock(text: string, ctx: ParseContext, language?: string): PreparedCodeBlock {
   const { font } = inlinePiece.code(text);
   const normalizedText = stripSingleTrailingNewline(text);
   return {
@@ -132,10 +216,8 @@ function stripSingleTrailingNewline(text: string): string {
   return text.endsWith("\n") ? text.slice(0, -1) : text;
 }
 
-type CodeBlockLayout = Extract<BlockLayout, { kind: "code" }>;
-
 @customElement("walli-code-block")
-export class WalliCodeBlockElement extends BlockShellElement<CodeBlockLayout> {
+class WalliCodeBlockElement extends BlockShellElement<CodeBlockLayout> {
   override set layout(layout: BlockRenderLayout<CodeBlockLayout>) {
     super.layout = layout;
     const loading = loadLanguage(layout.block.language);
@@ -155,15 +237,7 @@ export class WalliCodeBlockElement extends BlockShellElement<CodeBlockLayout> {
       class="absolute top-0 overflow-hidden rounded-2xl bg-secondary ring-1 ring-border shadow-inner"
       style=${`left:${contentInsetX + block.contentLeft}px; width:${block.width}px; height:${block.height}px;`}
     >
-      ${block.lines.map(
-        (line, lineIndex) =>
-          html`<div
-            class="absolute whitespace-pre font-mono text-sm font-medium leading-5 text-secondary-foreground"
-            style=${`left:${getCodeBlockStyle("paddingLeft")}px; top:${getCodeBlockStyle("paddingTop") + lineIndex * getCodeBlockStyle("lineHeight")}px;`}
-          >${highlightLine(line.text, block.language).map(
-            (span) => html`<span class=${span.className}>${span.text}</span>`,
-          )}</div>`,
-      )}
+      ${block.lines.map((line, lineIndex) => renderCodeLine(line, lineIndex, block.language))}
       <div
         class=${`absolute right-0 top-0 bottom-0 flex justify-center border-l border-border ${block.lines.length === 1 ? "items-center" : "items-start pt-2"}`}
         style=${`width:${getCodeBlockStyle("actionWidth")}px;`}
@@ -179,3 +253,16 @@ export class WalliCodeBlockElement extends BlockShellElement<CodeBlockLayout> {
     </div>`;
   }
 }
+
+function renderCodeLine(
+  line: LayoutLine,
+  lineIndex: number,
+  language: string | null,
+): TemplateResult {
+  const spans = highlightLine(line.text, language);
+  // Keep the interpolation adjacent to the tags: whitespace is significant under `whitespace-pre`.
+  // prettier-ignore
+  return html`<div class="absolute whitespace-pre font-mono text-sm font-medium leading-5 text-secondary-foreground" style=${`left:${getCodeBlockStyle("paddingLeft")}px; top:${getCodeBlockStyle("paddingTop") + lineIndex * getCodeBlockStyle("lineHeight")}px;`}>${spans.map((span) => html`<span class=${span.className}>${span.text}</span>`)}</div>`;
+}
+
+void WalliCodeBlockElement;

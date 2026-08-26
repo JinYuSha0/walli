@@ -4,25 +4,66 @@ import {
   materializeRichInlineLineRange,
   measureRichInlineStats,
   prepareRichInline,
+  type PreparedRichInline,
   walkRichInlineLineRanges,
 } from "@chenglou/pretext/rich-inline";
 import { customElement } from "lit/decorators.js";
 import { html, type TemplateResult } from "lit";
 import clsx from "clsx";
 import type {
-  BlockLayout,
-  InlineFragmentLayout,
-  InlinePiece,
+  BlockFrameBase,
+  CoreBlockDefinition,
   ParseContext,
-  PreparedTableBlock,
-  PreparedTableCell,
-  TableCellLayout,
-} from "../type";
-import { createBlockBase } from "../helper";
+  PreparedBlockBase,
+} from "../types";
+import type { InlineFragmentLayout, InlinePiece, PreparedInlineItem } from "./inline-block";
+import { createBlockBase, createBlockFrameBase } from "../helper";
 import { getFont } from "../styles";
 import { getLineHeight, getSpace } from "../styles/config";
-import { collectInlinePieceLines } from "./inline-block";
-import { BlockShellElement } from "./block-shell";
+import { BlockShellElement } from "../block-shell";
+import { collectInlinePieceLines } from "../inline-content";
+
+type PreparedTableCell = {
+  align: "left" | "center" | "right" | null;
+  flow: PreparedRichInline;
+  items: PreparedInlineItem[];
+};
+export type PreparedTableBlock = PreparedBlockBase & {
+  kind: "table";
+  lineHeight: number;
+  header: PreparedTableCell[];
+  rows: PreparedTableCell[][];
+};
+type TableCellLayout = {
+  align: "left" | "center" | "right" | null;
+  height: number;
+  lines: Array<{ fragments: InlineFragmentLayout[]; width: number }>;
+  paddingInlineEnd: number;
+  paddingInlineStart: number;
+  width: number;
+  x: number;
+  y: number;
+};
+export type TableBlockLayout = {
+  cells: TableCellLayout[];
+  columnWidths: number[];
+  contentLeft: number;
+  height: number;
+  kind: "table";
+  markerClassName: string | null;
+  markerLeft: number | null;
+  markerText: string | null;
+  quoteRailLefts: number[];
+  top: number;
+  viewportWidth: number;
+  width: number;
+};
+export type TableBlockFrame = BlockFrameBase & {
+  kind: "table";
+  lineHeight: number;
+  tableWidth: number;
+  width: number;
+};
 
 const tableTextClass =
   "inline-block whitespace-pre font-sans text-sm leading-none text-foreground align-baseline";
@@ -36,11 +77,11 @@ const TableBlockStyle = computed(() => ({
   cellPaddingY: getSpace(2.5),
 }));
 
-export function getTableBlockStyle(key: keyof (typeof TableBlockStyle)["value"]) {
+function getTableBlockStyle(key: keyof (typeof TableBlockStyle)["value"]) {
   return TableBlockStyle.value[key];
 }
 
-export function buildTableBlock(token: Tokens.Table, ctx: ParseContext): PreparedTableBlock {
+function buildTableBlock(token: Tokens.Table, ctx: ParseContext): PreparedTableBlock {
   return {
     ...createBlockBase(ctx),
     kind: "table",
@@ -54,7 +95,7 @@ export function buildTableBlock(token: Tokens.Table, ctx: ParseContext): Prepare
   };
 }
 
-export type TableMetrics = {
+type TableMetrics = {
   columnWidths: number[];
   height: number;
   rowHeights: number[];
@@ -73,7 +114,7 @@ type NaturalTableMetrics = {
 const naturalMetricsCache = new WeakMap<PreparedTableBlock, NaturalTableMetrics>();
 const tableMetricsCache = new WeakMap<PreparedTableBlock, Map<string, TableMetrics>>();
 
-export function measureTableBlock(block: PreparedTableBlock, availableWidth: number): TableMetrics {
+function measureTableBlock(block: PreparedTableBlock, availableWidth: number): TableMetrics {
   const cacheKey = createTableMetricsCacheKey(availableWidth);
   const cached = tableMetricsCache.get(block)?.get(cacheKey);
   if (cached !== undefined) return cached;
@@ -108,6 +149,41 @@ export function measureTableBlock(block: PreparedTableBlock, availableWidth: num
   return metrics;
 }
 
+export const tableBlockDefinition = {
+  name: "table",
+  prepare: buildTableBlock,
+  measure(block, { availableWidth, top }) {
+    const metrics = measureTableBlock(block, Math.max(1, availableWidth));
+    return {
+      ...createBlockFrameBase(block, top),
+      height: metrics.height,
+      kind: "table",
+      lineHeight: block.lineHeight,
+      tableWidth: metrics.width,
+      width: metrics.viewportWidth,
+    };
+  },
+  materialize(block, frame, { contentWidth }) {
+    const metrics = measureTableBlock(block, Math.max(1, contentWidth - frame.contentLeft));
+    return {
+      cells: materializeTableCells(block, metrics),
+      columnWidths: metrics.columnWidths,
+      contentLeft: frame.contentLeft,
+      height: frame.height,
+      kind: "table",
+      markerClassName: frame.markerClassName,
+      markerLeft: frame.markerLeft,
+      markerText: frame.markerText,
+      quoteRailLefts: frame.quoteRailLefts,
+      viewportWidth: frame.width,
+      top: frame.top,
+      width: metrics.width,
+    };
+  },
+  render: ({ block, contentInsetX }) =>
+    html`<walli-table-block .layout=${{ block, contentInsetX }}></walli-table-block>`,
+} satisfies CoreBlockDefinition<"table">;
+
 function createTableMetricsCacheKey(availableWidth: number): string {
   return [
     availableWidth,
@@ -139,7 +215,7 @@ function getNaturalTableMetrics(block: PreparedTableBlock): NaturalTableMetrics 
   return metrics;
 }
 
-export function materializeTableCells(
+function materializeTableCells(
   block: PreparedTableBlock,
   metrics: TableMetrics,
 ): TableCellLayout[] {
@@ -254,17 +330,20 @@ function materializeTableCellLines(
   walkRichInlineLineRanges(cell.flow, lineWidth, (range) => {
     const line = materializeRichInlineLineRange(cell.flow, range);
     lines.push({
-      fragments: line.fragments.map((fragment) => ({
-        alt: cell.imageAlts[fragment.itemIndex] ?? null,
-        className: cell.classNames[fragment.itemIndex]!,
-        href: cell.hrefs[fragment.itemIndex] ?? null,
-        imageHeight: cell.imageHeights[fragment.itemIndex] ?? null,
-        imageWidth: cell.imageWidths[fragment.itemIndex] ?? null,
-        kind: cell.imageSrcs[fragment.itemIndex] === null ? "text" : "image",
-        leadingGap: fragment.gapBefore,
-        src: cell.imageSrcs[fragment.itemIndex] ?? null,
-        text: fragment.text,
-      })),
+      fragments: line.fragments.map((fragment) => {
+        const item = cell.items[fragment.itemIndex]!;
+        return {
+          alt: item.image?.alt ?? null,
+          className: item.className,
+          href: item.href,
+          imageHeight: item.image?.height ?? null,
+          imageWidth: item.image?.width ?? null,
+          kind: item.image === null ? "text" : "image",
+          leadingGap: fragment.gapBefore,
+          src: item.image?.src ?? null,
+          text: fragment.text,
+        };
+      }),
       width: line.width,
     });
   });
@@ -299,7 +378,6 @@ function buildTableCell(
 
   return {
     align,
-    classNames: pieces.map((piece) => piece.className),
     flow: prepareRichInline(
       pieces.map((piece) => ({
         break: piece.breakMode,
@@ -308,11 +386,19 @@ function buildTableCell(
         text: piece.text,
       })),
     ),
-    hrefs: pieces.map((piece) => piece.href ?? null),
-    imageAlts: pieces.map((piece) => piece.imageAlt ?? null),
-    imageHeights: pieces.map((piece) => piece.imageHeight ?? null),
-    imageSrcs: pieces.map((piece) => piece.imageSrc ?? null),
-    imageWidths: pieces.map((piece) => piece.imageWidth ?? null),
+    items: pieces.map((piece) => ({
+      className: piece.className,
+      href: piece.href ?? null,
+      image:
+        piece.imageSrc === undefined
+          ? null
+          : {
+              alt: piece.imageAlt ?? "",
+              height: piece.imageHeight ?? null,
+              src: piece.imageSrc ?? null,
+              width: piece.imageWidth ?? null,
+            },
+    })),
   };
 }
 
@@ -344,10 +430,8 @@ function createTablePiece(piece: InlinePiece, isHeader: boolean): InlinePiece {
   };
 }
 
-type TableBlockLayout = Extract<BlockLayout, { kind: "table" }>;
-
 @customElement("walli-table-block")
-export class WalliTableBlockElement extends BlockShellElement<TableBlockLayout> {
+class WalliTableBlockElement extends BlockShellElement<TableBlockLayout> {
   protected override renderContent(block: TableBlockLayout, contentInsetX: number): TemplateResult {
     return html`<div
       class="walli-table-scrollbar absolute top-0 overflow-x-auto overflow-y-hidden rounded-[6px] bg-background ring-1 ring-border"
@@ -463,3 +547,5 @@ function renderTableFragment(fragment: InlineFragmentLayout): TemplateResult {
     .textContent=${fragment.text}
   ></span>`;
 }
+
+void WalliTableBlockElement;

@@ -1,8 +1,8 @@
 import { html, render, type TemplateResult } from "lit";
 import { customElement } from "lit/decorators.js";
 import { getBlockUsedWidth, materializeMessageBlocks } from "../core";
-import type { BlockLayout, ChatMessageInstance, MessageFrame } from "../core/type";
-import { renderMessageBlockTemplate } from "../core/blocks";
+import type { BlockLayout, ChatMessageInstance, MessageFrame } from "../core/types";
+import { renderMessageBlockTemplate } from "../core/block-registry";
 import { getCommonStyle } from "../core/styles";
 import clsx from "clsx";
 import "../core/components";

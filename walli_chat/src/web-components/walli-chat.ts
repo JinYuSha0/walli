@@ -12,11 +12,9 @@ import {
   getMaxChatWidth,
   findVisibleRange,
 } from "../core/index";
-import type { ConversationFrame, PreparedChatMessage } from "../core/type";
+import type { ConversationFrame, PreparedChatMessage } from "../core/types";
 import { StreamingMarkdownParser } from "../core/md-parse";
 import { parseEventData, ServerSentEventParser, type ServerSentEvent } from "../core/sse-parser";
-import { registerStreamBlocks } from "../core/blocks/stream-block";
-import { registerLoadingBlock } from "../core/blocks/loading-block";
 import { getCommonStyle } from "../core/styles";
 import { timeScheduler } from "../core/helper";
 import type {
@@ -35,7 +33,7 @@ import type {
 
 import type { WalliMessageElement } from "./walli-message";
 
-export { registerBlock } from "../core/blocks";
+export { registerBlock } from "../core/block-registry";
 
 type Size = {
   width: number;
@@ -102,12 +100,6 @@ export class WalliChatElement extends LitElement {
   private readonly scrollInteractionEndTaskType = "scroll-interaction-end";
   private mountedStart = 0;
   private mountedEnd = 0;
-
-  constructor() {
-    super();
-    registerLoadingBlock();
-    registerStreamBlocks();
-  }
 
   @property({ attribute: false })
   get messages(): readonly WalliChatMessage[] {

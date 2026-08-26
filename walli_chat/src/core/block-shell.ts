@@ -1,6 +1,6 @@
 import { html, render as litRender, type TemplateResult } from "lit";
 import clsx from "clsx";
-import type { BlockLayout } from "../type";
+import type { BlockLayout } from "./types";
 
 type ShellBlockLayout = Pick<
   BlockLayout,

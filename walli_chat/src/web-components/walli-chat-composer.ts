@@ -377,7 +377,6 @@ export class WalliChatComposerElement extends LitElement {
       this.transcriptionState = "recording";
       await this.updateComplete;
       this.startWaveform(session, stream);
-
     } catch (cause) {
       session.finishedReject?.(cause);
       session.finishedResolve = undefined;
@@ -446,7 +445,8 @@ export class WalliChatComposerElement extends LitElement {
       const text = (await session.promise)?.trim() ?? "";
       if (session.abortController.signal.aborted) return;
       const baseValue = session.baseValue;
-      const separator = baseValue.length > 0 && !/\s$/.test(baseValue) && text.length > 0 ? " " : "";
+      const separator =
+        baseValue.length > 0 && !/\s$/.test(baseValue) && text.length > 0 ? " " : "";
       const nextValue = `${baseValue}${separator}${text}`;
       this.value = nextValue;
       this.onValueChange?.(nextValue);
@@ -580,42 +580,47 @@ export class WalliChatComposerElement extends LitElement {
         </button>
 
         <div class="flex min-w-0 flex-1 items-center justify-center">
-          ${capturing
-            ? html`<div
-                class="flex h-7 w-full items-center justify-between overflow-hidden px-1"
-                role="img"
-                aria-label="Recording audio"
-              >
-                ${Array.from(
-                  { length: getTranscriptionWaveformBarCount() },
-                  () => html`<i
-                    class="voice-wave-bar block h-0.5 w-0.5 flex-none rounded-full bg-muted-foreground opacity-35"
-                    aria-hidden="true"
-                  ></i>`,
-                )}
-              </div>`
-            : html`<span class="text-base text-muted-foreground">${this.transcribingText}</span>`}
+          ${
+            capturing
+              ? html`<div
+                  class="flex h-7 w-full items-center justify-between overflow-hidden px-1"
+                  role="img"
+                  aria-label="Recording audio"
+                >
+                  ${Array.from(
+                    { length: getTranscriptionWaveformBarCount() },
+                    () =>
+                      html`<i
+                        class="voice-wave-bar block h-0.5 w-0.5 flex-none rounded-full bg-muted-foreground opacity-35"
+                        aria-hidden="true"
+                      ></i>`,
+                  )}
+                </div>`
+              : html`<span class="text-base text-muted-foreground">${this.transcribingText}</span>`
+          }
         </div>
 
         <div class="flex flex-none items-center gap-1">
-          ${capturing
-            ? html`<button
-                class="[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-foreground transition-colors [box-shadow:0_0_0_1px_var(--border)] enabled:hover:bg-accent focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40"
-                type="button"
-                aria-label="Stop transcription"
-                ?disabled=${!recording}
-                @click=${() => void this.stopTranscription(false)}
-              >
-                ${createElement(Square, {
-                  "aria-hidden": "true",
-                  fill: "currentColor",
-                  height: 12,
-                  width: 12,
-                })}
-              </button>`
-            : html`<span class="inline-flex h-9 w-9 items-center justify-center"
-                ><walli-loading aria-label="Transcribing"></walli-loading
-              ></span>`}
+          ${
+            capturing
+              ? html`<button
+                  class="[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-foreground transition-colors [box-shadow:0_0_0_1px_var(--border)] enabled:hover:bg-accent focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40"
+                  type="button"
+                  aria-label="Stop transcription"
+                  ?disabled=${!recording}
+                  @click=${() => void this.stopTranscription(false)}
+                >
+                  ${createElement(Square, {
+                    "aria-hidden": "true",
+                    fill: "currentColor",
+                    height: 12,
+                    width: 12,
+                  })}
+                </button>`
+              : html`<span class="inline-flex h-9 w-9 items-center justify-center"
+                  ><walli-loading aria-label="Transcribing"></walli-loading
+                ></span>`
+          }
           <button
             class="[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-9 w-9 items-center justify-center rounded-full border-0 bg-primary p-0 text-primary-foreground transition-[opacity,transform] enabled:cursor-pointer enabled:hover:scale-105 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-35"
             type="button"
@@ -744,19 +749,21 @@ export class WalliChatComposerElement extends LitElement {
         ></textarea>
 
         <div class=${clsx("flex items-center gap-1", this.expanded && "col-start-2 row-start-2")}>
-          ${this.onTranscribe
-            ? html`<button
-                class=${clsx(
-                  "[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-foreground transition-colors duration-150 enabled:hover:bg-accent focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none",
-                )}
-                type="button"
-                aria-label="Start transcription"
-                ?disabled=${this.disabled || this.running}
-                @click=${this.handleVoice}
-              >
-                ${createIcon(Mic)}
-              </button>`
-            : nothing}
+          ${
+            this.onTranscribe
+              ? html`<button
+                  class=${clsx(
+                    "[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-foreground transition-colors duration-150 enabled:hover:bg-accent focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none",
+                  )}
+                  type="button"
+                  aria-label="Start transcription"
+                  ?disabled=${this.disabled || this.running}
+                  @click=${this.handleVoice}
+                >
+                  ${createIcon(Mic)}
+                </button>`
+              : nothing
+          }
           <button
             class=${clsx(
               "[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 p-0 transition-[opacity,transform] duration-150 enabled:hover:scale-105 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-30 motion-reduce:transition-none",

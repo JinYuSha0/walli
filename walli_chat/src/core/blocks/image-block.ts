@@ -1,29 +1,83 @@
 import type { Token } from "marked";
 import {
   createBlockBase,
+  createBlockFrameBase,
   parseImageDimensions,
   parseMarkdownImageSrc,
   type ImageDimensions,
 } from "../helper";
-import type { BlockLayout, ParseContext, PreparedImageBlock } from "../type";
+import type {
+  BlockFrameBase,
+  CoreBlockDefinition,
+  ParseContext,
+  PreparedBlockBase,
+} from "../types";
 import PhotoSwipe from "photoswipe";
 import "photoswipe/style.css";
-import { computed } from "@preact/signals-core";
 import { customElement } from "lit/decorators.js";
-import { BlockShellElement } from "./block-shell";
+import { BlockShellElement } from "../block-shell";
 import { html, type TemplateResult } from "lit";
+import { getMediaStyle } from "../styles";
 
-const ImageBlockStyle = computed(() => ({
-  imageBlockGap: 2,
-  imageBlockHeight: 240,
-  imageBlockMaxWidth: 320,
-}));
+export type PreparedImageBlock = PreparedBlockBase & {
+  alt: string;
+  kind: "image";
+  src: string;
+  targetHeight: number | null;
+  targetWidth: number | null;
+};
+export type ImageBlockLayout = {
+  alt: string;
+  contentLeft: number;
+  height: number;
+  kind: "image";
+  markerClassName: string | null;
+  markerLeft: number | null;
+  markerText: string | null;
+  quoteRailLefts: number[];
+  src: string;
+  top: number;
+  width: number;
+};
+export type ImageBlockFrame = BlockFrameBase & { kind: "image"; width: number };
 
-export function getImageBlockStyle(key: keyof (typeof ImageBlockStyle)["value"]) {
-  return ImageBlockStyle.value[key];
-}
+export const imageBlockDefinition = {
+  name: "image",
+  prepare: buildImageBlock,
+  measure(block, { availableWidth, top }) {
+    const preferredWidth = block.targetWidth ?? availableWidth;
+    const width = Math.max(1, Math.round(Math.min(availableWidth, preferredWidth)));
+    const height =
+      block.targetHeight !== null && block.targetWidth !== null
+        ? block.targetHeight * (width / block.targetWidth)
+        : (block.targetHeight ?? getMediaStyle("imageHeight"));
+    return {
+      ...createBlockFrameBase(block, top),
+      height: Math.max(1, Math.round(height)),
+      kind: "image",
+      width,
+    };
+  },
+  materialize(block, frame) {
+    return {
+      alt: block.alt,
+      contentLeft: frame.contentLeft,
+      height: frame.height,
+      kind: "image",
+      markerClassName: frame.markerClassName,
+      markerLeft: frame.markerLeft,
+      markerText: frame.markerText,
+      quoteRailLefts: frame.quoteRailLefts,
+      src: block.src,
+      top: frame.top,
+      width: frame.width,
+    };
+  },
+  render: ({ block, contentInsetX }) =>
+    html`<walli-image-block .layout=${{ block, contentInsetX }}></walli-image-block>`,
+} satisfies CoreBlockDefinition<"image", typeof buildImageBlock>;
 
-export function buildImageBlock(
+function buildImageBlock(
   tokens: readonly Token[] | undefined,
   ctx: ParseContext,
 ): PreparedImageBlock | null {
@@ -66,7 +120,6 @@ function createImageBlock({
   };
 }
 
-type ImageBlockLayout = Extract<BlockLayout, { kind: "image" }>;
 type ImagePreviewSize = {
   height: number;
   width: number;
@@ -75,7 +128,7 @@ type ImagePreviewSize = {
 const imagePreviewSizeCache = new Map<string, Promise<ImagePreviewSize | null>>();
 
 @customElement("walli-image-block")
-export class WalliImageBlockElement extends BlockShellElement<ImageBlockLayout> {
+class WalliImageBlockElement extends BlockShellElement<ImageBlockLayout> {
   private renderedBlock: ImageBlockLayout | null = null;
 
   protected override renderContent(block: ImageBlockLayout, contentInsetX: number): TemplateResult {
@@ -176,3 +229,5 @@ function loadImagePreviewSize(src: string): Promise<ImagePreviewSize | null> {
   imagePreviewSizeCache.set(src, pending);
   return pending;
 }
+
+void WalliImageBlockElement;

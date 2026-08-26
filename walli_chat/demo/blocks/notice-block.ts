@@ -10,8 +10,7 @@ import noticeBlockCss from "./notice-block.css?inline";
 
 const padding = 16;
 const lineHeight = 22;
-const font =
-  '500 14px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+const font = '500 14px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
 type NoticeBlockData = {
   text: string;
@@ -56,12 +55,13 @@ export const noticeBlockDefinition = {
       class="notice"
       style=${`left:${left}px;top:${top}px;width:${width}px;height:${height}px;font:${font};`}
     >
-      ${layout.lines.map(
-        (line, index) => html`<div
-          class="notice-line"
-          style=${`left:${padding}px;top:${padding + index * lineHeight}px;height:${lineHeight}px;`}
-        >${line.text}</div>`,
-      )}
+      ${layout.lines.map((line, index) => renderNoticeLine(line.text, index))}
     </div>`;
   },
 } satisfies WalliChatTokenizedBlockDefinition<NoticeBlockData>;
+
+function renderNoticeLine(text: string, index: number) {
+  // Keep text adjacent to the tags because `.notice-line` preserves whitespace.
+  // prettier-ignore
+  return html`<div class="notice-line" style=${`left:${padding}px;top:${padding + index * lineHeight}px;height:${lineHeight}px;`}>${text}</div>`;
+}

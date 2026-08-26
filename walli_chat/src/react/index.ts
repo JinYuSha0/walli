@@ -14,7 +14,7 @@ import type {
   WalliChatElement,
   WalliLoadingElement,
 } from "../web-components";
-import type { WalliChatTokenizedBlockDefinition } from "../core/blocks/custom-block";
+import type { WalliChatTokenizedBlockDefinition } from "../core/block-registry";
 import {
   builtInBlocks,
   registerBlock,
@@ -23,7 +23,7 @@ import {
   type WalliChatBlockRegistration,
   type WalliChatBlockRenderContext,
   type WalliChatBuiltInBlockName,
-} from "../core/blocks";
+} from "../core/block-registry";
 import type {
   WalliChatMessage,
   WalliChatEndReachedCallback,
@@ -135,7 +135,20 @@ export const WalliChatComposer = forwardRef<WalliChatComposerRef, WalliChatCompo
       element.transcribingText = transcribingText;
       element.uploadImagesTitle = uploadImagesTitle;
       element.value = value;
-    }, [disabled, maxHeight, menuItems, onCancel, onSubmit, onTranscribe, onUploadImages, onValueChange, placeholder, transcribingText, uploadImagesTitle, value]);
+    }, [
+      disabled,
+      maxHeight,
+      menuItems,
+      onCancel,
+      onSubmit,
+      onTranscribe,
+      onUploadImages,
+      onValueChange,
+      placeholder,
+      transcribingText,
+      uploadImagesTitle,
+      value,
+    ]);
 
     useImperativeHandle(
       forwardedRef,
@@ -198,7 +211,9 @@ export type WalliChatRef = {
     <Name extends WalliChatBlockName>(
       definition: WalliChatBlockDefinition<Name>,
     ): WalliChatBlockRegistration;
-    <T>(definition: WalliChatTokenizedBlockDefinition<T>): WalliChatBlockRegistration;
+    <Input, Prepared = Input, Materialized = Prepared>(
+      definition: WalliChatTokenizedBlockDefinition<Input, Prepared, Materialized>,
+    ): WalliChatBlockRegistration;
   };
 };
 
@@ -276,9 +291,7 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
       scrollToIndex(options) {
         elementRef.current?.scrollToIndex(options);
       },
-      registerBlock(
-        definition: WalliChatBlockDefinition | WalliChatTokenizedBlockDefinition,
-      ) {
+      registerBlock(definition: WalliChatBlockDefinition | WalliChatTokenizedBlockDefinition) {
         return registerBlock(definition as WalliChatBlockDefinition);
       },
     }),
@@ -292,9 +305,7 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
       ref: elementRef,
       style,
     },
-    emptyContent == null
-      ? null
-      : createElement("div", { slot: "empty-content" }, emptyContent),
+    emptyContent == null ? null : createElement("div", { slot: "empty-content" }, emptyContent),
     children,
   );
 });
