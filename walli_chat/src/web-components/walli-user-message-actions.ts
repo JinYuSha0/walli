@@ -1,4 +1,4 @@
-import "./action-button";
+import "./walli-action-button";
 import { html, render } from "lit";
 import { customElement } from "lit/decorators.js";
 

@@ -19,7 +19,7 @@ import { BlockShellElement, type BlockRenderLayout } from "../block-shell";
 import { html, type TemplateResult } from "lit";
 import { computed } from "@preact/signals-core";
 import Prism from "prismjs";
-import "../components/action-button";
+import "../../web-components/walli-action-button";
 
 export type PreparedCodeBlock = PreparedBlockBase & {
   kind: "code";

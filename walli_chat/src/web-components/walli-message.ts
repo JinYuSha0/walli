@@ -5,7 +5,8 @@ import type { BlockLayout, ChatMessageInstance, MessageFrame } from "../core/typ
 import { renderMessageBlockTemplate } from "../core/block-registry";
 import { getCommonStyle } from "../core/styles";
 import clsx from "clsx";
-import "../core/components";
+import "./walli-assistant-message-actions";
+import "./walli-user-message-actions";
 
 @customElement("walli-message")
 export class WalliMessageElement extends HTMLElement {

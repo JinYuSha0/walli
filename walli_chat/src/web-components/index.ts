@@ -3,6 +3,9 @@ import { WalliChatComposerElement } from "./walli-chat-composer";
 import { WalliChatComposerAssetsElement } from "./walli-chat-composer-assets";
 import { WalliMessageElement } from "./walli-message";
 import { WalliLoadingElement } from "./walli-loading";
+import { WalliActionButtonElement } from "./walli-action-button";
+import { WalliAssistantMessageActionsElement } from "./walli-assistant-message-actions";
+import { WalliUserMessageActionsElement } from "./walli-user-message-actions";
 
 export {
   WalliChatComposerAssetsElement,
@@ -10,6 +13,9 @@ export {
   WalliChatElement,
   WalliMessageElement,
   WalliLoadingElement,
+  WalliActionButtonElement,
+  WalliAssistantMessageActionsElement,
+  WalliUserMessageActionsElement,
 };
 export type {
   WalliChatComposerActionCallback,
@@ -52,5 +58,8 @@ declare global {
     "walli-custom-block-content": HTMLElement;
     "walli-message": WalliMessageElement;
     "walli-loading": WalliLoadingElement;
+    "walli-action-button": WalliActionButtonElement;
+    "walli-assistant-message-actions": WalliAssistantMessageActionsElement;
+    "walli-user-message-actions": WalliUserMessageActionsElement;
   }
 }
