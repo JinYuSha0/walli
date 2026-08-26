@@ -15,6 +15,10 @@
       "types": "./dist/types/react/index.d.ts",
       "import": "./dist/react.js"
     },
+    "./vue": {
+      "types": "./dist/types/vue/index.d.ts",
+      "import": "./dist/vue.js"
+    },
     "./theme.css": "./dist/walli-chat.css"
   },
   "files": [
@@ -32,18 +36,30 @@
     "prepublishOnly": "pnpm run build",
     "storybook": "storybook dev -p 6006",
     "storybook:react": "storybook dev -p 6007 -c .storybook-react",
+    "storybook:vue": "storybook dev -p 6008 -c .storybook-vue",
     "build-storybook": "storybook build",
     "build-storybook:react": "storybook build -c .storybook-react -o storybook-static-react",
+    "build-storybook:vue": "storybook build -c .storybook-vue -o storybook-static-vue",
     "deploy:storybook": "pnpm run build-storybook && pnpm dlx wrangler pages deploy storybook-static --project-name=walli-chat-storybook --branch=main --commit-dirty=true"
   },
   "peerDependencies": {
-    "react": ">=18"
+    "react": ">=18",
+    "vue": ">=3.4"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@preact/signals-core": "^1.14.4",
     "@storybook/addon-a11y": "^10.5.10",
     "@storybook/addon-docs": "^10.5.10",
     "@storybook/react-vite": "^10.5.10",
+    "@storybook/vue3-vite": "^10.5.10",
     "@storybook/web-components-vite": "^10.5.10",
     "@types/prismjs": "^1.26.6",
     "@types/react": "^19.2.18",
@@ -54,7 +70,8 @@
     "storybook": "^10.5.10",
     "typescript": "~6.0.2",
     "unocss": "^66.7.5",
-    "vite": "^8.2.0"
+    "vite": "^8.2.0",
+    "vue": "^3.5.30"
   },
   "dependencies": {
     "@chenglou/pretext": "^0.0.8",

@@ -285,20 +285,29 @@ function InsertMessagesDemo() {
   };
   return (
     <DemoFrame>
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
         <button style={buttonStyle} onClick={() => insert(true)}>
           Insert at top
         </button>
         <button style={buttonStyle} onClick={() => insert(false)}>
           Insert at bottom
         </button>
-        <label>
+        <label
+          style={{
+            display: "inline-flex",
+            cursor: "pointer",
+            alignItems: "center",
+            gap: 7,
+            color: "var(--walli-foreground)",
+            font: "500 13px sans-serif",
+          }}
+        >
           <input
             type="checkbox"
             role="switch"
             checked={stick}
             onChange={(event) => setStick(event.target.checked)}
-          />{" "}
+          />
           Stick
         </label>
       </div>

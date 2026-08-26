@@ -56,7 +56,7 @@ export const AllFeatures: Story = {
     <ComposerStage>
       <ComposerDemo
         {...args}
-        menuItems={demoMenuItems}
+        menuItems={demoMenuItems.slice(1)}
         onUploadImages={mockUpload}
         onTranscribe={mockTranscription}
         onSubmit={(markdown, text, assets) =>
@@ -131,7 +131,6 @@ function ActionMenuDemo(args: Args) {
           value={value}
           onValueChange={setValue}
           menuItems={demoMenuItems}
-          onUploadImages={mockUpload}
         />
       </div>
     </ComposerStage>

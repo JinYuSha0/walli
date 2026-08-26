@@ -1,5 +1,6 @@
 .storybook/
 .storybook-react/
+.storybook-vue/
 .agents/
 .codex/
 
@@ -8,11 +9,13 @@ public/
 src/
 stories/
 stories-react/
+stories-vue/
 
 coverage/
 dist-demo/
 storybook-static/
 storybook-static-react/
+storybook-static-vue/
 
 *.config.*
 *.log

@@ -12,6 +12,7 @@ dist
 dist-ssr
 storybook-static
 storybook-static-react
+storybook-static-vue
 *.local
 
 # Editor directories and files

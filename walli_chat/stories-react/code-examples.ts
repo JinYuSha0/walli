@@ -221,31 +221,23 @@ export function FullChat() {
   );
 }`,
   composerAllFeatures: `import { useState } from "react";
-import { FileSpreadsheet, ImagePlus, Search } from "lucide";
+import { FileSpreadsheet, ImagePlus, Paperclip, Search } from "lucide";
 import { WalliChatComposer } from "walli_chat/react";
+
+const menuItems = [
+  { icon: Paperclip, title: "Add files", onClick: () => console.log("Add files") },
+  { icon: Search, title: "Search the web", onClick: () => console.log("Search") },
+  { icon: ImagePlus, title: "Insert image", onClick: () => console.log("Image") },
+  { icon: FileSpreadsheet, title: "Insert spreadsheet", onClick: () => console.log("Spreadsheet") },
+];
 
 export function Example() {
   const [value, setValue] = useState("");
   return <WalliChatComposer
     value={value}
     onValueChange={setValue}
-    menuItems={[
-      {
-        icon: Search,
-        title: "Search the web",
-        onClick: () => console.log("Search"),
-      },
-      {
-        icon: ImagePlus,
-        title: "Insert image",
-        onClick: () => console.log("Image"),
-      },
-      {
-        icon: FileSpreadsheet,
-        title: "Insert spreadsheet",
-        onClick: () => console.log("Spreadsheet"),
-      },
-    ]}
+    uploadImagesTitle={menuItems[0].title}
+    menuItems={menuItems.slice(1)}
     onUploadImages={async (files, setProgress, setResult) => {
       for (const file of files) {
         setProgress(file, 100);
@@ -271,8 +263,15 @@ export function Example() {
       return "Transcribed message";
     }}`),
   composerActionMenu: `import { useState } from "react";
-import { FileSpreadsheet, ImagePlus, Search } from "lucide";
+import { FileSpreadsheet, ImagePlus, Paperclip, Search } from "lucide";
 import { WalliChatComposer } from "walli_chat/react";
+
+const menuItems = [
+  { icon: Paperclip, title: "Add files", onClick: () => console.log("Add files") },
+  { icon: Search, title: "Search the web", onClick: () => console.log("Search") },
+  { icon: ImagePlus, title: "Insert image", onClick: () => console.log("Image") },
+  { icon: FileSpreadsheet, title: "Insert spreadsheet", onClick: () => console.log("Spreadsheet") },
+];
 
 export function Example() {
   const [value, setValue] = useState("");
@@ -280,23 +279,7 @@ export function Example() {
     <WalliChatComposer
       value={value}
       onValueChange={setValue}
-      menuItems={[
-        {
-          icon: Search,
-          title: "Search the web",
-          onClick: () => console.log("Search"),
-        },
-        {
-          icon: ImagePlus,
-          title: "Insert image",
-          onClick: () => console.log("Image"),
-        },
-        {
-          icon: FileSpreadsheet,
-          title: "Insert spreadsheet",
-          onClick: () => console.log("Spreadsheet"),
-        },
-      ]}
+      menuItems={menuItems}
     />
   );
 }`,

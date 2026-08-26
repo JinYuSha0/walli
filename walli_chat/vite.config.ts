@@ -122,12 +122,13 @@ export default defineConfig(({ command, mode }) => ({
             entry: {
               index: resolve(projectRoot, "src/index.ts"),
               react: resolve(projectRoot, "src/react/index.ts"),
+              vue: resolve(projectRoot, "src/vue/index.ts"),
               theme: resolve(projectRoot, "src/theme-entry.ts"),
             },
             formats: ["es"],
           },
           rollupOptions: {
-            external: ["react"],
+            external: ["react", "vue"],
             output: {
               assetFileNames: "walli-chat[extname]",
               entryFileNames: "[name].js",

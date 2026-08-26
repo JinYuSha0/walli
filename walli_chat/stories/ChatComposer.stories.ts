@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import { html } from "lit";
 import { ref } from "lit/directives/ref.js";
-import { FileSpreadsheet, ImagePlus, Search } from "lucide";
+import { FileSpreadsheet, ImagePlus, Paperclip, Search } from "lucide";
 import type {
   WalliChatComposerMenuItem,
   WalliChatComposerTranscriptionContext,
@@ -17,6 +17,7 @@ type Args = {
 };
 
 export const demoMenuItems: readonly WalliChatComposerMenuItem[] = [
+  { icon: Paperclip, title: "Add files", onClick: () => console.info("Add files") },
   { icon: Search, title: "Search the web", onClick: () => console.info("Search") },
   { icon: ImagePlus, title: "Insert image", onClick: () => console.info("Insert image") },
   {
@@ -49,7 +50,7 @@ const meta: Meta<Args> = {
           .disabled=${disabled}
           .placeholder=${placeholder}
           .value=${value}
-          .menuItems=${demoMenuItems}
+          .menuItems=${demoMenuItems.slice(1)}
           .onUploadImages=${mockUpload}
           .onTranscribe=${mockTranscription}
           .onSubmit=${(message: string) => console.info("Submitted from Storybook", message)}
@@ -74,11 +75,16 @@ export const AllFeatures: Story = {
 
 <script type="module">
   import "walli_chat";
-  import { FileSpreadsheet, ImagePlus, Search } from "lucide";
+  import { FileSpreadsheet, ImagePlus, Paperclip, Search } from "lucide";
 
   const composer = document.querySelector("walli-chat-composer");
 
-  composer.menuItems = [
+  const menuItems = [
+    {
+      icon: Paperclip,
+      title: "Add files",
+      onClick: () => console.log("Add files"),
+    },
     {
       icon: Search,
       title: "Search the web",
@@ -95,6 +101,7 @@ export const AllFeatures: Story = {
       onClick: () => console.log("Insert spreadsheet"),
     },
   ];
+  composer.menuItems = menuItems.slice(1);
 
   composer.onUploadImages = async (files, setProgress, setResult) => {
     await Promise.all(files.map((file, index) =>
@@ -230,15 +237,15 @@ export const WithActionMenu: Story = {
   parameters: {
     docs: {
       description: {
-        story:
-          "The extra-action menu mirrors the search, image, and spreadsheet actions from the demo.",
+        story: "The extra-action menu displays all four configured menu items.",
       },
       source: {
         code: `<script type="module">
-  import { Search, ImagePlus, FileSpreadsheet } from "lucide";
+  import { Search, ImagePlus, FileSpreadsheet, Paperclip } from "lucide";
 
   const composer = document.querySelector("walli-chat-composer");
   composer.menuItems = [
+    { icon: Paperclip, title: "Add files", onClick: () => {} },
     { icon: Search, title: "Search the web", onClick: () => {} },
     { icon: ImagePlus, title: "Insert image", onClick: () => {} },
     { icon: FileSpreadsheet, title: "Insert spreadsheet", onClick: () => {} },
@@ -256,7 +263,6 @@ export const WithActionMenu: Story = {
           .placeholder=${placeholder}
           .value=${value}
           .menuItems=${demoMenuItems}
-          .onUploadImages=${mockUpload}
         ></walli-chat-composer>
       </div>
     </div>
