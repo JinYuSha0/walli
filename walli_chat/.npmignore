@@ -1,4 +1,5 @@
 .storybook/
+.storybook-react/
 .agents/
 .codex/
 
@@ -6,10 +7,12 @@ demo/
 public/
 src/
 stories/
+stories-react/
 
 coverage/
 dist-demo/
 storybook-static/
+storybook-static-react/
 
 *.config.*
 *.log

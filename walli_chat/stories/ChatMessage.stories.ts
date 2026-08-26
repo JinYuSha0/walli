@@ -21,7 +21,7 @@ type Args = {
   messages: WalliChatMessage[];
 };
 
-const conversation: WalliChatMessage[] = [
+export const conversation: WalliChatMessage[] = [
   {
     id: "conversation-user-1",
     role: "user",
@@ -62,7 +62,7 @@ const conversation: WalliChatMessage[] = [
   },
 ];
 
-const markdownShowcase: WalliChatMessage[] = [
+export const markdownShowcase: WalliChatMessage[] = [
   {
     id: "markdown-user",
     role: "user",
@@ -95,7 +95,7 @@ const markdownShowcase: WalliChatMessage[] = [
   },
 ];
 
-const userMessage: WalliChatMessage[] = [
+export const userMessage: WalliChatMessage[] = [
   {
     id: "single-user",
     role: "user",
@@ -104,7 +104,7 @@ const userMessage: WalliChatMessage[] = [
   },
 ];
 
-const assistantMessage: WalliChatMessage[] = [
+export const assistantMessage: WalliChatMessage[] = [
   {
     id: "single-assistant",
     role: "assistant",
@@ -113,7 +113,7 @@ const assistantMessage: WalliChatMessage[] = [
   },
 ];
 
-const imageMessage: WalliChatMessage[] = [
+export const imageMessage: WalliChatMessage[] = [
   {
     id: "image-fixed-user",
     role: "user",
@@ -170,7 +170,7 @@ const imageMessage: WalliChatMessage[] = [
   },
 ];
 
-const customBlockMessage: WalliChatMessage[] = [
+export const customBlockMessage: WalliChatMessage[] = [
   {
     id: "custom-block-user",
     role: "user",
@@ -269,7 +269,7 @@ chat.messages = [
 // Call when the extension is no longer needed:
 // registration.unregister();`;
 
-const replaceToolCallBlockDefinition = {
+export const replaceToolCallBlockDefinition = {
   ...toolCallBlockDefinition,
   measure(data, context) {
     const iconSpace = 26;
@@ -298,7 +298,7 @@ const replaceToolCallBlockDefinition = {
   },
 } satisfies typeof toolCallBlockDefinition;
 
-const replaceBlockMessage: WalliChatMessage[] = [
+export const replaceBlockMessage: WalliChatMessage[] = [
   {
     id: "replace-block-user",
     role: "user",
@@ -1195,7 +1195,7 @@ function renderFullChat() {
   `;
 }
 
-function createStorySseStream(): ReadableStream<string> {
+export function createStorySseStream(): ReadableStream<string> {
   type StoryStreamRecord = {
     delay: number;
     event: "delta" | "start" | "tool-call" | "tool-result";
@@ -1291,7 +1291,7 @@ function createStorySseStream(): ReadableStream<string> {
   });
 }
 
-async function mockFullChatUpload(
+export async function mockFullChatUpload(
   files: readonly File[],
   setProgress: (file: File, progress: number) => void,
   setResult: (file: File, result: { url: string } | { error: Error }) => void,
@@ -1315,7 +1315,7 @@ async function mockFullChatUpload(
   );
 }
 
-async function mockFullChatTranscription({
+export async function mockFullChatTranscription({
   stream,
   finished,
   signal,

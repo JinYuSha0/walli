@@ -31,7 +31,9 @@
     "preview": "vite preview",
     "prepublishOnly": "pnpm run build",
     "storybook": "storybook dev -p 6006",
+    "storybook:react": "storybook dev -p 6007 -c .storybook-react",
     "build-storybook": "storybook build",
+    "build-storybook:react": "storybook build -c .storybook-react -o storybook-static-react",
     "deploy:storybook": "pnpm run build-storybook && pnpm dlx wrangler pages deploy storybook-static --project-name=walli-chat-storybook --branch=main --commit-dirty=true"
   },
   "peerDependencies": {
@@ -41,9 +43,13 @@
     "@preact/signals-core": "^1.14.4",
     "@storybook/addon-a11y": "^10.5.10",
     "@storybook/addon-docs": "^10.5.10",
+    "@storybook/react-vite": "^10.5.10",
     "@storybook/web-components-vite": "^10.5.10",
     "@types/prismjs": "^1.26.6",
     "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.3",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "rollup-plugin-visualizer": "^7.0.1",
     "storybook": "^10.5.10",
     "typescript": "~6.0.2",

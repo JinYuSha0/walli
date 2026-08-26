@@ -113,7 +113,7 @@ export const WalliChatComposer = forwardRef<WalliChatComposerRef, WalliChatCompo
       slot,
       style,
       transcribingText = "Transcribing",
-      uploadImagesTitle = "Add photos",
+      uploadImagesTitle = "Add files",
       value,
     },
     forwardedRef,

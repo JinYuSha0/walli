@@ -16,7 +16,7 @@ type Args = {
   value: string;
 };
 
-const demoMenuItems: readonly WalliChatComposerMenuItem[] = [
+export const demoMenuItems: readonly WalliChatComposerMenuItem[] = [
   { icon: Search, title: "Search the web", onClick: () => console.info("Search") },
   { icon: ImagePlus, title: "Insert image", onClick: () => console.info("Insert image") },
   {
@@ -230,7 +230,8 @@ export const WithActionMenu: Story = {
   parameters: {
     docs: {
       description: {
-        story: "The extra-action menu mirrors the search, image, and spreadsheet actions from the demo.",
+        story:
+          "The extra-action menu mirrors the search, image, and spreadsheet actions from the demo.",
       },
       source: {
         code: `<script type="module">
@@ -247,18 +248,16 @@ export const WithActionMenu: Story = {
     },
   },
   render: ({ disabled, placeholder, value }) => html`
-    <div
-      style="box-sizing:border-box;min-height:380px;padding:250px 0 60px;overflow:visible"
-    >
+    <div style="box-sizing:border-box;min-height:380px;padding:250px 0 60px;overflow:visible">
       <div style="margin:0 auto;max-width:760px">
-      <walli-chat-composer
-        ${ref((element) => initializeActionMenuStory(element))}
-        .disabled=${disabled}
-        .placeholder=${placeholder}
-        .value=${value}
-        .menuItems=${demoMenuItems}
-        .onUploadImages=${mockUpload}
-      ></walli-chat-composer>
+        <walli-chat-composer
+          ${ref((element) => initializeActionMenuStory(element))}
+          .disabled=${disabled}
+          .placeholder=${placeholder}
+          .value=${value}
+          .menuItems=${demoMenuItems}
+          .onUploadImages=${mockUpload}
+        ></walli-chat-composer>
       </div>
     </div>
   `,
@@ -268,7 +267,8 @@ export const WithAttachments: Story = {
   parameters: {
     docs: {
       description: {
-        story: "Programmatically inserted image and file attachments, using the same API as the demo.",
+        story:
+          "Programmatically inserted image and file attachments, using the same API as the demo.",
       },
       source: {
         code: `const image = new File([svg], "walli-preview.svg", {
@@ -359,7 +359,7 @@ function initializeActionMenuStory(element: Element | undefined): void {
   });
 }
 
-const mockUpload: WalliChatComposerUploadImagesCallback = async (
+export const mockUpload: WalliChatComposerUploadImagesCallback = async (
   files,
   setProgress,
   setResult,
@@ -383,7 +383,7 @@ const mockUpload: WalliChatComposerUploadImagesCallback = async (
   );
 };
 
-async function mockTranscription({
+export async function mockTranscription({
   stream,
   finished,
   signal,
