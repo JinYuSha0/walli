@@ -98,7 +98,7 @@ export class WalliChatComposerAssetsElement extends HTMLElement {
       ${
         attachment.status === "uploading"
           ? html`<div
-              class="absolute inset-0 flex items-center justify-center bg-white/15 [backdrop-filter:blur(8px)] [-webkit-backdrop-filter:blur(8px)] dark:bg-black/20"
+              class="absolute inset-0 flex items-center justify-center rounded-[inherit] bg-white/15 [backdrop-filter:blur(8px)] [-webkit-backdrop-filter:blur(8px)] dark:bg-black/20"
               aria-label=${`Uploading ${attachment.file.name}: ${Math.round(attachment.progress)}%`}
               role="progressbar"
               aria-valuemin="0"
@@ -130,7 +130,7 @@ export class WalliChatComposerAssetsElement extends HTMLElement {
             </div>`
           : attachment.status === "error"
             ? html`<div
-                class="absolute inset-0 flex items-center justify-center bg-black/45 text-white [backdrop-filter:blur(3px)] [-webkit-backdrop-filter:blur(3px)]"
+                class="absolute inset-0 flex items-center justify-center rounded-[inherit] bg-black/45 text-white [backdrop-filter:blur(3px)] [-webkit-backdrop-filter:blur(3px)]"
                 aria-label=${`Upload failed for ${attachment.file.name}: ${attachment.error?.message ?? "Unknown error"}`}
                 title=${attachment.error?.message ?? "Upload failed"}
                 role="status"
