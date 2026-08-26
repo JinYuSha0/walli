@@ -145,7 +145,7 @@ export function parseBlockTokens(
         appendBlockGroup(
           blocks,
           [code.prepare(token.text, ctx, token.lang)],
-          getCommonStyle("richBlockGap"),
+          getCommonStyle("blockGap"),
         );
         continue;
       }
@@ -317,7 +317,7 @@ function isFileName(name: string): boolean {
 function buildListBlocks(token: Tokens.List, ctx: ParseContext): PreparedBlock[] {
   const blocks: PreparedBlock[] = [];
   const itemCtx: ParseContext = {
-    listDepth: ctx.listDepth,
+    listDepth: ctx.listDepth + 1,
     quoteDepth: ctx.quoteDepth,
   };
 

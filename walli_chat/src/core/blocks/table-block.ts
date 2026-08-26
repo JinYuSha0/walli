@@ -69,7 +69,7 @@ const tableTextClass =
   "inline-block whitespace-pre font-sans text-sm leading-none text-foreground align-baseline";
 
 const TableBlockStyle = computed(() => ({
-  paddingBottom: getSpace(6),
+  paddingBottom: getSpace(4),
   lineHeight: getLineHeight("text-sm"),
   paddingTop: getSpace(2),
   paddingInlineEnd: getSpace(3),
