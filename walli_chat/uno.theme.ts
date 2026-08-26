@@ -1,5 +1,9 @@
 import type { PresetWind3Theme } from "unocss";
 
+function themeColor(name: string): string {
+  return `var(--${name}, var(--walli-${name}))`;
+}
+
 export const walliUnoTheme: PresetWind3Theme = {
   animation: {
     counts: {
@@ -22,7 +26,7 @@ export const walliUnoTheme: PresetWind3Theme = {
     properties: {
       "walli-shimmer": {
         "background-image":
-          "linear-gradient(to right,var(--stream-shimmer-base,var(--muted-foreground)) var(--stream-shimmer-highlight-start,30%),var(--stream-shimmer-highlight,var(--foreground)) 50%,var(--stream-shimmer-base,var(--muted-foreground)) var(--stream-shimmer-highlight-end,70%))",
+          "linear-gradient(to right,var(--stream-shimmer-base,var(--walli-stream-shimmer-base)) var(--stream-shimmer-highlight-start,var(--walli-stream-shimmer-highlight-start)),var(--stream-shimmer-highlight,var(--walli-stream-shimmer-highlight)) 50%,var(--stream-shimmer-base,var(--walli-stream-shimmer-base)) var(--stream-shimmer-highlight-end,var(--walli-stream-shimmer-highlight-end)))",
         "background-size": "200% auto",
       },
     },
@@ -33,25 +37,23 @@ export const walliUnoTheme: PresetWind3Theme = {
     },
   },
   colors: {
-    background: "var(--background)",
-    "scroll-to-bottom": "var(--scroll-to-bottom-background, var(--background))",
-    "scroll-to-bottom-hover": "var(--scroll-to-bottom-background-hover, var(--accent))",
-    foreground: "var(--foreground)",
-    card: "var(--card)",
-    "card-foreground": "var(--card-foreground)",
-    popover: "var(--popover)",
-    "popover-foreground": "var(--popover-foreground)",
-    primary: "var(--primary)",
-    "primary-foreground": "var(--primary-foreground)",
-    secondary: "var(--secondary)",
-    "secondary-foreground": "var(--secondary-foreground)",
-    muted: "var(--muted)",
-    "muted-foreground": "var(--muted-foreground)",
-    accent: "var(--accent)",
-    "accent-foreground": "var(--accent-foreground)",
-    destructive: "var(--destructive)",
-    border: "var(--border)",
-    input: "var(--input)",
-    ring: "var(--ring)",
+    background: themeColor("background"),
+    "scroll-to-bottom": themeColor("scroll-to-bottom-background"),
+    "scroll-to-bottom-hover": themeColor("scroll-to-bottom-background-hover"),
+    foreground: themeColor("foreground"),
+    card: themeColor("card"),
+    "card-foreground": themeColor("card-foreground"),
+    popover: themeColor("popover"),
+    "popover-foreground": themeColor("popover-foreground"),
+    primary: themeColor("primary"),
+    "primary-foreground": themeColor("primary-foreground"),
+    secondary: themeColor("secondary"),
+    "secondary-foreground": themeColor("secondary-foreground"),
+    muted: themeColor("muted"),
+    "muted-foreground": themeColor("muted-foreground"),
+    accent: themeColor("accent"),
+    "accent-foreground": themeColor("accent-foreground"),
+    border: themeColor("border"),
+    ring: themeColor("ring"),
   },
 };

@@ -568,10 +568,10 @@ export class WalliChatComposerElement extends LitElement {
     const capturing = this.transcriptionState === "starting" || recording;
     return html`
       <div
-        class="box-border flex min-h-[52px] items-center gap-3 rounded-[28px] bg-card px-2 py-[5px] text-card-foreground [box-shadow:0_0_0_1px_var(--border),0_2px_8px_rgb(0_0_0_/_8%),0_4px_40px_8px_rgb(0_0_0_/_5%)]"
+        class="box-border flex min-h-[52px] items-center gap-3 rounded-[28px] bg-card px-2 py-[5px] text-card-foreground [box-shadow:0_0_0_1px_var(--border,var(--walli-border)),0_2px_8px_rgb(0_0_0_/_8%),0_4px_40px_8px_rgb(0_0_0_/_5%)]"
       >
         <button
-          class="[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-9 w-9 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-foreground transition-colors [box-shadow:0_0_0_1px_var(--border)] enabled:hover:bg-accent focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          class="[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-9 w-9 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-foreground transition-colors [box-shadow:0_0_0_1px_var(--border,var(--walli-border))] enabled:hover:bg-accent focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           type="button"
           aria-label="Cancel transcription"
           @click=${this.cancelTranscription}
@@ -604,7 +604,7 @@ export class WalliChatComposerElement extends LitElement {
           ${
             capturing
               ? html`<button
-                  class="[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-foreground transition-colors [box-shadow:0_0_0_1px_var(--border)] enabled:hover:bg-accent focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40"
+                  class="[-webkit-appearance:none] [-webkit-tap-highlight-color:transparent] inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-foreground transition-colors [box-shadow:0_0_0_1px_var(--border,var(--walli-border))] enabled:hover:bg-accent focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40"
                   type="button"
                   aria-label="Stop transcription"
                   ?disabled=${!recording}
@@ -639,7 +639,7 @@ export class WalliChatComposerElement extends LitElement {
     if (this.transcriptionState !== "idle") return this.renderTranscription();
     const hasMenuItems = Boolean(this.onUploadImages) || this.menuItems.length > 0;
     return html`<div
-      class="relative box-border min-h-[52px] rounded-[28px] bg-card px-2 py-[5px] text-card-foreground [box-shadow:0_0_0_1px_var(--border),0_2px_8px_rgb(0_0_0_/_8%),0_4px_40px_8px_rgb(0_0_0_/_5%)]"
+      class="relative box-border min-h-[52px] rounded-[28px] bg-card px-2 py-[5px] text-card-foreground [box-shadow:0_0_0_1px_var(--border,var(--walli-border)),0_2px_8px_rgb(0_0_0_/_8%),0_4px_40px_8px_rgb(0_0_0_/_5%)]"
     >
       ${
         this.attachments.length > 0
@@ -678,7 +678,7 @@ export class WalliChatComposerElement extends LitElement {
           ${
             hasMenuItems && this.menuOpen
               ? html`<div
-                  class="absolute inset-x-0 z-20 flex origin-bottom-left flex-col gap-1.5 overflow-hidden rounded-2xl bg-popover p-2 text-popover-foreground [bottom:calc(100%+10px)] [border:1px_solid_var(--border)] [box-shadow:0_4px_12px_rgb(0_0_0_/_5%),0_1px_2px_rgb(0_0_0_/_3%)]"
+                  class="absolute inset-x-0 z-20 flex origin-bottom-left flex-col gap-1.5 overflow-hidden rounded-2xl bg-popover p-2 text-popover-foreground [bottom:calc(100%+10px)] [border:1px_solid_var(--border,var(--walli-border))] [box-shadow:0_4px_12px_rgb(0_0_0_/_5%),0_1px_2px_rgb(0_0_0_/_3%)]"
                   role="menu"
                   aria-label="Add to message"
                 >
@@ -727,7 +727,7 @@ export class WalliChatComposerElement extends LitElement {
 
         <textarea
           class=${clsx(
-            "box-border block h-10 min-h-10 w-full min-w-0 cursor-text select-text resize-none overflow-x-hidden overflow-y-hidden whitespace-pre-wrap break-words border-0 bg-transparent px-[7px] py-2 font-sans text-base leading-6 text-inherit outline-none transition-[height,padding] duration-150 [transition-timing-function:ease] motion-reduce:transition-none [scrollbar-color:var(--muted-foreground)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60",
+            "box-border block h-10 min-h-10 w-full min-w-0 cursor-text select-text resize-none overflow-x-hidden overflow-y-hidden whitespace-pre-wrap break-words border-0 bg-transparent px-[7px] py-2 font-sans text-base leading-6 text-inherit outline-none transition-[height,padding] duration-150 [transition-timing-function:ease] motion-reduce:transition-none [scrollbar-color:var(--muted-foreground,var(--walli-muted-foreground))_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60",
             this.expanded && "col-span-2 col-start-1 row-start-1",
           )}
           .value=${this.value}

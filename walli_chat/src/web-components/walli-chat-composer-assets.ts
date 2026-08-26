@@ -73,7 +73,7 @@ export class WalliChatComposerAssetsElement extends HTMLElement {
     const isImage = attachment.file.type.startsWith("image/");
     return html`<div
       class=${clsx(
-        "composer-asset relative box-border h-20 w-20 overflow-hidden rounded-2xl bg-muted [border:1px_solid_var(--border)]",
+        "composer-asset relative box-border h-20 w-20 overflow-hidden rounded-2xl bg-muted [border:1px_solid_var(--border,var(--walli-border))]",
         !isImage && "flex flex-col items-center justify-between px-2 py-2",
       )}
     >

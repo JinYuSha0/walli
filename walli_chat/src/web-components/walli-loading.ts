@@ -7,7 +7,7 @@ export class WalliLoadingElement extends LitElement {
 
   static override styles = css`
     :host {
-      color: var(--muted-foreground);
+      color: var(--muted-foreground, var(--walli-muted-foreground));
       display: inline-block;
       height: 22px;
       position: relative;

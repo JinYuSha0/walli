@@ -34,7 +34,11 @@
 }
 
 .composer-shell::after {
-  background: linear-gradient(to bottom, transparent, var(--background) 72%);
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--background, var(--walli-background)) 72%
+  );
   content: "";
   inset: calc(100% - 12px) -16px calc(-1 * max(24px, env(safe-area-inset-bottom)));
   pointer-events: none;
@@ -43,7 +47,8 @@
 }
 
 .walli-table-scrollbar {
-  scrollbar-color: var(--table-scrollbar-thumb) var(--table-scrollbar-track);
+  scrollbar-color: var(--table-scrollbar-thumb, var(--walli-table-scrollbar-thumb))
+    var(--table-scrollbar-track, var(--walli-table-scrollbar-track));
   scrollbar-width: thin;
 }
 
@@ -52,17 +57,17 @@
 }
 
 .walli-table-scrollbar::-webkit-scrollbar-track {
-  background: var(--table-scrollbar-track);
+  background: var(--table-scrollbar-track, var(--walli-table-scrollbar-track));
 }
 
 .walli-table-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--table-scrollbar-thumb);
+  background: var(--table-scrollbar-thumb, var(--walli-table-scrollbar-thumb));
   background-clip: content-box;
   border: 2px solid transparent;
   border-radius: 999px;
 }
 
 .walli-table-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: var(--table-scrollbar-thumb-hover);
+  background: var(--table-scrollbar-thumb-hover, var(--walli-table-scrollbar-thumb-hover));
   background-clip: content-box;
 }

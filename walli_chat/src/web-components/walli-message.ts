@@ -67,7 +67,7 @@ export class WalliMessageElement extends HTMLElement {
               message.frame.role === "user",
             "bg-transparent shadow-none": hasAssets,
           })}
-          style=${`width:${message.frame.frameWidth}px;height:${message.frame.bubbleHeight}px;${message.frame.role === "user" && !hasAssets ? "background-color:var(--user-message-background);" : ""}`}
+          style=${`width:${message.frame.frameWidth}px;height:${message.frame.bubbleHeight}px;${message.frame.role === "user" && !hasAssets ? "background-color:var(--user-message-background,var(--walli-user-message-background));" : ""}`}
         >
           ${
             textBubbleStyle
@@ -113,7 +113,7 @@ function getTextBubbleStyle(
   const top = Math.min(...textBlocks.map((block) => block.top));
   const bottom = Math.max(...textBlocks.map((block) => block.top + block.height));
   const paddingY = getCommonStyle("bubblePaddingY");
-  return `background-color:var(--user-message-background);left:${left}px;top:${top - paddingY}px;width:${bubbleWidth}px;height:${bottom - top + paddingY * 2}px;`;
+  return `background-color:var(--user-message-background,var(--walli-user-message-background));left:${left}px;top:${top - paddingY}px;width:${bubbleWidth}px;height:${bottom - top + paddingY * 2}px;`;
 }
 
 function getTextContentInset(frame: MessageFrame, textBlocks: readonly BlockLayout[]): number {
