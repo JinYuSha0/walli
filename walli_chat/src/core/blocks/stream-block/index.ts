@@ -73,7 +73,7 @@ export const startBlockDefinition = {
       style=${`padding:${getStreamBlockStyle("startPaddingY")}px ${getStreamBlockStyle("startPaddingX")}px;`}
     >
       <span
-        class="animate-walli-breathe flex-none origin-center rounded-full bg-current opacity-45 motion-reduce:animate-none"
+        class="animate-walli-breathe flex-none origin-center rounded-full bg-current opacity-45"
         style=${`height:${getStreamBlockStyle("startDotSize")}px;width:${getStreamBlockStyle("startDotSize")}px;`}
       ></span>
     </div>`;
@@ -118,7 +118,7 @@ export const toolCallBlockDefinition = {
       style=${`padding-block:${getStreamBlockStyle("toolPaddingY")}px;`}
     >
       <span
-        class="animate-walli-shimmer min-w-0 bg-clip-text text-transparent [-webkit-background-clip:text] motion-reduce:animate-none"
+        class="animate-walli-shimmer min-w-0 bg-clip-text text-transparent [-webkit-background-clip:text]"
         style=${`font:${getStreamBlockStyle("toolLabelFont")};line-height:${getStreamBlockStyle("toolLineHeight")}px;`}
         >${label}</span
       >

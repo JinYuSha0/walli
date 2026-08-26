@@ -17,16 +17,13 @@ const TOTAL_MESSAGE_LENGTH = 10_000;
 
 const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
   message("user", "Give me an image of a fixed size."),
-  message(
-    "assistant",
-    '![image](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRZYXcjQI4KQpTXByeK6dpmd6GJY5LPVE6NL3Rd-CbZ7s2UsphrHs1djE8&s=10){width="365" height="547"}',
-  ),
+  message("assistant", '![mountain lake](/demo-landscape-lake.jpg){width="480" height="320"}'),
   message("user", "Give me two images of unknown dimensions."),
   message(
     "assistant",
-    "![image](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRZYXcjQI4KQpTXByeK6dpmd6GJY5LPVE6NL3Rd-CbZ7s2UsphrHs1djE8&s=10)",
+    "![mountain lake](/demo-landscape-lake.jpg)",
     "",
-    "![image](https://img.redocn.com/sheji/20250805/jilongpochengshijianzhuriluoquanjing_13631705.jpg.400.jpg)",
+    "![coastline](/demo-landscape-coast.jpg)",
   ),
   message("assistant", readmeZhCn),
   message("user", "Add one deliberately complex nested markdown sample to the test loop."),

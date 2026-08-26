@@ -756,9 +756,10 @@ export class WalliChatElement extends LitElement {
   }
 
   private scheduleProjection(): void {
-    if (this.scheduledRaf !== null) return;
+    if (!this.isConnected || this.scheduledRaf !== null) return;
     this.scheduledRaf = requestAnimationFrame(() => {
       this.scheduledRaf = null;
+      if (!this.isConnected || this.canvasElement === null) return;
       this.projectFrame();
     });
   }
@@ -778,6 +779,9 @@ export class WalliChatElement extends LitElement {
   }
 
   private projectFrame(): void {
+    const canvas = this.canvasElement;
+    if (canvas === null) return;
+
     const viewportWidth = this.viewportElement?.clientWidth ?? this.containerSize.width;
     const viewportHeight = this.viewportElement?.clientHeight ?? this.containerSize.height;
     const scrollTop = this.viewportElement?.scrollTop ?? this.viewportScrollTop;
@@ -820,11 +824,8 @@ export class WalliChatElement extends LitElement {
         width: frame.chatWidth,
         height: frame.totalHeight,
       };
-      const canvas = this.renderRoot.querySelector<HTMLDivElement>(".chat-canvas");
-      if (canvas !== null) {
-        canvas.style.width = `${frame.chatWidth}px`;
-        canvas.style.height = `${frame.totalHeight}px`;
-      }
+      canvas.style.width = `${frame.chatWidth}px`;
+      canvas.style.height = `${frame.totalHeight}px`;
       if (this.viewportElement !== null && this.viewportElement.clientWidth !== viewportWidth) {
         this.scheduleProjection();
       }
@@ -880,9 +881,10 @@ export class WalliChatElement extends LitElement {
   }
 
   private scheduleScrollRequest(): void {
-    if (this.scheduledScrollRaf !== null) return;
+    if (!this.isConnected || this.scheduledScrollRaf !== null) return;
     this.scheduledScrollRaf = requestAnimationFrame(() => {
       this.scheduledScrollRaf = null;
+      if (!this.isConnected || this.canvasElement === null) return;
       this.applyPendingScrollRequest();
     });
   }
@@ -937,7 +939,7 @@ export class WalliChatElement extends LitElement {
         width: frame.chatWidth,
         height: frame.totalHeight,
       };
-      const canvas = this.renderRoot.querySelector<HTMLDivElement>(".chat-canvas");
+      const canvas = this.canvasElement;
       if (canvas !== null) {
         canvas.style.width = `${frame.chatWidth}px`;
         canvas.style.height = `${frame.totalHeight}px`;

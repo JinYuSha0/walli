@@ -122,8 +122,7 @@ const imageMessage: WalliChatMessage[] = [
   {
     id: "image-fixed-assistant",
     role: "assistant",
-    markdown:
-      '![image](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRZYXcjQI4KQpTXByeK6dpmd6GJY5LPVE6NL3Rd-CbZ7s2UsphrHs1djE8&s=10){width="365" height="547"}',
+    markdown: '![mountain lake](/demo-landscape-lake.jpg){width="480" height="320"}',
   },
   {
     id: "image-intrinsic-user",
@@ -134,9 +133,9 @@ const imageMessage: WalliChatMessage[] = [
     id: "image-intrinsic-assistant",
     role: "assistant",
     markdown: [
-      "![image](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRZYXcjQI4KQpTXByeK6dpmd6GJY5LPVE6NL3Rd-CbZ7s2UsphrHs1djE8&s=10)",
+      "![mountain lake](/demo-landscape-lake.jpg)",
       "",
-      "![image](https://img.redocn.com/sheji/20250805/jilongpochengshijianzhuriluoquanjing_13631705.jpg.400.jpg)",
+      "![coastline](/demo-landscape-coast.jpg)",
     ].join("\n"),
   },
   {

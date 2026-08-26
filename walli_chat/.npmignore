@@ -1,0 +1,17 @@
+.storybook/
+.agents/
+.codex/
+
+demo/
+public/
+src/
+stories/
+
+coverage/
+dist-demo/
+storybook-static/
+
+*.config.*
+*.log
+AGENTS.md
+index.html

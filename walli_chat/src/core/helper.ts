@@ -24,10 +24,9 @@ export function parseMarkdownHref(href: string | null | undefined): string | und
 export function parseMarkdownImageSrc(src: string | null | undefined): string | undefined {
   if (src === undefined || src === null) return;
   try {
-    const url = new URL(src);
-    return url.protocol === "http:" || url.protocol === "https:" || url.protocol === "blob:"
-      ? url.href
-      : undefined;
+    const url = new URL(src, "https://walli.invalid/");
+    if (url.protocol !== "http:" && url.protocol !== "https:" && url.protocol !== "blob:") return;
+    return /^[a-z][a-z\d+.-]*:/i.test(src) ? url.href : src;
   } catch {
     return;
   }

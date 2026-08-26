@@ -1,7 +1,9 @@
 {
   "name": "walli_chat",
-  "private": true,
   "version": "0.0.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "types": "./dist/types/index.d.ts",
   "exports": {
@@ -27,6 +29,7 @@
     "deploy:demo": "pnpm run build:demo && pnpm dlx wrangler pages deploy dist-demo --project-name=walli-chat-demo --branch=main --commit-dirty=true",
     "analyze": "vite build --mode analyze && pnpm run build:types",
     "preview": "vite preview",
+    "prepublishOnly": "pnpm run build",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "deploy:storybook": "pnpm run build-storybook && pnpm dlx wrangler pages deploy storybook-static --project-name=walli-chat-storybook --branch=main --commit-dirty=true"
