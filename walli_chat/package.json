@@ -26,16 +26,23 @@
     "build:types": "tsc -p tsconfig.build.json",
     "deploy:demo": "pnpm run build:demo && pnpm dlx wrangler pages deploy dist-demo --project-name=walli-chat-demo --branch=main --commit-dirty=true",
     "analyze": "vite build --mode analyze && pnpm run build:types",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build",
+    "deploy:storybook": "pnpm run build-storybook && pnpm dlx wrangler pages deploy storybook-static --project-name=walli-chat-storybook --branch=main --commit-dirty=true"
   },
   "peerDependencies": {
     "react": ">=18"
   },
   "devDependencies": {
     "@preact/signals-core": "^1.14.4",
+    "@storybook/addon-a11y": "^10.5.10",
+    "@storybook/addon-docs": "^10.5.10",
+    "@storybook/web-components-vite": "^10.5.10",
     "@types/prismjs": "^1.26.6",
     "@types/react": "^19.2.18",
     "rollup-plugin-visualizer": "^7.0.1",
+    "storybook": "^10.5.10",
     "typescript": "~6.0.2",
     "unocss": "^66.7.5",
     "vite": "^8.2.0"
