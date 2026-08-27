@@ -9,12 +9,13 @@ import walliChatBlocksUnoCss from "virtual:walli-chat-blocks-uno-styles";
 dayjs.extend(customParseFormat);
 
 const cardWidth = 360;
-const cardPadding = 12;
+const cardPaddingTop = 12;
+const cardPaddingBottom = 16;
 const titleHeight = 20;
 const titleFieldGap = 12;
 const fieldHeight = 58;
 const fieldGap = 10;
-const actionMarginTop = 12;
+const actionMarginTop = 16;
 const actionHeight = 40;
 
 type ConfirmationFieldBase = {
@@ -191,7 +192,8 @@ export const confirmationCardBlockDefinition = {
       data.fields.length * fieldHeight + Math.max(0, data.fields.length - 1) * fieldGap;
     return {
       height:
-        cardPadding * 2 +
+        cardPaddingTop +
+        cardPaddingBottom +
         (data.title === undefined ? 0 : titleHeight + titleFieldGap) +
         fieldsHeight +
         actionMarginTop +
@@ -201,7 +203,7 @@ export const confirmationCardBlockDefinition = {
   },
   render({ ctx, data, height, messageId, width }) {
     return html`<form
-      class="box-border flex w-full flex-col rounded-xl border border-solid [background:var(--walli-card)] [border-color:var(--walli-border)] p-3 [box-shadow:var(--walli-block-shadow)] [color:var(--walli-card-foreground)]"
+      class="box-border flex w-full flex-col rounded-xl border border-solid [background:var(--walli-card)] [border-color:var(--walli-border)] p-3 pb-4 [box-shadow:var(--walli-block-shadow)] [color:var(--walli-card-foreground)]"
       style=${`width:${width}px;height:${height}px`}
       @submit=${(event: SubmitEvent) => submitCard(event, ctx, data, messageId)}
       novalidate
@@ -215,7 +217,7 @@ export const confirmationCardBlockDefinition = {
         ${data.fields.map((field) => renderField(data, field))}
       </div>
       <button
-        class="mt-3 h-10 shrink-0 cursor-pointer rounded-lg border-0 [background:var(--walli-primary)] px-3 text-sm font-semibold [color:var(--walli-primary-foreground)] enabled:hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        class="mt-4 h-10 shrink-0 cursor-pointer rounded-lg border-0 [background:var(--walli-primary)] px-3 text-sm font-semibold [color:var(--walli-primary-foreground)] enabled:hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         type="submit"
         ?disabled=${ctx.isStreaming || data.action.disabled === true}
       >
