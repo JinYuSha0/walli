@@ -5,8 +5,8 @@ export const source = (code: string) => ({ docs: { source: { code, language: "ht
 
 export function chatSource(messages: unknown, height = 640) {
   return `<script setup lang="ts">
-import { WalliChat, type WalliChatMessage } from "walli_chat/vue";
-import "walli_chat/theme.css";
+import { WalliChat, type WalliChatMessage } from "@walli/chat/vue";
+import "@walli/chat/theme.css";
 
 const messages: WalliChatMessage[] = ${JSON.stringify(messages, null, 2)};
 </script>
@@ -19,8 +19,8 @@ const messages: WalliChatMessage[] = ${JSON.stringify(messages, null, 2)};
 export function composerSource(attributes = "", initialValue = "") {
   return `<script setup lang="ts">
 import { ref } from "vue";
-import { WalliChatComposer } from "walli_chat/vue";
-import "walli_chat/theme.css";
+import { WalliChatComposer } from "@walli/chat/vue";
+import "@walli/chat/theme.css";
 
 const value = ref(${JSON.stringify(initialValue)});
 </script>

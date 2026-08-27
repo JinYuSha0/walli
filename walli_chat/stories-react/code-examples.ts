@@ -10,8 +10,8 @@ import {
 import { fullChatWelcomeMessages } from "./full-chat-data";
 
 function chat(messages: unknown, height = 640): string {
-  return `import { WalliChat, type WalliChatMessage } from "walli_chat/react";
-import "walli_chat/theme.css";
+  return `import { WalliChat, type WalliChatMessage } from "@walli/chat/react";
+import "@walli/chat/theme.css";
 
 const messages: WalliChatMessage[] = ${JSON.stringify(messages, null, 2)};
 
@@ -27,7 +27,7 @@ export const exampleSources = {
   assistantMessage: chat(assistantMessage, 240),
   imageMessage: chat(imageMessage),
   customBlock: `import { useEffect, useMemo } from "react";
-import { WalliChat, registerBlock } from "walli_chat/react";
+import { WalliChat, registerBlock } from "@walli/chat/react";
 import { noticeBlockDefinition } from "./notice-block";
 
 export function Example() {
@@ -41,7 +41,7 @@ import {
   WalliChat,
   registerBlock,
   type WalliChatRef,
-} from "walli_chat/react";
+} from "@walli/chat/react";
 import { replacementBlockDefinition } from "./replacement-block";
 
 export function Example() {
@@ -62,8 +62,8 @@ export function Example() {
   return <WalliChat ref={chat} messages={[]} style={{ height: 320 }} />;
 }`,
   themeToggle: `import { useState } from "react";
-import { WalliChat } from "walli_chat/react";
-import "walli_chat/theme.css";
+import { WalliChat } from "@walli/chat/react";
+import "@walli/chat/theme.css";
 
 export function Example({ messages }) {
   const [dark, setDark] = useState(false);
@@ -80,7 +80,7 @@ export function Example({ messages }) {
   );
 }`,
   scrollControls: `import { useRef, useState } from "react";
-import { WalliChat, type WalliChatMessage, type WalliChatRef } from "walli_chat/react";
+import { WalliChat, type WalliChatMessage, type WalliChatRef } from "@walli/chat/react";
 
 const messages: WalliChatMessage[] = Array.from(
   { length: 40 },
@@ -124,7 +124,7 @@ export function Example() {
   );
 }`,
   insertMessages: `import { useRef } from "react";
-import { WalliChat, type WalliChatRef } from "walli_chat/react";
+import { WalliChat, type WalliChatRef } from "@walli/chat/react";
 
 export function Example({ initialMessages }) {
   const chat = useRef<WalliChatRef>(null);
@@ -163,7 +163,7 @@ import {
   type WalliChatMessage,
   type WalliChatRef,
   type WalliChatStreamingHandle,
-} from "walli_chat/react";
+} from "@walli/chat/react";
 import { createStorySseStream } from "./story-stream";
 
 const welcomeMessages: WalliChatMessage[] = ${JSON.stringify(fullChatWelcomeMessages, null, 2)};
@@ -181,20 +181,13 @@ export function FullChat() {
         value={value}
         onValueChange={setValue}
         menuItems={[
-          {
-            icon: Search,
-            title: "Search the web",
-            onClick: () => console.log("Search"),
-          },
-          {
-            icon: ImagePlus,
-            title: "Insert image",
-            onClick: () => console.log("Image"),
-          },
+          { icon: Paperclip, title: "Add files", onClick: () => console.info("Add files") },
+          { icon: Search, title: "Search the web", onClick: () => console.info("Search") },
+          { icon: ImagePlus, title: "Insert image", onClick: () => console.info("Insert image") },
           {
             icon: FileSpreadsheet,
             title: "Insert spreadsheet",
-            onClick: () => console.log("Spreadsheet"),
+            onClick: () => console.info("Insert spreadsheet"),
           },
         ]}
         onCancel={() => activeStream.current?.abort()}
@@ -222,7 +215,7 @@ export function FullChat() {
 }`,
   composerAllFeatures: `import { useState } from "react";
 import { FileSpreadsheet, ImagePlus, Paperclip, Search } from "lucide";
-import { WalliChatComposer } from "walli_chat/react";
+import { WalliChatComposer } from "@walli/chat/react";
 
 const menuItems = [
   { icon: Paperclip, title: "Add files", onClick: () => console.log("Add files") },
@@ -264,7 +257,7 @@ export function Example() {
     }}`),
   composerActionMenu: `import { useState } from "react";
 import { FileSpreadsheet, ImagePlus, Paperclip, Search } from "lucide";
-import { WalliChatComposer } from "walli_chat/react";
+import { WalliChatComposer } from "@walli/chat/react";
 
 const menuItems = [
   { icon: Paperclip, title: "Add files", onClick: () => console.log("Add files") },
@@ -284,7 +277,7 @@ export function Example() {
   );
 }`,
   composerAttachments: `import { useEffect, useRef, useState } from "react";
-import { WalliChatComposer, type WalliChatComposerRef } from "walli_chat/react";
+import { WalliChatComposer, type WalliChatComposerRef } from "@walli/chat/react";
 
 export function Example({ image, spreadsheet }) {
   const composer = useRef<WalliChatComposerRef>(null);
@@ -310,7 +303,7 @@ export function Example({ image, spreadsheet }) {
 function pagination(loadAtTop: boolean): string {
   const method = loadAtTop ? "insertMessagesAtTop" : "insertMessagesAtBottom";
   return `import { useRef } from "react";
-import { WalliChat, type WalliChatRef } from "walli_chat/react";
+import { WalliChat, type WalliChatRef } from "@walli/chat/react";
 
 export function Example({ initialPage, loadNextPage }) {
   const chat = useRef<WalliChatRef>(null);
@@ -332,7 +325,7 @@ export function Example({ initialPage, loadNextPage }) {
 
 function composer(extra: string, initialValue = ""): string {
   return `import { useState } from "react";
-import { WalliChatComposer } from "walli_chat/react";
+import { WalliChatComposer } from "@walli/chat/react";
 
 export function Example() {
   const [value, setValue] = useState(${JSON.stringify(initialValue)});

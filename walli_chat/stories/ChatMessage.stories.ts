@@ -197,7 +197,7 @@ const customBlockSource = `import {
   prepareWithSegments,
 } from "@chenglou/pretext";
 import { html } from "lit";
-import { registerBlock } from "walli_chat";
+import { registerBlock } from "@walli/chat";
 
 const padding = 16;
 const lineHeight = 22;
@@ -323,7 +323,7 @@ const replaceBlockSource = `import { html } from "lit";
 import {
   registerBlock,
   toolCallBlockDefinition,
-} from "walli_chat";
+} from "@walli/chat";
 
 const replacement = {
   ...toolCallBlockDefinition,
@@ -386,6 +386,7 @@ function createChatSource(messages: readonly WalliChatMessage[]): string {
 
 const meta: Meta<Args> = {
   title: "Components/Chat Message",
+  excludeStories: /^[a-z]/,
   tags: ["autodocs"],
   parameters: {
     layout: "fullscreen",
@@ -429,7 +430,7 @@ export const FullChat: Story = {
 </walli-chat>
 
 <script type="module">
-  import "walli_chat";
+  import "@walli/chat";
 
   const chat = document.querySelector("walli-chat");
   const composer = document.querySelector("walli-chat-composer");
@@ -635,7 +636,7 @@ export const ThemeToggle: Story = {
 </div>
 
 <script type="module">
-  import "walli_chat";
+  import "@walli/chat";
 
   const demo = document.querySelector("#theme-demo");
   const button = document.querySelector("#theme");
@@ -670,7 +671,7 @@ export const ScrollControls: Story = {
 <walli-chat></walli-chat>
 
 <script type="module">
-  import "walli_chat";
+  import "@walli/chat";
 
   const chat = document.querySelector("walli-chat");
   const index = document.querySelector("#index");
@@ -704,7 +705,7 @@ export const InsertMessages: Story = {
 <walli-chat></walli-chat>
 
 <script type="module">
-  import "walli_chat";
+  import "@walli/chat";
 
   const chat = document.querySelector("walli-chat");
   const stick = document.querySelector("#stick");
@@ -762,7 +763,7 @@ function createPaginationSource(loadAtTop: boolean): string {
   return `<walli-chat></walli-chat>
 
 <script type="module">
-  import "walli_chat";
+  import "@walli/chat";
 
   const chat = document.querySelector("walli-chat");
   chat.defaultScrollToBottom = ${loadAtTop};

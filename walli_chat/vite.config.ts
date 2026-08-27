@@ -80,7 +80,7 @@ export function walliChatUnoCss(): Plugin {
 export default defineConfig(({ command, mode }) => ({
   root: command === "serve" || mode === "demo" ? demoRoot : projectRoot,
   cacheDir: resolve(projectRoot, "node_modules/.vite/walli-chat-demo"),
-  publicDir: mode === "demo" ? resolve(projectRoot, "public") : false,
+  publicDir: command === "serve" || mode === "demo" ? resolve(projectRoot, "public") : false,
   plugins: [
     walliChatUnoCss(),
     mode === "analyze" &&
@@ -100,11 +100,11 @@ export default defineConfig(({ command, mode }) => ({
   resolve: {
     alias: [
       {
-        find: /^walli_chat\/theme\.css$/,
+        find: /^@walli\/chat\/theme\.css$/,
         replacement: resolve(sourceRoot, "theme.css"),
       },
       {
-        find: /^walli_chat$/,
+        find: /^@walli\/chat$/,
         replacement: resolve(sourceRoot, "index.ts"),
       },
     ],

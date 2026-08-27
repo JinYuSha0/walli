@@ -29,6 +29,7 @@ export const demoMenuItems: readonly WalliChatComposerMenuItem[] = [
 
 const meta: Meta<Args> = {
   title: "Components/Chat Composer",
+  excludeStories: /^[a-z]/,
   tags: ["autodocs"],
   parameters: {
     layout: "padded",
@@ -74,7 +75,7 @@ export const AllFeatures: Story = {
         code: `<walli-chat-composer placeholder="Message"></walli-chat-composer>
 
 <script type="module">
-  import "walli_chat";
+  import "@walli/chat";
   import { FileSpreadsheet, ImagePlus, Paperclip, Search } from "lucide";
 
   const composer = document.querySelector("walli-chat-composer");

@@ -1,12 +1,12 @@
-import "walli_chat/theme.css";
+import "@walli/chat/theme.css";
 import { FileSpreadsheet, ImagePlus, Search } from "lucide";
-import { registerBlock } from "walli_chat";
+import { registerBlock } from "@walli/chat";
 import type {
   WalliChatComposerElement,
   WalliChatElement,
   WalliChatMessage,
   WalliChatStreamingHandle,
-} from "walli_chat";
+} from "@walli/chat";
 import { noticeBlockDefinition } from "./blocks/notice-block";
 import { getDemoMessages } from "./store";
 import { createDemoSseRecords } from "./mock/stream";

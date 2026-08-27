@@ -20,8 +20,8 @@
       "@/*": ["./src/react-app/*"],
       "@shared/*": ["./src/shared/*"],
       "@worker/*": ["./src/worker/*"],
-      "walli_chat": ["../walli_chat/dist/types/index.d.ts"],
-      "walli_chat/react": ["../walli_chat/dist/types/react/index.d.ts"]
+      "@walli/chat": ["../walli_chat/dist/types/index.d.ts"],
+      "@walli/chat/react": ["../walli_chat/dist/types/react/index.d.ts"]
     },
 
     /* Linting */

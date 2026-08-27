@@ -7,8 +7,8 @@ import {
   type WalliChatMessage,
   type WalliChatRef,
   type WalliChatStreamingHandle,
-} from "walli_chat/react";
-import "walli_chat/theme.css";
+} from "@walli/chat/react";
+import "@walli/chat/theme.css";
 import { authClient } from "@/auth-client";
 import { uploadAsset } from "@/api";
 

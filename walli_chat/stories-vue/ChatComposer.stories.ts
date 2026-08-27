@@ -130,8 +130,8 @@ type Story = StoryObj<Args>;
 const allFeaturesCode = `<script setup lang="ts">
 import { ref } from "vue";
 import { FileSpreadsheet, ImagePlus, Paperclip, Search } from "lucide";
-import { WalliChatComposer } from "walli_chat/vue";
-import "walli_chat/theme.css";
+import { WalliChatComposer } from "@walli/chat/vue";
+import "@walli/chat/theme.css";
 
 const value = ref("");
 const menuItems = [
@@ -184,7 +184,7 @@ async function transcribe({ stream, finished, signal }) {
 
 const draftCode = `<script setup lang="ts">
 import { ref } from "vue";
-import { WalliChatComposer } from "walli_chat/vue";
+import { WalliChatComposer } from "@walli/chat/vue";
 
 const value = ref("Can you summarize this conversation?");
 </script>
@@ -199,7 +199,7 @@ const value = ref("Can you summarize this conversation?");
 
 const disabledCode = `<script setup lang="ts">
 import { ref } from "vue";
-import { WalliChatComposer } from "walli_chat/vue";
+import { WalliChatComposer } from "@walli/chat/vue";
 
 const value = ref("");
 </script>
@@ -214,7 +214,7 @@ const value = ref("");
 
 const transcriptionCode = `<script setup lang="ts">
 import { ref } from "vue";
-import { WalliChatComposer } from "walli_chat/vue";
+import { WalliChatComposer } from "@walli/chat/vue";
 
 const value = ref("");
 
@@ -245,7 +245,7 @@ async function transcribe({ stream, finished, signal }) {
 const actionMenuCode = `<script setup lang="ts">
 import { nextTick, onMounted, ref } from "vue";
 import { FileSpreadsheet, ImagePlus, Paperclip, Search } from "lucide";
-import { WalliChatComposer } from "walli_chat/vue";
+import { WalliChatComposer } from "@walli/chat/vue";
 
 const composer = ref();
 const value = ref("");
@@ -275,7 +275,7 @@ onMounted(async () => {
 
 const attachmentsCode = `<script setup lang="ts">
 import { onMounted, ref } from "vue";
-import { WalliChatComposer } from "walli_chat/vue";
+import { WalliChatComposer } from "@walli/chat/vue";
 
 const composer = ref();
 const value = ref("");

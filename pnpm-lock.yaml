@@ -198,7 +198,7 @@ importers:
       tw-animate-css:
         specifier: ^1.4.0
         version: 1.4.0
-      walli_chat:
+      '@walli/chat':
         specifier: workspace:*
         version: link:../walli_chat
       zod:

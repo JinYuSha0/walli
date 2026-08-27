@@ -35,15 +35,15 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: /^walli_chat\/theme\.css$/,
+        find: /^@walli\/chat\/theme\.css$/,
         replacement: resolve("../walli_chat/src/theme.css"),
       },
       {
-        find: /^walli_chat\/react$/,
+        find: /^@walli\/chat\/react$/,
         replacement: resolve("../walli_chat/src/react/index.ts"),
       },
       {
-        find: /^walli_chat$/,
+        find: /^@walli\/chat$/,
         replacement: resolve("../walli_chat/src/index.ts"),
       },
       { find: "@shared", replacement: resolve("src/shared") },

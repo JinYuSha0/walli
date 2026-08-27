@@ -5,7 +5,7 @@ import {
   type PreparedTextWithSegments,
 } from "@chenglou/pretext";
 import { html } from "lit";
-import type { WalliChatTokenizedBlockDefinition } from "walli_chat";
+import type { WalliChatTokenizedBlockDefinition } from "@walli/chat";
 import noticeBlockCss from "./notice-block.css?inline";
 
 const padding = 16;
