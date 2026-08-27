@@ -199,6 +199,10 @@ export class WalliChatElement extends LitElement {
         : "target" in optionsOrX && optionsOrX.target !== undefined
           ? { animated, target: optionsOrX.target }
           : { animated, top: optionsOrX.top ?? 0 };
+    if ("target" in request && request.target === "bottom") {
+      this.isScrollingToBottom = true;
+      this.isAtBottom = true;
+    }
     this.pendingScrollRequest = {
       ...request,
     };

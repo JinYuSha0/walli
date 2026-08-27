@@ -184,6 +184,7 @@ async function submitReply(
     item.disabled = true;
   });
 
+  ctx.scrollTo({ animated: false, target: "bottom" });
   const submitted = await ctx.submit(reply);
   if (!submitted && !ctx.isStreaming) {
     buttons.forEach((item) => {
