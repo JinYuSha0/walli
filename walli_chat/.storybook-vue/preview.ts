@@ -24,7 +24,7 @@ const preview: Preview = {
     options: {
       storySort: {
         method: "custom",
-        order: ["Vue", ["Chat", "Chat Composer"]],
+        order: ["Vue", ["Chat", "Chat Composer", "Custom Blocks"]],
       },
     },
   },

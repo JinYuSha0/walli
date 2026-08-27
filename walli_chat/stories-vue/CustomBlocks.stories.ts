@@ -1,0 +1,212 @@
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
+import {
+  confirmationCardBlockDefinition,
+  createConfirmationCardMarkdown,
+  createNoticeMarkdown,
+  noticeBlockDefinition,
+  recommendedRepliesBlockDefinition,
+  type ConfirmationCardData,
+  type ConfirmationCardField,
+  type ConfirmationCardSubmission,
+} from "@walli/chat-blocks";
+import { defineComponent, h, ref } from "vue";
+import {
+  WalliChat,
+  WalliChatComposer,
+  registerBlock,
+  type WalliChatBlockAction,
+  type WalliChatExpose,
+  type WalliChatMessage,
+} from "../src/vue";
+import {
+  confirmationCardMessage,
+  noticeMessages,
+  recommendedRepliesMessage,
+} from "../stories/CustomBlocks.stories";
+import { source } from "./source";
+
+registerBlock(recommendedRepliesBlockDefinition);
+registerBlock(confirmationCardBlockDefinition);
+registerBlock(noticeBlockDefinition);
+
+type Args = { messages: WalliChatMessage[] };
+
+const vueSource = `<script setup lang="ts">
+import { ref } from "vue";
+import {
+  WalliChat,
+  WalliChatComposer,
+  registerBlock,
+  type WalliChatExpose,
+} from "@walli/chat/vue";
+import {
+  confirmationCardBlockDefinition,
+  createConfirmationCardMarkdown,
+  createNoticeMarkdown,
+  createRecommendedRepliesMarkdown,
+  noticeBlockDefinition,
+  recommendedRepliesBlockDefinition,
+} from "@walli/chat-blocks";
+import "@walli/chat/theme.css";
+
+registerBlock(recommendedRepliesBlockDefinition);
+registerBlock(confirmationCardBlockDefinition);
+registerBlock(noticeBlockDefinition);
+
+const chat = ref<WalliChatExpose>();
+const confirmation = {
+  title: "Confirm appointment",
+  fields: [
+    { id: "contact", label: "Contact", type: "text", required: true },
+    { id: "quantity", label: "Quantity", type: "number", min: 1, decimals: 0 },
+    {
+      id: "appointmentAt",
+      label: "Appointment time",
+      type: "time",
+      format: "YYYY-MM-DD HH:mm",
+      min: "now",
+    },
+  ],
+  action: { id: "confirm-appointment", label: "Confirm" },
+};
+const messages = [
+  {
+    id: "recommended",
+    role: "assistant",
+    markdown: createRecommendedRepliesMarkdown(["Tell me more", "Show me an example"]),
+  },
+  {
+    id: "confirmation",
+    role: "assistant",
+    markdown: createConfirmationCardMarkdown(confirmation),
+    meta: confirmation,
+  },
+  ...(["info", "success", "error"] as const).map((variant) => ({
+    id: \`notice-\${variant}\`,
+    role: "assistant" as const,
+    markdown: createNoticeMarkdown({ text: \`\${variant} notice\`, variant }),
+  })),
+];
+
+async function onAction({ name, data }) {
+  if (name !== "confirmation-card") return;
+  await submitConfirmation(data);
+  chat.value?.insertMessagesAtBottom([{
+    id: crypto.randomUUID(),
+    role: "assistant",
+    markdown: createNoticeMarkdown({ text: "Appointment submitted successfully.", variant: "success" }),
+  }]);
+}
+</script>
+
+<template>
+  <WalliChat ref="chat" :messages="messages" :on-action="onAction" style="height: 720px">
+    <WalliChatComposer slot="composer" value="" />
+  </WalliChat>
+</template>`;
+
+const CustomBlocksSurface = defineComponent({
+  name: "CustomBlocksSurface",
+  props: { messages: { required: true, type: Array } },
+  setup(props) {
+    const chat = ref<WalliChatExpose>();
+    const handleAction = async ({ data, messageId, name }: WalliChatBlockAction) => {
+      if (name !== "confirmation-card") return;
+      const submission = data as ConfirmationCardSubmission;
+      const message = chat.value?.element?.messages.find((item) => item.id === messageId);
+      const cardData = message?.meta as ConfirmationCardData | undefined;
+      if (!cardData) return;
+      const fields = cardData.fields.map<ConfirmationCardField>(
+        (field) =>
+          ({
+            ...field,
+            editable: false,
+            value: submission.fields[field.id] ?? field.value,
+          }) as ConfirmationCardField,
+      );
+      const confirmedData: ConfirmationCardData = {
+        ...cardData,
+        action: { ...cardData.action, disabled: true, label: "Submitted" },
+        fields,
+      };
+      chat.value?.replaceMessage(messageId, {
+        markdown: createConfirmationCardMarkdown(confirmedData),
+        meta: confirmedData,
+      });
+      chat.value?.insertMessagesAtBottom(
+        [
+          {
+            id: `vue-confirmation-success-${crypto.randomUUID()}`,
+            role: "assistant",
+            markdown: createNoticeMarkdown({
+              text: "Appointment submitted successfully.",
+              variant: "success",
+            }),
+            showActions: false,
+          },
+        ],
+        { stick: true },
+      );
+    };
+
+    return () =>
+      h("div", { style: { height: "720px", width: "100%", background: "var(--walli-background)" } }, [
+        h(
+          WalliChat,
+          {
+            ref: chat,
+            messages: props.messages as WalliChatMessage[],
+            onAction: handleAction,
+            style: { display: "block", height: "100%", width: "100%" },
+          },
+          {
+            default: () =>
+              h(WalliChatComposer, {
+                slot: "composer",
+                value: "",
+                placeholder: "Choose a reply or type a message",
+                onSubmit: async (markdown: string) => {
+                  if (!markdown) return;
+                  chat.value?.insertMessagesAtBottom(
+                    [{ id: `vue-user-${crypto.randomUUID()}`, role: "user", markdown }],
+                    { stick: true },
+                  );
+                },
+              }),
+          },
+        ),
+      ]);
+  },
+});
+
+const meta = {
+  title: "Vue/Custom Blocks",
+  component: WalliChat,
+  tags: ["autodocs"],
+  parameters: { layout: "fullscreen" },
+  args: {
+    messages: [recommendedRepliesMessage, confirmationCardMessage, ...noticeMessages],
+  },
+  render: (args) => ({
+    components: { CustomBlocksSurface },
+    setup: () => ({ args }),
+    template: `<CustomBlocksSurface v-bind="args" />`,
+  }),
+} satisfies Meta<Args>;
+
+export default meta;
+type Story = StoryObj<Args>;
+
+export const AllBlocks: Story = { parameters: source(vueSource) };
+export const RecommendedReplies: Story = {
+  args: { messages: [recommendedRepliesMessage] },
+  parameters: source(vueSource),
+};
+export const ConfirmationCard: Story = {
+  args: { messages: [confirmationCardMessage] },
+  parameters: source(vueSource),
+};
+export const Notices: Story = {
+  args: { messages: noticeMessages },
+  parameters: source(vueSource),
+};
