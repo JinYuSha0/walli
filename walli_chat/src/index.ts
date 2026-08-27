@@ -14,10 +14,13 @@ export {
   builtInBlocks,
   registerBlock,
   type WalliChatBlockDefinition,
+  type WalliChatBlockContext,
   type WalliChatBlockName,
   type WalliChatBlockRegistration,
   type WalliChatBlockRenderContext,
   type WalliChatBuiltInBlockName,
+  type WalliChatBlockState,
+  type WalliChatScrollState,
 } from "./core/block-registry";
 export {
   type WalliChatBlockMeasureContext,

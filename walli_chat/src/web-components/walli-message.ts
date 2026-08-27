@@ -3,6 +3,7 @@ import { customElement } from "lit/decorators.js";
 import { getBlockUsedWidth, materializeMessageBlocks } from "../core";
 import type { BlockLayout, ChatMessageInstance, MessageFrame } from "../core/types";
 import { renderMessageBlockTemplate } from "../core/block-registry";
+import type { WalliChatBlockContext } from "../core/block-registry";
 import { getCommonStyle } from "../core/styles";
 import clsx from "clsx";
 import "./walli-assistant-message-actions";
@@ -13,21 +14,25 @@ export class WalliMessageElement extends HTMLElement {
   private currentBlocks: BlockLayout[] = [];
   private currentMessage: ChatMessageInstance | null = null;
   private currentKey = "";
+  private currentBlockContext: WalliChatBlockContext | undefined;
+  private currentHasCustomBlock = false;
 
-  set message(message: ChatMessageInstance | null | undefined) {
-    if (message === undefined || message === null) {
-      return;
-    }
-
+  update(message: ChatMessageInstance, context: WalliChatBlockContext): void {
+    const streamingChanged = this.currentBlockContext?.isStreaming !== context.isStreaming;
+    this.currentBlockContext = context;
     const key = this.computeKey(message);
     const canReuseContents =
       this.currentMessage?.prepared === message.prepared && this.currentKey === key;
 
     this.currentMessage = message;
     this.currentKey = key;
-    if (canReuseContents) return;
-
-    this.currentBlocks = materializeMessageBlocks(message);
+    if (!canReuseContents) {
+      const materialized = materializeMessageBlocks(message);
+      this.currentBlocks = materialized.blocks;
+      this.currentHasCustomBlock = materialized.hasCustomBlock;
+    } else if (!streamingChanged || !this.currentHasCustomBlock) {
+      return;
+    }
     this.renderMessage(message);
   }
 
@@ -75,7 +80,11 @@ export class WalliMessageElement extends HTMLElement {
               : null
           }
           ${blocks.map((block) =>
-            renderMessageBlockTemplate(block, block.kind === "assetsGroup" ? 0 : textContentInset),
+            renderMessageBlockTemplate(
+              block,
+              block.kind === "assetsGroup" ? 0 : textContentInset,
+              block.kind === "custom" ? this.currentBlockContext : undefined,
+            ),
           )}
         </div>
         ${

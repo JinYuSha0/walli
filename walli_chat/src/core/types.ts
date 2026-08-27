@@ -47,10 +47,14 @@ export type CoreBlockDefinition<
     frame: Extract<BlockFrame, { kind: Kind }>,
     context: CoreBlockMaterializeContext,
   ) => Extract<BlockLayout, { kind: Kind }>;
-  render: (context: {
-    block: Extract<BlockLayout, { kind: Kind }>;
-    contentInsetX: number;
-  }) => unknown;
+  render: (
+    context: {
+      block: Extract<BlockLayout, { kind: Kind }>;
+      contentInsetX: number;
+    } & (Kind extends "custom"
+      ? { ctx: import("./block-registry").WalliChatBlockContext }
+      : object),
+  ) => unknown;
 };
 
 export type ParseContext = {

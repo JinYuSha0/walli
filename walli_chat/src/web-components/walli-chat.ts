@@ -2,7 +2,7 @@ import "./walli-message";
 import "./walli-scroll-to-bottom-button";
 import "./walli-loading";
 import { html, LitElement, nothing } from "lit";
-import { customElement, eventOptions, property, state } from "lit/decorators.js";
+import { customElement, eventOptions, property, query, state } from "lit/decorators.js";
 import walliChatUnoCss from "virtual:walli-chat-uno-styles";
 import prismThemeCss from "../core/styles/prism-theme.css?inline";
 import walliChatHostCss from "../core/styles/walli-chat.css?inline";
@@ -13,6 +13,7 @@ import {
   findVisibleRange,
 } from "../core/index";
 import type { ConversationFrame, PreparedChatMessage } from "../core/types";
+import type { WalliChatBlockContext, WalliChatScrollState } from "../core/block-registry";
 import { StreamingMarkdownParser } from "../core/md-parse";
 import { parseEventData, ServerSentEventParser, type ServerSentEvent } from "../core/sse-parser";
 import { getCommonStyle } from "../core/styles";
@@ -32,6 +33,7 @@ import type {
 } from "../types";
 
 import type { WalliMessageElement } from "./walli-message";
+import type { WalliChatComposerElement } from "./walli-chat-composer";
 
 export { registerBlock } from "../core/block-registry";
 
@@ -79,6 +81,7 @@ export class WalliChatElement extends LitElement {
   private activeTopInsertionScrollFloor: number | null = null;
   private composerOverlayElement: HTMLDivElement | null = null;
   private composerShellElement: HTMLDivElement | null = null;
+  @query('slot[name="composer"]') private accessor composerSlotElement!: HTMLSlotElement;
   private mountedMessageElements = new Map<number, WalliMessageElement>();
   private containerSize: Size = {
     width: this.clientWidth,
@@ -311,6 +314,7 @@ export class WalliChatElement extends LitElement {
     }
 
     this.activeStreamingMessageCount++;
+    this.scheduleProjection();
     const finished = this.consumeStreamingMessage(
       stream,
       abortController.signal,
@@ -319,6 +323,7 @@ export class WalliChatElement extends LitElement {
       parser,
     ).finally(() => {
       this.activeStreamingMessageCount--;
+      this.scheduleProjection();
     });
     return {
       abort: (reason) => abortController.abort(reason),
@@ -542,7 +547,7 @@ export class WalliChatElement extends LitElement {
     this.composerOverlayElement =
       this.renderRoot.querySelector<HTMLDivElement>(".composer-overlay");
     this.composerShellElement = this.renderRoot.querySelector<HTMLDivElement>(".composer-shell");
-    const composerSlot = this.renderRoot.querySelector<HTMLSlotElement>('slot[name="composer"]');
+    const composerSlot = this.composerSlotElement;
     this.hasComposer = (composerSlot?.assignedElements({ flatten: true }).length ?? 0) > 0;
     if (!this.hasComposer) this.composerBottomInsetHeight = 0;
     this.updateComposerScrollbarInset();
@@ -715,6 +720,38 @@ export class WalliChatElement extends LitElement {
     } else {
       this.isAtBottom = isAtBottom;
     }
+  }
+
+  private getScrollState(): WalliChatScrollState {
+    const viewport = this.viewportElement;
+    const scrollTop = viewport?.scrollTop ?? this.viewportScrollTop;
+    const viewportHeight = viewport?.clientHeight ?? this.containerSize.height;
+    const scrollHeight = viewport?.scrollHeight ?? this.frame?.totalHeight ?? 0;
+    return {
+      distanceToBottom: Math.max(0, scrollHeight - viewportHeight - scrollTop),
+      isAtBottom: this.isAtBottom,
+      scrollHeight,
+      scrollTop,
+      viewportHeight,
+    };
+  }
+
+  private createBlockContext(): WalliChatBlockContext {
+    return {
+      isStreaming: this.activeStreamingMessageCount > 0,
+      getScrollState: () => this.getScrollState(),
+      scrollTo: (options) => this.scrollTo(options),
+      scrollToIndex: (options) => this.scrollToIndex(options),
+      submit: (text) => this.submitMessage(text),
+    };
+  }
+
+  private async submitMessage(text: string): Promise<boolean> {
+    const composer = this.composerSlotElement
+      .assignedElements({ flatten: true })
+      .find((element) => element.localName === "walli-chat-composer") as
+      WalliChatComposerElement | undefined;
+    return composer?.submitMessage(text) ?? false;
   }
 
   private handleScrollInteractionStart(): void {
@@ -1061,12 +1098,13 @@ export class WalliChatElement extends LitElement {
     end: number,
     force: boolean,
   ): void {
+    const blockContext = this.createBlockContext();
     if (!force && start === this.mountedStart && end === this.mountedEnd) {
       for (let index = start; index < end; index++) {
         const element = this.mountedMessageElements.get(index);
         if (element !== undefined) {
           element.dataset.index = String(index);
-          element.message = frame.messages[index]!;
+          element.update(frame.messages[index]!, blockContext);
         }
       }
       return;
@@ -1090,7 +1128,7 @@ export class WalliChatElement extends LitElement {
         existingElement ?? (document.createElement("walli-message") as WalliMessageElement);
       elementsByMessageId.delete(message.prepared.id);
       element.dataset.index = String(index);
-      element.message = message;
+      element.update(message, blockContext);
       nextMountedElements.set(index, element);
 
       if (existingElement === undefined) {

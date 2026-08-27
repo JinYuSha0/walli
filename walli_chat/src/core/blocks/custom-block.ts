@@ -2,8 +2,8 @@ import { html, render, type TemplateResult } from "lit";
 import { customElement } from "lit/decorators.js";
 import { createBlockFrameBase } from "../helper";
 import type { BlockFrameBase, CoreBlockDefinition, PreparedBlockBase } from "../types";
-import { BlockShellElement } from "../block-shell";
-import type { AnyCustomBlockDefinition } from "../block-registry";
+import { BlockShellElement, type BlockRenderLayout } from "../block-shell";
+import type { AnyCustomBlockDefinition, WalliChatBlockContext } from "../block-registry";
 
 export type PreparedCustomBlock = PreparedBlockBase & {
   data: unknown;
@@ -24,6 +24,9 @@ export type CustomBlockLayout = {
   width: number;
 };
 export type CustomBlockFrame = BlockFrameBase & { kind: "custom"; width: number };
+type CustomBlockRenderLayout = BlockRenderLayout<CustomBlockLayout> & {
+  ctx: WalliChatBlockContext;
+};
 
 export const customBlockDefinition = {
   name: "custom",
@@ -71,11 +74,12 @@ export const customBlockDefinition = {
       width: frame.width,
     };
   },
-  render: ({ block, contentInsetX }) =>
-    html`<walli-custom-block .layout=${{ block, contentInsetX }}></walli-custom-block>`,
+  render: ({ block, contentInsetX, ctx }) =>
+    html`<walli-custom-block .layout=${{ block, contentInsetX, ctx }}></walli-custom-block>`,
 } satisfies CoreBlockDefinition<"custom">;
 
 type CustomBlockContentLayout = {
+  ctx: WalliChatBlockContext;
   data: unknown;
   definition: AnyCustomBlockDefinition;
   height: number;
@@ -111,6 +115,7 @@ class WalliCustomBlockContentElement extends HTMLElement {
     render(
       layout.definition.render({
         contentInsetX: 0,
+        ctx: layout.ctx,
         data: layout.data,
         height: layout.height,
         left: 0,
@@ -162,14 +167,23 @@ function normalizeStyles(styles: string | readonly string[] | undefined): string
 
 @customElement("walli-custom-block")
 class WalliCustomBlockElement extends BlockShellElement<CustomBlockLayout> {
+  private ctx: WalliChatBlockContext | null = null;
+
+  override set layout(layout: CustomBlockRenderLayout) {
+    this.ctx = layout.ctx;
+    super.layout = layout;
+  }
+
   protected override renderContent(
     block: CustomBlockLayout,
     contentInsetX: number,
   ): TemplateResult {
+    const ctx = this.ctx!;
     return html`<walli-custom-block-content
       class="absolute block overflow-hidden"
       style=${`left:${contentInsetX + block.contentLeft}px;top:0;width:${block.width}px;height:${block.height}px;`}
       .layout=${{
+        ctx,
         data: block.data,
         definition: block.definition,
         height: block.height,

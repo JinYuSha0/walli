@@ -294,6 +294,27 @@ export class WalliChatComposerElement extends LitElement {
     }
   }
 
+  async submitMessage(text: string): Promise<boolean> {
+    const normalizedText = text.trim();
+    if (
+      this.disabled ||
+      this.running ||
+      normalizedText.length === 0 ||
+      this.onSubmit === undefined
+    ) {
+      return false;
+    }
+    this.menuOpen = false;
+    this.dismissKeyboard();
+    this.running = true;
+    try {
+      await this.onSubmit(normalizedText, normalizedText, []);
+      return true;
+    } finally {
+      this.running = false;
+    }
+  }
+
   private get canSubmit(): boolean {
     if (this.attachments.some((attachment) => attachment.status === "uploading")) return false;
     return (

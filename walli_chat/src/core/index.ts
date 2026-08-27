@@ -185,14 +185,20 @@ function layoutMessageFrame(
   };
 }
 
-export function materializeMessageBlocks(message: ChatMessageInstance): BlockLayout[] {
-  return message.prepared.blocks.map((block, index) =>
-    materializeMessageBlockLayout(
+export function materializeMessageBlocks(message: ChatMessageInstance): {
+  blocks: BlockLayout[];
+  hasCustomBlock: boolean;
+} {
+  let hasCustomBlock = false;
+  const blocks = message.prepared.blocks.map((block, index) => {
+    if (block.kind === "custom") hasCustomBlock = true;
+    return materializeMessageBlockLayout(
       block,
       message.frame.blocks[index]!,
       message.frame.layoutContentWidth,
-    ),
-  );
+    );
+  });
+  return { blocks, hasCustomBlock };
 }
 
 export function findVisibleRange(
