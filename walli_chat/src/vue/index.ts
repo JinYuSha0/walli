@@ -78,6 +78,8 @@ export const WalliChatComposer = defineComponent({
       default: () => [],
       type: Array as PropType<readonly WalliChatComposerMenuItem[]>,
     },
+    onCancel: Function as PropType<WalliChatComposerActionCallback>,
+    onSubmit: Function as PropType<WalliChatComposerSubmitCallback>,
     onUploadImages: Function as PropType<WalliChatComposerUploadImagesCallback>,
     onTranscribe: Function as PropType<WalliChatComposerTranscribeCallback>,
     placeholder: { default: "Message", type: String },
@@ -88,8 +90,6 @@ export const WalliChatComposer = defineComponent({
     value: { default: "", type: String },
   },
   emits: {
-    cancel: () => true,
-    submit: (_markdown: string, _text: string, _assets: readonly WalliChatComposerAsset[]) => true,
     "update:value": (_value: string) => true,
     valueChange: (_value: string) => true,
   },
@@ -106,12 +106,8 @@ export const WalliChatComposer = defineComponent({
       composer.transcribingText = props.transcribingText;
       composer.uploadImagesTitle = props.uploadImagesTitle;
       composer.value = props.value;
-      composer.onCancel = () => {
-        emit("cancel");
-      };
-      composer.onSubmit = async (markdown, text, assets) => {
-        emit("submit", markdown, text, assets);
-      };
+      composer.onCancel = props.onCancel;
+      composer.onSubmit = props.onSubmit;
       composer.onUploadImages = props.onUploadImages;
       composer.onTranscribe = props.onTranscribe;
       composer.onValueChange = (value) => {
