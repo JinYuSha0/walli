@@ -52,7 +52,7 @@ export type CoreBlockDefinition<
       block: Extract<BlockLayout, { kind: Kind }>;
       contentInsetX: number;
     } & (Kind extends "custom"
-      ? { ctx: import("./block-registry").WalliChatBlockContext }
+      ? { ctx: import("./block-registry").WalliChatBlockContext; messageId: string }
       : object),
   ) => unknown;
 };

@@ -1,6 +1,13 @@
 import { marked, type Token, type TokenizerExtension } from "marked";
 import type { BlockFrame, BlockLayout, PreparedBlock } from "./types";
-import type { WalliChatScrollToIndexOptions, WalliChatScrollToOptions } from "../types";
+import type {
+  WalliChatBlockAction,
+  WalliChatInsertMessagesOptions,
+  WalliChatMessage,
+  WalliChatRemoveMessages,
+  WalliChatScrollToIndexOptions,
+  WalliChatScrollToOptions,
+} from "../types";
 
 export type WalliChatBlockMeasureContext = {
   availableWidth: number;
@@ -29,7 +36,16 @@ export type WalliChatScrollState = {
 };
 
 export type WalliChatBlockContext = WalliChatBlockState & {
+  action: (action: WalliChatBlockAction) => Promise<boolean>;
   getScrollState: () => WalliChatScrollState;
+  insertMessagesAtBottom: (
+    messages: readonly WalliChatMessage[],
+    options?: WalliChatInsertMessagesOptions,
+  ) => WalliChatRemoveMessages;
+  insertMessagesAtTop: (
+    messages: readonly WalliChatMessage[],
+    options?: WalliChatInsertMessagesOptions,
+  ) => WalliChatRemoveMessages;
   scrollTo: (options: WalliChatScrollToOptions) => void;
   scrollToIndex: (options: WalliChatScrollToIndexOptions) => void;
   submit: (text: string) => Promise<boolean>;
@@ -41,6 +57,7 @@ export type WalliChatTokenizedBlockRenderContext<T> = {
   data: T;
   height: number;
   left: number;
+  messageId: string;
   top: number;
   width: number;
 };
@@ -129,7 +146,7 @@ type BuiltInBlockLayoutMap = {
 export type WalliChatBlockRenderContext<Name extends WalliChatBlockName = WalliChatBlockName> = {
   block: BuiltInBlockLayoutMap[Name];
   contentInsetX: number;
-} & (Name extends "custom" ? { ctx: WalliChatBlockContext } : object);
+} & (Name extends "custom" ? { ctx: WalliChatBlockContext; messageId: string } : object);
 
 export type WalliChatBlockDefinition<Name extends WalliChatBlockName = WalliChatBlockName> =
   BuiltInBlockDefinitionMap[Name];
@@ -243,9 +260,11 @@ export function renderMessageBlockTemplate(
   block: BlockLayout,
   contentInsetX: number,
   ctx?: WalliChatBlockContext,
+  messageId?: string,
 ): unknown {
   const definition = resolveBuiltInBlockDefinition(block.kind);
   if (block.kind !== "custom") return definition.render({ block, contentInsetX } as never);
   if (ctx === undefined) throw new Error("Custom blocks require a Walli Chat block context");
-  return definition.render({ block, contentInsetX, ctx } as never);
+  if (messageId === undefined) throw new Error("Custom blocks require a message id");
+  return definition.render({ block, contentInsetX, ctx, messageId } as never);
 }

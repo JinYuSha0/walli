@@ -116,7 +116,15 @@ export default {
       fileName: "index",
     },
     rollupOptions: {
-      external: ["@chenglou/pretext", "@walli/chat", "lit"],
+      external: [
+        "@chenglou/pretext",
+        "@walli/chat",
+        "dayjs",
+        "dayjs/plugin/customParseFormat.js",
+        "lit",
+        "lucide",
+        "zod",
+      ],
     },
   },
 };

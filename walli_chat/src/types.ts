@@ -2,10 +2,12 @@ import type { IconNode } from "lucide";
 
 export type WalliChatMessage = {
   id: string;
+  meta?: unknown;
   role: "assistant" | "user";
   markdown: string;
   showActions?: boolean;
 };
+export type WalliChatMessagePatch = Partial<Omit<WalliChatMessage, "id">>;
 
 export type WalliChatFeedback = "like" | "dislike";
 export type WalliChatFeedbackCallback = (
@@ -14,6 +16,14 @@ export type WalliChatFeedbackCallback = (
   feedback: WalliChatFeedback,
 ) => void;
 export type WalliChatMessageCallback = (id: string, markdown: string) => void;
+export type WalliChatBlockAction = {
+  data: unknown;
+  messageId: string;
+  name: string;
+};
+export type WalliChatBlockActionCallback = (
+  action: WalliChatBlockAction,
+) => void | PromiseLike<void>;
 export type WalliChatRemoveMessages = () => void;
 export type WalliChatEndReachedInfo = {
   distanceFromEnd: number;

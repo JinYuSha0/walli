@@ -54,7 +54,10 @@
     "lit": ">=3.3.0"
   },
   "dependencies": {
-    "@chenglou/pretext": "^0.0.8"
+    "@chenglou/pretext": "^0.0.8",
+    "dayjs": "^1.11.21",
+    "lucide": "^1.31.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@walli/chat": "workspace:*",

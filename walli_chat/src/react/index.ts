@@ -10,6 +10,8 @@ import {
   type ReactNode,
 } from "react";
 import type {
+  WalliChatBlockAction,
+  WalliChatBlockActionCallback,
   WalliChatComposerElement,
   WalliChatElement,
   WalliLoadingElement,
@@ -45,6 +47,7 @@ import type {
   WalliChatFeedbackCallback,
   WalliChatInsertMessagesOptions,
   WalliChatMessageCallback,
+  WalliChatMessagePatch,
   WalliChatRemoveMessages,
   WalliChatScrollTarget,
   WalliChatScrollToIndexOptions,
@@ -183,6 +186,7 @@ export type WalliChatProps = {
   emptyContent?: ReactNode;
   loading?: boolean;
   messages: readonly WalliChatMessage[];
+  onAction?: WalliChatBlockActionCallback;
   onEndReached?: WalliChatEndReachedCallback;
   onEndReachedThreshold?: number;
   onFeedback?: WalliChatFeedbackCallback;
@@ -205,6 +209,7 @@ export type WalliChatRef = {
     stream: WalliChatTextStream,
     options: WalliChatStreamingOptions,
   ) => WalliChatStreamingHandle;
+  replaceMessage: (id: string, patch: WalliChatMessagePatch) => boolean;
   scrollTo: (options: WalliChatScrollToOptions) => void;
   scrollToIndex: (options: WalliChatScrollToIndexOptions) => void;
   registerBlock: {
@@ -226,6 +231,7 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
     emptyContent,
     loading = false,
     messages,
+    onAction,
     onEndReached,
     onEndReachedThreshold = 0,
     onFeedback,
@@ -259,12 +265,13 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
   useEffect(() => {
     if (elementRef.current) {
       elementRef.current.onEndReached = onEndReached;
+      elementRef.current.onAction = onAction;
       elementRef.current.onEndReachedThreshold = onEndReachedThreshold;
       elementRef.current.onFeedback = onFeedback;
       elementRef.current.onReply = onReply;
       elementRef.current.onShare = onShare;
     }
-  }, [onEndReached, onEndReachedThreshold, onFeedback, onReply, onShare]);
+  }, [onAction, onEndReached, onEndReachedThreshold, onFeedback, onReply, onShare]);
 
   useImperativeHandle(
     forwardedRef,
@@ -284,6 +291,9 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
         const element = elementRef.current;
         if (element === null) throw new Error("WalliChat is not mounted.");
         return element.insertStreamingMessageAtBottom(stream, options);
+      },
+      replaceMessage(id, patch) {
+        return elementRef.current?.replaceMessage(id, patch) ?? false;
       },
       scrollTo(options) {
         elementRef.current?.scrollTo(options);
@@ -311,6 +321,8 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
 });
 
 export type {
+  WalliChatBlockAction,
+  WalliChatBlockActionCallback,
   WalliChatBlockDefinition,
   WalliChatBlockName,
   WalliChatBlockRegistration,
@@ -336,6 +348,7 @@ export type {
   WalliChatFeedbackCallback,
   WalliChatInsertMessagesOptions,
   WalliChatMessageCallback,
+  WalliChatMessagePatch,
   WalliChatRemoveMessages,
   WalliChatScrollTarget,
   WalliChatScrollToIndexOptions,

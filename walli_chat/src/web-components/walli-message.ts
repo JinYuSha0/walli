@@ -84,6 +84,7 @@ export class WalliMessageElement extends HTMLElement {
               block,
               block.kind === "assetsGroup" ? 0 : textContentInset,
               block.kind === "custom" ? this.currentBlockContext : undefined,
+              block.kind === "custom" ? message.prepared.id : undefined,
             ),
           )}
         </div>

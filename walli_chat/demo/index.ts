@@ -2,8 +2,14 @@ import "@walli/chat/theme.css";
 import { FileSpreadsheet, ImagePlus, Search } from "lucide";
 import { registerBlock } from "@walli/chat";
 import {
-  createRecommendedRepliesMarkdown,
+  confirmationCardBlockDefinition,
+  createConfirmationCardMarkdown,
+  createNoticeMarkdown,
+  noticeBlockDefinition,
   recommendedRepliesBlockDefinition,
+  type ConfirmationCardField,
+  type ConfirmationCardData,
+  type ConfirmationCardSubmission,
 } from "@walli/chat-blocks";
 import type {
   WalliChatComposerElement,
@@ -11,7 +17,6 @@ import type {
   WalliChatMessage,
   WalliChatStreamingHandle,
 } from "@walli/chat";
-import { noticeBlockDefinition } from "./blocks/notice-block";
 import { getDemoMessages } from "./store";
 import { createDemoSseRecords } from "./mock/stream";
 import { TimeScheduler } from "../src/core/helper";
@@ -20,30 +25,15 @@ const timeScheduler = new TimeScheduler();
 
 registerBlock(noticeBlockDefinition);
 registerBlock(recommendedRepliesBlockDefinition);
+registerBlock(confirmationCardBlockDefinition);
 
 const chat = document.querySelector<WalliChatElement>("walli-chat");
 const composer = document.querySelector<WalliChatComposerElement>("walli-chat-composer");
 let activeStreamingHandle: WalliChatStreamingHandle | null = null;
-const demoMessages: WalliChatMessage[] = [
-  ...getDemoMessages().map((message, index) => ({
-    ...message,
-    id: `demo-${index}`,
-  })),
-  {
-    id: "demo-recommended-replies",
-    role: "assistant",
-    markdown: [
-      "你接下来想了解什么？",
-      "",
-      createRecommendedRepliesMarkdown([
-        "详细介绍一下 Walli Chat 的自定义 Block",
-        "给我一个推荐回复组件的完整使用示例",
-        "如何在流式生成期间禁用交互？",
-      ]),
-    ].join("\n"),
-    showActions: false,
-  },
-];
+const demoMessages = getDemoMessages().map((message, index) => ({
+  ...message,
+  id: `demo-${index}`,
+}));
 
 if (chat) {
   chat.messages = [];
@@ -57,6 +47,45 @@ if (chat) {
   };
   chat.onShare = (id, markdown) => {
     console.log("share", { id, markdown });
+  };
+  chat.onAction = async ({ data, messageId, name }) => {
+    if (name !== "confirmation-card") return;
+    const submission = data as ConfirmationCardSubmission;
+    await new Promise((resolve) => window.setTimeout(resolve, 600));
+    const message = chat.messages.find((item) => item.id === messageId);
+    const cardData = message?.meta as ConfirmationCardData | undefined;
+    if (cardData === undefined) throw new Error("Confirmation card metadata is missing");
+    const fields = cardData.fields.map<ConfirmationCardField>(
+      (field) =>
+        ({
+          ...field,
+          editable: false,
+          value: submission.fields[field.id] ?? field.value,
+        }) as ConfirmationCardField,
+    );
+    const confirmedCardData: ConfirmationCardData = {
+      ...cardData,
+      action: { ...cardData.action, disabled: true, label: "已提交" },
+      fields,
+    };
+    chat.replaceMessage(messageId, {
+      markdown: createConfirmationCardMarkdown(confirmedCardData),
+      meta: confirmedCardData,
+    });
+    chat.insertMessagesAtBottom(
+      [
+        {
+          id: `confirmation-success-${crypto.randomUUID()}`,
+          role: "assistant",
+          markdown: createNoticeMarkdown({
+            text: "预约信息提交成功。",
+            variant: "success",
+          }),
+          showActions: false,
+        },
+      ],
+      { stick: true },
+    );
   };
 }
 

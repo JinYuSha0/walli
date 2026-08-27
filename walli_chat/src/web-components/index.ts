@@ -18,6 +18,8 @@ export {
   WalliUserMessageActionsElement,
 };
 export type {
+  WalliChatBlockAction,
+  WalliChatBlockActionCallback,
   WalliChatComposerActionCallback,
   WalliChatComposerAsset,
   WalliChatComposerInsertedAssetsHandle,
@@ -40,6 +42,7 @@ export type {
   WalliChatFeedbackCallback,
   WalliChatInsertMessagesOptions,
   WalliChatMessageCallback,
+  WalliChatMessagePatch,
   WalliChatRemoveMessages,
   WalliChatScrollTarget,
   WalliChatScrollToIndexOptions,

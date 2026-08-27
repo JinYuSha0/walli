@@ -25,6 +25,14 @@
   --walli-accent-foreground: oklch(0.205 0 0);
   --walli-border: oklch(0.922 0 0);
   --walli-ring: oklch(0.708 0 0);
+  --walli-block-error: oklch(0.577 0.245 27.325);
+  --walli-block-info: oklch(0.546 0.245 262.881);
+  --walli-block-info-background: color-mix(in oklch, var(--walli-block-info) 8%, transparent);
+  --walli-block-success: oklch(0.527 0.154 150.069);
+  --walli-block-success-background: color-mix(in oklch, var(--walli-block-success) 8%, transparent);
+  --walli-block-error-background: color-mix(in oklch, var(--walli-block-error) 8%, transparent);
+  --walli-block-shadow: 0 2px 10px oklch(0 0 0 / 7%);
+  --walli-block-shadow-hover: 0 3px 12px oklch(0 0 0 / 9%);
 }
 
 .dark {
@@ -54,4 +62,9 @@
   --walli-accent-foreground: oklch(0.985 0 0);
   --walli-border: oklch(1 0 0 / 10%);
   --walli-ring: oklch(0.556 0 0);
+  --walli-block-error: oklch(0.704 0.191 22.216);
+  --walli-block-info: oklch(0.707 0.165 254.624);
+  --walli-block-success: oklch(0.723 0.219 149.579);
+  --walli-block-shadow: 0 2px 10px oklch(0 0 0 / 24%);
+  --walli-block-shadow-hover: 0 3px 12px oklch(0 0 0 / 30%);
 }

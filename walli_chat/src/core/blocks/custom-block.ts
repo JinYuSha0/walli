@@ -26,6 +26,7 @@ export type CustomBlockLayout = {
 export type CustomBlockFrame = BlockFrameBase & { kind: "custom"; width: number };
 type CustomBlockRenderLayout = BlockRenderLayout<CustomBlockLayout> & {
   ctx: WalliChatBlockContext;
+  messageId: string;
 };
 
 export const customBlockDefinition = {
@@ -74,8 +75,10 @@ export const customBlockDefinition = {
       width: frame.width,
     };
   },
-  render: ({ block, contentInsetX, ctx }) =>
-    html`<walli-custom-block .layout=${{ block, contentInsetX, ctx }}></walli-custom-block>`,
+  render: ({ block, contentInsetX, ctx, messageId }) =>
+    html`<walli-custom-block
+      .layout=${{ block, contentInsetX, ctx, messageId }}
+    ></walli-custom-block>`,
 } satisfies CoreBlockDefinition<"custom">;
 
 type CustomBlockContentLayout = {
@@ -83,6 +86,7 @@ type CustomBlockContentLayout = {
   data: unknown;
   definition: AnyCustomBlockDefinition;
   height: number;
+  messageId: string;
   width: number;
 };
 
@@ -119,6 +123,7 @@ class WalliCustomBlockContentElement extends HTMLElement {
         data: layout.data,
         height: layout.height,
         left: 0,
+        messageId: layout.messageId,
         top: 0,
         width: layout.width,
       }),
@@ -168,9 +173,11 @@ function normalizeStyles(styles: string | readonly string[] | undefined): string
 @customElement("walli-custom-block")
 class WalliCustomBlockElement extends BlockShellElement<CustomBlockLayout> {
   private ctx: WalliChatBlockContext | null = null;
+  private messageId = "";
 
   override set layout(layout: CustomBlockRenderLayout) {
     this.ctx = layout.ctx;
+    this.messageId = layout.messageId;
     super.layout = layout;
   }
 
@@ -187,6 +194,7 @@ class WalliCustomBlockElement extends BlockShellElement<CustomBlockLayout> {
         data: block.data,
         definition: block.definition,
         height: block.height,
+        messageId: this.messageId,
         width: block.width,
       }}
     ></walli-custom-block-content>`;

@@ -1,6 +1,8 @@
 import "../web-components";
 import { defineComponent, h, ref, watchEffect, type CSSProperties, type PropType } from "vue";
 import type {
+  WalliChatBlockAction,
+  WalliChatBlockActionCallback,
   WalliChatComposerElement,
   WalliChatElement,
   WalliLoadingElement,
@@ -36,6 +38,7 @@ import type {
   WalliChatInsertMessagesOptions,
   WalliChatMessage,
   WalliChatMessageCallback,
+  WalliChatMessagePatch,
   WalliChatRemoveMessages,
   WalliChatScrollTarget,
   WalliChatScrollToIndexOptions,
@@ -146,11 +149,13 @@ export const WalliChat = defineComponent({
       default: () => [],
       type: Array as PropType<readonly WalliChatMessage[]>,
     },
+    onAction: Function as PropType<WalliChatBlockActionCallback>,
     onEndReached: Function as PropType<WalliChatEndReachedCallback>,
     onEndReachedThreshold: { default: 0, type: Number },
     style: styleProp,
   },
   emits: {
+    action: (_action: WalliChatBlockAction) => true,
     feedback: (_id: string, _markdown: string, _feedback: "like" | "dislike") => true,
     reply: (_id: string, _markdown: string) => true,
     share: (_id: string, _markdown: string) => true,
@@ -168,6 +173,10 @@ export const WalliChat = defineComponent({
         chat.bottomOcclusionHeight = props.bottomOcclusionHeight;
       }
       chat.onEndReached = props.onEndReached;
+      chat.onAction = async (action) => {
+        await props.onAction?.(action);
+        emit("action", action);
+      };
       chat.onEndReachedThreshold = props.onEndReachedThreshold;
       chat.onFeedback = (id, markdown, feedback) => {
         emit("feedback", id, markdown, feedback);
@@ -197,6 +206,8 @@ export const WalliChat = defineComponent({
         if (!element.value) throw new Error("WalliChat is not mounted.");
         return element.value.insertStreamingMessageAtBottom(stream, options);
       },
+      replaceMessage: (id: string, patch: WalliChatMessagePatch) =>
+        element.value?.replaceMessage(id, patch) ?? false,
       scrollTo: (options: WalliChatScrollToOptions) => element.value?.scrollTo(options),
       scrollToIndex: (options: WalliChatScrollToIndexOptions) =>
         element.value?.scrollToIndex(options),
@@ -238,12 +249,15 @@ export type WalliChatExpose = {
     stream: WalliChatTextStream,
     options: WalliChatStreamingOptions,
   ) => WalliChatStreamingHandle;
+  replaceMessage: (id: string, patch: WalliChatMessagePatch) => boolean;
   scrollTo: (options: WalliChatScrollToOptions) => void;
   scrollToIndex: (options: WalliChatScrollToIndexOptions) => void;
   registerBlock: typeof registerBlock;
 };
 
 export type {
+  WalliChatBlockAction,
+  WalliChatBlockActionCallback,
   WalliChatBlockDefinition,
   WalliChatBlockName,
   WalliChatBlockRegistration,
@@ -269,6 +283,7 @@ export type {
   WalliChatInsertMessagesOptions,
   WalliChatMessage,
   WalliChatMessageCallback,
+  WalliChatMessagePatch,
   WalliChatRemoveMessages,
   WalliChatScrollTarget,
   WalliChatScrollToIndexOptions,

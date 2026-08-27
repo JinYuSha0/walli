@@ -24,6 +24,8 @@ import type {
   WalliChatFeedbackCallback,
   WalliChatInsertMessagesOptions,
   WalliChatMessageCallback,
+  WalliChatMessagePatch,
+  WalliChatBlockActionCallback,
   WalliChatRemoveMessages,
   WalliChatScrollToIndexOptions,
   WalliChatScrollToOptions,
@@ -59,6 +61,7 @@ export class WalliChatElement extends LitElement {
   @property({ attribute: false }) accessor emptyContent: unknown;
   @property({ type: Boolean, reflect: true }) accessor loading = false;
   @property({ attribute: false }) accessor onFeedback: WalliChatFeedbackCallback | undefined;
+  @property({ attribute: false }) accessor onAction: WalliChatBlockActionCallback | undefined;
   @property({ attribute: false }) accessor onEndReached: WalliChatEndReachedCallback | undefined;
   @property({ attribute: false }) accessor onEndReachedThreshold = 0;
   @property({ attribute: false }) accessor onReply: WalliChatMessageCallback | undefined;
@@ -234,6 +237,22 @@ export class WalliChatElement extends LitElement {
     this.applyMessagesInsertion("bottom", [...this._messages, ...insertedMessages], this._messages);
     if (options.stick) this.scheduleScrollRequest();
     return this.createInsertedMessagesRemoval("bottom", insertedMessages);
+  }
+
+  replaceMessage(id: string, patch: WalliChatMessagePatch): boolean {
+    const index = this._messages.findIndex((item) => item.id === id);
+    if (index < 0) return false;
+    const message = { ...this._messages[index]!, ...patch, id };
+    const previousMessages = this._messages;
+    this._messages = [
+      ...previousMessages.slice(0, index),
+      message,
+      ...previousMessages.slice(index + 1),
+    ];
+    this.preparedMessages.splice(index, 1, ...createPreparedChatMessages([message]));
+    this.requestUpdate("messages", previousMessages);
+    this.invalidateFrame({ keepMountedRows: true });
+    return true;
   }
 
   private isSameMessage(left: WalliChatMessage | undefined, right: WalliChatMessage | undefined) {
@@ -739,12 +758,23 @@ export class WalliChatElement extends LitElement {
   private createBlockContext(): WalliChatBlockContext {
     return {
       isStreaming: this.activeStreamingMessageCount > 0,
+      action: this.handleBlockAction,
       getScrollState: () => this.getScrollState(),
+      insertMessagesAtBottom: (messages, options) => this.insertMessagesAtBottom(messages, options),
+      insertMessagesAtTop: (messages, options) => this.insertMessagesAtTop(messages, options),
       scrollTo: (options) => this.scrollTo(options),
       scrollToIndex: (options) => this.scrollToIndex(options),
       submit: (text) => this.submitMessage(text),
     };
   }
+
+  private readonly handleBlockAction = async (
+    action: Parameters<NonNullable<WalliChatBlockActionCallback>>[0],
+  ): Promise<boolean> => {
+    if (this.onAction === undefined) return false;
+    await this.onAction(action);
+    return true;
+  };
 
   private async submitMessage(text: string): Promise<boolean> {
     const composer = this.composerSlotElement
@@ -1104,7 +1134,8 @@ export class WalliChatElement extends LitElement {
         const element = this.mountedMessageElements.get(index);
         if (element !== undefined) {
           element.dataset.index = String(index);
-          element.update(frame.messages[index]!, blockContext);
+          const message = frame.messages[index]!;
+          element.update(message, blockContext);
         }
       }
       return;

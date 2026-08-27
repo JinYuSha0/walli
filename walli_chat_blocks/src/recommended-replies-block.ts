@@ -7,6 +7,7 @@ import {
   type PreparedTextWithSegments,
 } from "@chenglou/pretext";
 import { html } from "lit";
+import { blockBaseStyles } from "./block-theme.js";
 import walliChatBlocksUnoCss from "virtual:walli-chat-blocks-uno-styles";
 
 const minimumButtonHeight = 42;
@@ -38,33 +39,7 @@ export const defaultRecommendedReplies = [
   "What should I do next?",
 ] as const;
 
-const componentStyles = `
-  :host {
-    display: block;
-    height: 100%;
-    width: 100%;
-  }
-
-  button {
-    background: var(--card, var(--walli-card, #fff));
-    border: 1px solid color-mix(
-      in oklch,
-      var(--border, var(--walli-border, #e4e4e7)) 65%,
-      transparent
-    );
-    box-shadow: 0 2px 10px rgb(0 0 0 / 7%);
-    color: var(--card-foreground, var(--walli-card-foreground, #18181b));
-    font: ${font};
-    transition: background-color 150ms ease, box-shadow 150ms ease, opacity 150ms ease;
-  }
-
-  button:hover:enabled {
-    background: var(--accent, var(--walli-accent, var(--card, var(--walli-card, #fff))));
-    box-shadow: 0 3px 12px rgb(0 0 0 / 9%);
-  }
-`;
-
-const styles = [walliChatBlocksUnoCss, componentStyles];
+const styles = [walliChatBlocksUnoCss, blockBaseStyles];
 
 export const recommendedRepliesBlockDefinition = {
   name: "recommended-replies",
@@ -110,7 +85,7 @@ export const recommendedRepliesBlockDefinition = {
         const textLayout = layoutWithLines(reply.preparedText, metrics.contentWidth, lineHeight);
         const textTop = (metrics.height - textLayout.lines.length * lineHeight) / 2;
         return html`<button
-          class="[-webkit-appearance:none] relative box-border block max-w-full shrink-0 cursor-pointer overflow-hidden rounded-xl p-0 text-left focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-48"
+          class="[-webkit-appearance:none] relative box-border block max-w-full shrink-0 cursor-pointer overflow-hidden rounded-xl border border-solid [background:var(--walli-card)] [border-color:var(--walli-border)] p-0 text-left font-sans text-sm font-medium leading-5 [box-shadow:var(--walli-block-shadow)] [color:var(--walli-card-foreground)] transition-[background-color,box-shadow,opacity] duration-150 enabled:hover:[background:var(--walli-accent)] enabled:hover:[box-shadow:var(--walli-block-shadow-hover)] focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:[outline-color:var(--walli-ring)] disabled:cursor-not-allowed disabled:opacity-48"
           style=${`width:${metrics.width}px;height:${metrics.height}px`}
           type="button"
           title=${reply.text}

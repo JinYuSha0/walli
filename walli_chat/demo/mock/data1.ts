@@ -1,5 +1,11 @@
 import readmeZhCn from "../../../README.zh-CN.md?raw";
 import type { WalliChatMessage } from "@walli/chat";
+import {
+  createConfirmationCardMarkdown,
+  createNoticeMarkdown,
+  createRecommendedRepliesMarkdown,
+  type ConfirmationCardData,
+} from "@walli/chat-blocks";
 
 export type MarkdownChatSeed = WalliChatMessage;
 
@@ -14,6 +20,51 @@ function message(role: "assistant" | "user", ...lines: string[]): MarkdownChatSe
 let BASE_MESSAGE_ID = 0;
 
 const TOTAL_MESSAGE_LENGTH = 10_000;
+
+export const demoConfirmationCardData: ConfirmationCardData = {
+  title: "确认预约信息",
+  fields: [
+    {
+      id: "contact",
+      label: "联系人",
+      type: "text",
+      required: true,
+      editable: true,
+      minLength: 2,
+      maxLength: 30,
+      value: "Walli 用户",
+    },
+    {
+      id: "quantity",
+      label: "数量",
+      type: "number",
+      required: true,
+      editable: true,
+      min: 1,
+      max: 100,
+      decimals: 0,
+      value: 2,
+    },
+    {
+      id: "appointmentAt",
+      label: "预约时间",
+      type: "time",
+      format: "YYYY-MM-DD HH:mm",
+      required: true,
+      editable: true,
+      min: "now",
+    },
+    {
+      id: "createdDate",
+      label: "创建日期",
+      type: "time",
+      format: "YYYY-MM-DD",
+      editable: false,
+      value: "2026-08-27",
+    },
+  ],
+  action: { id: "confirm-appointment", label: "确认提交" },
+};
 
 const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
   message("user", "Give me an image of a fixed size."),
@@ -341,13 +392,6 @@ const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
     "| Accessibility | Kai | Backlog | P1 | Images have alt text and preview trigger roles. | Keyboard paths need broader test coverage. | Audit focus handling in preview and scroll container. | Tables may need semantic alternatives later. |",
     "| Packaging | Lina | Done | P2 | Web component and React wrapper build separately. | Public options should stay minimal. | Document `defaultScrollToBottom`. | Keep demo-only styles out of library runtime. |",
   ),
-  message("user", "展示一下外部注册的自定义 Block。"),
-  message(
-    "assistant",
-    ":::notice",
-    "自定义 Notice Block：这个区域的数据位于 mock 中，由 demo 在外部注册。Block 使用 Pretext 测量文本，并根据当前可用宽度计算换行和最终高度。调整窗口宽度可以验证布局是否准确更新。",
-    ":::",
-  ),
 ];
 
 export function getMessages() {
@@ -355,5 +399,37 @@ export function getMessages() {
   for (let i = 0; i < TOTAL_MESSAGE_LENGTH; i++) {
     message.push(BASE_MESSAGE_SPECS[i % BASE_MESSAGE_SPECS.length]!);
   }
+  message.push(
+    {
+      id: "demo-notice-info",
+      role: "assistant",
+      markdown: createNoticeMarkdown({
+        text: "提示：这个 Notice Block 使用 Pretext 测量文本，并根据可用宽度准确换行。",
+        variant: "info",
+      }),
+      showActions: false,
+    },
+    {
+      id: "demo-recommended-replies",
+      role: "assistant",
+      markdown: [
+        "你接下来想了解什么？",
+        "",
+        createRecommendedRepliesMarkdown([
+          "详细介绍一下 Walli Chat 的自定义 Block",
+          "给我一个推荐回复组件的完整使用示例",
+          "如何在流式生成期间禁用交互？",
+        ]),
+      ].join("\n"),
+      showActions: false,
+    },
+    {
+      id: "demo-confirmation-card",
+      role: "assistant",
+      markdown: createConfirmationCardMarkdown(demoConfirmationCardData),
+      meta: demoConfirmationCardData,
+      showActions: false,
+    },
+  );
   return message;
 }
