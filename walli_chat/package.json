@@ -1,6 +1,35 @@
 {
   "name": "@walli/chat",
-  "version": "0.0.0",
+  "version": "0.0.0-beta.0",
+  "description": "High-performance, general-purpose AI chat component.",
+  "keywords": [
+    "web-components",
+    "ai-chat",
+    "chat-ui",
+    "ai-ui",
+    "conversation-ui",
+    "message-list",
+    "chat-input",
+    "llm",
+    "react",
+    "vue",
+    "custom-elements",
+    "high-performance",
+    "virtual-list"
+  ],
+  "homepage": "https://www.wallibot.dev",
+  "bugs": {
+    "url": "https://github.com/JinYuSha0/walli/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JinYuSha0/walli.git"
+  },
+  "author": {
+    "name": "JinYuSha0",
+    "url": "https://github.com/JinYuSha0"
+  },
+  "license": "MIT",
   "publishConfig": {
     "access": "public"
   },
@@ -55,6 +84,7 @@
     }
   },
   "devDependencies": {
+    "@walli/chat-blocks": "workspace:*",
     "@preact/signals-core": "^1.14.4",
     "@storybook/addon-a11y": "^10.5.10",
     "@storybook/addon-docs": "^10.5.10",

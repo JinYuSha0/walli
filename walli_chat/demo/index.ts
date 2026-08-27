@@ -1,6 +1,10 @@
 import "@walli/chat/theme.css";
 import { FileSpreadsheet, ImagePlus, Search } from "lucide";
 import { registerBlock } from "@walli/chat";
+import {
+  createRecommendedRepliesMarkdown,
+  recommendedRepliesBlockDefinition,
+} from "@walli/chat-blocks";
 import type {
   WalliChatComposerElement,
   WalliChatElement,
@@ -15,14 +19,31 @@ import { TimeScheduler } from "../src/core/helper";
 const timeScheduler = new TimeScheduler();
 
 registerBlock(noticeBlockDefinition);
+registerBlock(recommendedRepliesBlockDefinition);
 
 const chat = document.querySelector<WalliChatElement>("walli-chat");
 const composer = document.querySelector<WalliChatComposerElement>("walli-chat-composer");
 let activeStreamingHandle: WalliChatStreamingHandle | null = null;
-const demoMessages = getDemoMessages().map((message, index) => ({
-  ...message,
-  id: `demo-${index}`,
-}));
+const demoMessages: WalliChatMessage[] = [
+  ...getDemoMessages().map((message, index) => ({
+    ...message,
+    id: `demo-${index}`,
+  })),
+  {
+    id: "demo-recommended-replies",
+    role: "assistant",
+    markdown: [
+      "你接下来想了解什么？",
+      "",
+      createRecommendedRepliesMarkdown([
+        "详细介绍一下 Walli Chat 的自定义 Block",
+        "给我一个推荐回复组件的完整使用示例",
+        "如何在流式生成期间禁用交互？",
+      ]),
+    ].join("\n"),
+    showActions: false,
+  },
+];
 
 if (chat) {
   chat.messages = [];

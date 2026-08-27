@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { visualizer } from "rollup-plugin-visualizer";
 import { createGenerator, presetWind3, type PresetWind3Theme } from "unocss";
 import { walliUnoTheme } from "./uno.theme.ts";
+import { walliChatBlocksUnoCss } from "../walli_chat_blocks/vite.config.ts";
 
 const walliChatUnoCssId = "virtual:walli-chat-uno-styles";
 const resolvedWalliChatUnoCssId = `\0${walliChatUnoCssId}`;
@@ -83,6 +84,7 @@ export default defineConfig(({ command, mode }) => ({
   publicDir: command === "serve" || mode === "demo" ? resolve(projectRoot, "public") : false,
   plugins: [
     walliChatUnoCss(),
+    walliChatBlocksUnoCss(),
     mode === "analyze" &&
       visualizer({
         filename: "dist/stats.html",
@@ -106,6 +108,10 @@ export default defineConfig(({ command, mode }) => ({
       {
         find: /^@walli\/chat$/,
         replacement: resolve(sourceRoot, "index.ts"),
+      },
+      {
+        find: /^@walli\/chat-blocks$/,
+        replacement: resolve(projectRoot, "../walli_chat_blocks/src/index.ts"),
       },
     ],
   },
