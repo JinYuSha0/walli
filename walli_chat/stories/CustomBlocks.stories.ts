@@ -185,6 +185,104 @@ chat.onAction = async ({ name, data, messageId }) => {
   }]);
 };`;
 
+const recommendedRepliesSource = `import { registerBlock } from "@walli/chat";
+import {
+  createRecommendedRepliesMarkdown,
+  recommendedRepliesBlockDefinition,
+} from "@walli/chat-blocks";
+import "@walli/chat/theme.css";
+
+registerBlock(recommendedRepliesBlockDefinition);
+
+const chat = document.querySelector("walli-chat");
+chat.messages = [{
+  id: "recommended-replies",
+  role: "assistant",
+  markdown: [
+    "What would you like to explore next?",
+    "",
+    createRecommendedRepliesMarkdown([
+      "Tell me more about custom blocks",
+      "Show me a complete recommended replies example",
+      "How do I disable interaction while streaming?",
+    ]),
+  ].join("\\n"),
+  showActions: false,
+}];`;
+
+const confirmationCardSource = `import { registerBlock } from "@walli/chat";
+import {
+  confirmationCardBlockDefinition,
+  createConfirmationCardMarkdown,
+} from "@walli/chat-blocks";
+import "@walli/chat/theme.css";
+
+registerBlock(confirmationCardBlockDefinition);
+
+const confirmation = {
+  title: "Confirm appointment",
+  fields: [
+    {
+      id: "contact",
+      label: "Contact",
+      type: "text",
+      required: true,
+      minLength: 2,
+      maxLength: 30,
+      value: "Walli user",
+    },
+    {
+      id: "quantity",
+      label: "Quantity",
+      type: "number",
+      min: 1,
+      max: 100,
+      decimals: 0,
+      value: 2,
+    },
+    {
+      id: "appointmentAt",
+      label: "Appointment time",
+      type: "time",
+      format: "YYYY-MM-DD HH:mm",
+      required: true,
+      min: "now",
+    },
+  ],
+  action: { id: "confirm-appointment", label: "Confirm" },
+};
+
+const chat = document.querySelector("walli-chat");
+chat.messages = [{
+  id: "confirmation-card",
+  role: "assistant",
+  markdown: createConfirmationCardMarkdown(confirmation),
+  meta: confirmation,
+  showActions: false,
+}];
+
+chat.onAction = async ({ name, data }) => {
+  if (name === "confirmation-card") await submitConfirmation(data);
+};`;
+
+const noticesSource = `import { registerBlock } from "@walli/chat";
+import { createNoticeMarkdown, noticeBlockDefinition } from "@walli/chat-blocks";
+import "@walli/chat/theme.css";
+
+registerBlock(noticeBlockDefinition);
+
+const chat = document.querySelector("walli-chat");
+chat.messages = [
+  { text: "Here is some helpful information.", variant: "info" },
+  { text: "The operation completed successfully.", variant: "success" },
+  { text: "Submission failed. Check your input and try again.", variant: "error" },
+].map(({ text, variant }) => ({
+  id: \`notice-\${variant}\`,
+  role: "assistant",
+  markdown: createNoticeMarkdown({ text, variant }),
+  showActions: false,
+}));`;
+
 function renderBlocks(messages: WalliChatMessage[]) {
   let chat: WalliChatElement | undefined;
 
@@ -278,15 +376,15 @@ export const AllBlocks: Story = {
 
 export const RecommendedReplies: Story = {
   args: { messages: [recommendedRepliesMessage] },
-  parameters: { docs: { source: { code: webComponentsSource, language: "ts" } } },
+  parameters: { docs: { source: { code: recommendedRepliesSource, language: "ts" } } },
 };
 
 export const ConfirmationCard: Story = {
   args: { messages: [confirmationCardMessage] },
-  parameters: { docs: { source: { code: webComponentsSource, language: "ts" } } },
+  parameters: { docs: { source: { code: confirmationCardSource, language: "ts" } } },
 };
 
 export const Notices: Story = {
   args: { messages: noticeMessages },
-  parameters: { docs: { source: { code: webComponentsSource, language: "ts" } } },
+  parameters: { docs: { source: { code: noticesSource, language: "ts" } } },
 };

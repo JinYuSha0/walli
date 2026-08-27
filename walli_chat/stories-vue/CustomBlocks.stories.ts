@@ -105,6 +105,124 @@ async function onAction({ name, data }) {
   </WalliChat>
 </template>`;
 
+const vueRecommendedRepliesSource = `<script setup lang="ts">
+import { WalliChat, WalliChatComposer, registerBlock } from "@walli/chat/vue";
+import {
+  createRecommendedRepliesMarkdown,
+  recommendedRepliesBlockDefinition,
+} from "@walli/chat-blocks";
+import "@walli/chat/theme.css";
+
+registerBlock(recommendedRepliesBlockDefinition);
+
+const messages = [{
+  id: "recommended-replies",
+  role: "assistant" as const,
+  markdown: [
+    "What would you like to explore next?",
+    "",
+    createRecommendedRepliesMarkdown([
+      "Tell me more about custom blocks",
+      "Show me a complete recommended replies example",
+      "How do I disable interaction while streaming?",
+    ]),
+  ].join("\\n"),
+  showActions: false,
+}];
+</script>
+
+<template>
+  <WalliChat :messages="messages" style="height: 720px">
+    <WalliChatComposer slot="composer" value="" />
+  </WalliChat>
+</template>`;
+
+const vueConfirmationCardSource = `<script setup lang="ts">
+import { WalliChat, registerBlock } from "@walli/chat/vue";
+import {
+  confirmationCardBlockDefinition,
+  createConfirmationCardMarkdown,
+  type ConfirmationCardData,
+} from "@walli/chat-blocks";
+import "@walli/chat/theme.css";
+
+registerBlock(confirmationCardBlockDefinition);
+
+const confirmation: ConfirmationCardData = {
+  title: "Confirm appointment",
+  fields: [
+    {
+      id: "contact",
+      label: "Contact",
+      type: "text",
+      required: true,
+      minLength: 2,
+      maxLength: 30,
+      value: "Walli user",
+    },
+    {
+      id: "quantity",
+      label: "Quantity",
+      type: "number",
+      min: 1,
+      max: 100,
+      decimals: 0,
+      value: 2,
+    },
+    {
+      id: "appointmentAt",
+      label: "Appointment time",
+      type: "time",
+      format: "YYYY-MM-DD HH:mm",
+      required: true,
+      min: "now",
+    },
+  ],
+  action: { id: "confirm-appointment", label: "Confirm" },
+};
+const messages = [{
+  id: "confirmation-card",
+  role: "assistant" as const,
+  markdown: createConfirmationCardMarkdown(confirmation),
+  meta: confirmation,
+  showActions: false,
+}];
+
+async function onAction({ name, data }) {
+  if (name === "confirmation-card") await submitConfirmation(data);
+}
+</script>
+
+<template>
+  <WalliChat :messages="messages" :on-action="onAction" style="height: 720px" />
+</template>`;
+
+const vueNoticesSource = `<script setup lang="ts">
+import { WalliChat, registerBlock } from "@walli/chat/vue";
+import { createNoticeMarkdown, noticeBlockDefinition } from "@walli/chat-blocks";
+import "@walli/chat/theme.css";
+
+registerBlock(noticeBlockDefinition);
+
+const messages = [
+  { text: "Here is some helpful information.", variant: "info" as const },
+  { text: "The operation completed successfully.", variant: "success" as const },
+  {
+    text: "Submission failed. Check your input and try again.",
+    variant: "error" as const,
+  },
+].map(({ text, variant }) => ({
+  id: \`notice-\${variant}\`,
+  role: "assistant" as const,
+  markdown: createNoticeMarkdown({ text, variant }),
+  showActions: false,
+}));
+</script>
+
+<template>
+  <WalliChat :messages="messages" style="height: 720px" />
+</template>`;
+
 const CustomBlocksSurface = defineComponent({
   name: "CustomBlocksSurface",
   props: { messages: { required: true, type: Array } },
@@ -200,13 +318,13 @@ type Story = StoryObj<Args>;
 export const AllBlocks: Story = { parameters: source(vueSource) };
 export const RecommendedReplies: Story = {
   args: { messages: [recommendedRepliesMessage] },
-  parameters: source(vueSource),
+  parameters: source(vueRecommendedRepliesSource),
 };
 export const ConfirmationCard: Story = {
   args: { messages: [confirmationCardMessage] },
-  parameters: source(vueSource),
+  parameters: source(vueConfirmationCardSource),
 };
 export const Notices: Story = {
   args: { messages: noticeMessages },
-  parameters: source(vueSource),
+  parameters: source(vueNoticesSource),
 };
