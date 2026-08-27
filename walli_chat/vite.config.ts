@@ -106,6 +106,10 @@ export default defineConfig(({ command, mode }) => ({
         replacement: resolve(sourceRoot, "theme.css"),
       },
       {
+        find: /^@walli\/chat-blocks\/theme\.css$/,
+        replacement: resolve(projectRoot, "../walli_chat_blocks/src/theme.css"),
+      },
+      {
         find: /^@walli\/chat$/,
         replacement: resolve(sourceRoot, "index.ts"),
       },

@@ -200,8 +200,11 @@ export class WalliChatElement extends LitElement {
           ? { animated, target: optionsOrX.target }
           : { animated, top: optionsOrX.top ?? 0 };
     if ("target" in request && request.target === "bottom") {
+      this.isUserScrolling = false;
       this.isScrollingToBottom = true;
       this.isAtBottom = true;
+      this.activeTopInsertionScrollFloor = null;
+      timeScheduler.cancelByType(this.scrollInteractionEndTaskType);
     }
     this.pendingScrollRequest = {
       ...request,
@@ -806,12 +809,14 @@ export class WalliChatElement extends LitElement {
     });
   }
 
-  private handleScrollGestureEnd(): void {
+  @eventOptions({ passive: true })
+  private handleWheel(): void {
+    this.handleScrollInteractionStart();
     this.handleScrollInteractionEnd();
   }
 
   @eventOptions({ passive: true })
-  private handleWheel(): void {
+  private handleTouchMove(): void {
     this.handleScrollInteractionStart();
     this.handleScrollInteractionEnd();
   }
@@ -1237,13 +1242,8 @@ export class WalliChatElement extends LitElement {
       >
         <div
           class="chat-viewport absolute inset-0 overflow-auto [overflow-anchor:none]"
-          @pointerdown=${this.handleScrollInteractionStart}
-          @pointerup=${this.handleScrollGestureEnd}
-          @pointercancel=${this.handleScrollGestureEnd}
-          @touchstart=${this.handleScrollInteractionStart}
-          @touchend=${this.handleScrollGestureEnd}
-          @touchcancel=${this.handleScrollGestureEnd}
           @wheel=${this.handleWheel}
+          @touchmove=${this.handleTouchMove}
           @scroll=${this.handleScroll}
           @scrollend=${this.handleScrollEnd}
         >

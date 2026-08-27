@@ -110,14 +110,19 @@ export function walliChatBlocksUnoCss(): Plugin {
 export default {
   plugins: [walliChatBlocksUnoCss()],
   build: {
+    cssCodeSplit: false,
     lib: {
-      entry: "src/index.ts",
+      cssFileName: "walli-chat-blocks",
+      entry: {
+        index: "src/index.ts",
+        theme: "src/theme-entry.ts",
+      },
       formats: ["es"],
-      fileName: "index",
     },
     rollupOptions: {
       external: [
         "@chenglou/pretext",
+        "@tanstack/form-core",
         "@walli/chat",
         "dayjs",
         "dayjs/plugin/customParseFormat.js",
@@ -125,6 +130,10 @@ export default {
         "lucide",
         "zod",
       ],
+      output: {
+        assetFileNames: "walli-chat-blocks[extname]",
+        entryFileNames: "[name].js",
+      },
     },
   },
 };

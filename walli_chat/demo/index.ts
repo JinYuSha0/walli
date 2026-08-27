@@ -1,4 +1,5 @@
 import "@walli/chat/theme.css";
+import "@walli/chat-blocks/theme.css";
 import { FileSpreadsheet, ImagePlus, Search } from "lucide";
 import { registerBlock } from "@walli/chat";
 import {

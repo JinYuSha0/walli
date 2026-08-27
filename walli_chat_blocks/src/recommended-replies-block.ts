@@ -85,7 +85,7 @@ export const recommendedRepliesBlockDefinition = {
         const textLayout = layoutWithLines(reply.preparedText, metrics.contentWidth, lineHeight);
         const textTop = (metrics.height - textLayout.lines.length * lineHeight) / 2;
         return html`<button
-          class="[-webkit-appearance:none] relative box-border block max-w-full shrink-0 cursor-pointer overflow-hidden rounded-xl border border-solid [background:var(--walli-card)] [border-color:var(--walli-border)] p-0 text-left font-sans text-sm font-medium leading-5 [box-shadow:var(--walli-block-shadow)] [color:var(--walli-card-foreground)] transition-[background-color,box-shadow,opacity] duration-150 enabled:hover:[background:var(--walli-accent)] enabled:hover:[box-shadow:var(--walli-block-shadow-hover)] focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:[outline-color:var(--walli-ring)] disabled:cursor-not-allowed disabled:opacity-48"
+          class="[-webkit-appearance:none] relative box-border block max-w-full shrink-0 cursor-pointer overflow-hidden rounded-xl border border-solid [background:var(--walli-card)] [border-color:var(--walli-border)] p-0 text-left font-sans text-sm font-medium leading-5 [box-shadow:var(--walli-recommended-reply-shadow)] [color:var(--walli-card-foreground)] transition-[background-color,opacity] duration-150 enabled:hover:[background:var(--walli-accent)] focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:[outline-color:var(--walli-ring)] disabled:cursor-not-allowed disabled:opacity-48"
           style=${`width:${metrics.width}px;height:${metrics.height}px`}
           type="button"
           title=${reply.text}
