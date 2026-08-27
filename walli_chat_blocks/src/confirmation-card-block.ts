@@ -284,7 +284,7 @@ function renderInput(data: ConfirmationCardData, field: ConfirmationCardField, i
     />`;
   }
   return html`<input
-    class="mt-1.5 box-border block h-[34px] w-full rounded-md border border-solid [background:var(--walli-background)] [border-color:var(--walli-border)] px-2.5 text-sm text-inherit [color-scheme:inherit] focus:[border-color:var(--walli-ring)] focus:outline-none"
+    class="[-webkit-appearance:none] [appearance:none] mt-1.5 box-border block h-[34px] w-full rounded-md border border-solid [background:var(--walli-background)] [border-color:var(--walli-border)] px-2.5 text-sm text-inherit [color-scheme:inherit] focus:[border-color:var(--walli-ring)] focus:outline-none"
     id=${inputId}
     name=${field.id}
     type=${field.format === "YYYY-MM-DD" ? "date" : "datetime-local"}

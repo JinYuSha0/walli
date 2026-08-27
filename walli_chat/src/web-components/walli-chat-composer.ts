@@ -53,6 +53,11 @@ export class WalliChatComposerElement extends LitElement {
       touch-action: manipulation;
       width: 100%;
     }
+
+    button,
+    textarea {
+      touch-action: manipulation;
+    }
   `;
 
   override createRenderRoot() {

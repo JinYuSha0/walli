@@ -525,6 +525,7 @@ export class WalliChatElement extends LitElement {
 
   private requestStreamingFollow(): void {
     if (!this.shouldFollowStreamingMessage()) return;
+    this.isScrollingToBottom = true;
     this.pendingScrollRequest = {
       animated: false,
       source: "streaming",
