@@ -1,4 +1,5 @@
 import type { WalliChatBlockContext, WalliChatTokenizedBlockDefinition } from "@walli/chat";
+import { FieldApi, FormApi } from "@tanstack/form-core";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat.js";
 import { html, nothing } from "lit";
@@ -25,7 +26,21 @@ type ConfirmationFieldBase = {
   required?: boolean;
 };
 
+export type ConfirmationFieldErrorMessages = {
+  decimals?: string;
+  invalid?: string;
+  max?: string;
+  maxLength?: string;
+  min?: string;
+  minLength?: string;
+  required?: string;
+};
+
 export type ConfirmationTextField = ConfirmationFieldBase & {
+  errorMessages?: Pick<
+    ConfirmationFieldErrorMessages,
+    "maxLength" | "minLength" | "required"
+  >;
   maxLength?: number;
   minLength?: number;
   type: "text";
@@ -33,6 +48,10 @@ export type ConfirmationTextField = ConfirmationFieldBase & {
 };
 
 export type ConfirmationNumberField = ConfirmationFieldBase & {
+  errorMessages?: Pick<
+    ConfirmationFieldErrorMessages,
+    "decimals" | "invalid" | "max" | "min" | "required"
+  >;
   decimals?: number;
   max?: number;
   min?: number;
@@ -41,6 +60,7 @@ export type ConfirmationNumberField = ConfirmationFieldBase & {
 };
 
 export type ConfirmationTimeField = ConfirmationFieldBase & {
+  errorMessages?: Pick<ConfirmationFieldErrorMessages, "invalid" | "max" | "min" | "required">;
   format: "YYYY-MM-DD" | "YYYY-MM-DD HH:mm";
   max?: string;
   min?: string;
@@ -69,10 +89,31 @@ export type ConfirmationCardSubmission = {
   type: "confirmation-card";
 };
 
-const editedValuesByCard = new WeakMap<ConfirmationCardData, Map<string, string>>();
+type ConfirmationFormValues = Record<string, string>;
+type ConfirmationFormApi = ReturnType<typeof createConfirmationFormApi>;
+type ConfirmationFieldApi = ReturnType<typeof createConfirmationFieldApi>;
+type ConfirmationFormState = {
+  fields: Map<string, ConfirmationFieldApi>;
+  form: ConfirmationFormApi;
+};
+
+const formStateByCard = new WeakMap<ConfirmationCardData, ConfirmationFormState>();
+
+const errorMessagesSchema = z
+  .object({
+    decimals: z.string().trim().min(1).optional(),
+    invalid: z.string().trim().min(1).optional(),
+    max: z.string().trim().min(1).optional(),
+    maxLength: z.string().trim().min(1).optional(),
+    min: z.string().trim().min(1).optional(),
+    minLength: z.string().trim().min(1).optional(),
+    required: z.string().trim().min(1).optional(),
+  })
+  .optional();
 
 const baseFieldSchema = z.object({
   editable: z.boolean().optional(),
+  errorMessages: errorMessagesSchema,
   id: z.string().trim().min(1),
   label: z.string().trim().min(1),
   required: z.boolean().optional(),
@@ -202,10 +243,11 @@ export const confirmationCardBlockDefinition = {
     };
   },
   render({ ctx, data, height, messageId, width }) {
+    const formState = getFormState(data);
     return html`<form
       class="box-border flex w-full flex-col rounded-xl border border-solid [background:var(--walli-card)] [border-color:var(--walli-border)] p-3 pb-4 [box-shadow:var(--walli-block-shadow)] [color:var(--walli-card-foreground)]"
       style=${`width:${width}px;height:${height}px`}
-      @submit=${(event: SubmitEvent) => submitCard(event, ctx, data, messageId)}
+      @submit=${(event: SubmitEvent) => submitCard(event, ctx, data, messageId, formState)}
       novalidate
     >
       ${
@@ -214,7 +256,7 @@ export const confirmationCardBlockDefinition = {
           : html`<h3 class="m-0 mb-3 h-5 text-sm font-semibold leading-5">${data.title}</h3>`
       }
       <div class="flex flex-col gap-2.5">
-        ${data.fields.map((field) => renderField(data, field))}
+        ${data.fields.map((field) => renderField(field, formState.fields.get(field.id)!))}
       </div>
       <button
         class="mt-4 h-10 shrink-0 cursor-pointer rounded-lg border-0 [background:var(--walli-primary)] px-3 text-sm font-semibold [color:var(--walli-primary-foreground)] enabled:hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
@@ -232,7 +274,7 @@ export function createConfirmationCardMarkdown(data: ConfirmationCardData): stri
   return `:::confirmation-card\n${JSON.stringify(parsed, null, 2)}\n:::`;
 }
 
-function renderField(data: ConfirmationCardData, field: ConfirmationCardField) {
+function renderField(field: ConfirmationCardField, fieldApi: ConfirmationFieldApi) {
   const editable = field.editable ?? true;
   const inputId = `confirmation-field-${field.id}`;
   return html`<div class="relative h-[58px]" data-field-id=${field.id}>
@@ -241,7 +283,7 @@ function renderField(data: ConfirmationCardData, field: ConfirmationCardField) {
     >
     ${
       editable
-        ? renderInput(data, field, inputId)
+        ? renderInput(field, fieldApi, inputId)
         : html`<div
             class="mt-1.5 box-border h-[34px] overflow-hidden rounded-md [background:var(--walli-muted)] px-2.5 text-sm leading-[34px]"
             data-readonly-value
@@ -252,22 +294,25 @@ function renderField(data: ConfirmationCardData, field: ConfirmationCardField) {
     <div
       class="absolute right-0 top-0 h-[18px] max-w-[60%] overflow-hidden text-ellipsis whitespace-nowrap text-right text-[11px] leading-[18px] [color:var(--walli-block-error)]"
       data-error-for=${field.id}
-    ></div>
+    >${getFieldError(fieldApi) ?? nothing}</div>
   </div>`;
 }
 
-function renderInput(data: ConfirmationCardData, field: ConfirmationCardField, inputId: string) {
-  const cachedValue = getEditedValue(data, field);
+function renderInput(
+  field: ConfirmationCardField,
+  fieldApi: ConfirmationFieldApi,
+  inputId: string,
+) {
+  const value = String(fieldApi.state.value ?? "");
   if (field.type === "text") {
     return html`<input
       class="mt-1.5 box-border block h-[34px] w-full rounded-md border border-solid [background:var(--walli-background)] [border-color:var(--walli-border)] px-2.5 text-sm text-inherit focus:[border-color:var(--walli-ring)] focus:outline-none"
       id=${inputId}
       name=${field.id}
       type="text"
-      value=${cachedValue}
-      @input=${(event: InputEvent) => cacheEditedValue(data, field.id, event)}
-      minlength=${field.minLength ?? nothing}
-      maxlength=${field.maxLength ?? nothing}
+      .value=${value}
+      @blur=${() => fieldApi.handleBlur()}
+      @input=${(event: InputEvent) => handleFieldChange(event, fieldApi)}
     />`;
   }
   if (field.type === "number") {
@@ -276,8 +321,9 @@ function renderInput(data: ConfirmationCardData, field: ConfirmationCardField, i
       id=${inputId}
       name=${field.id}
       type="number"
-      value=${cachedValue}
-      @input=${(event: InputEvent) => cacheEditedValue(data, field.id, event)}
+      .value=${value}
+      @blur=${() => fieldApi.handleBlur()}
+      @input=${(event: InputEvent) => handleFieldChange(event, fieldApi)}
       min=${field.min ?? nothing}
       max=${field.max ?? nothing}
       step=${field.decimals === undefined ? "any" : 10 ** -field.decimals}
@@ -288,27 +334,80 @@ function renderInput(data: ConfirmationCardData, field: ConfirmationCardField, i
     id=${inputId}
     name=${field.id}
     type=${field.format === "YYYY-MM-DD" ? "date" : "datetime-local"}
-    value=${cachedValue}
-    @input=${(event: InputEvent) => cacheEditedValue(data, field.id, event)}
+    .value=${value}
+    @blur=${() => fieldApi.handleBlur()}
+    @input=${(event: InputEvent) => handleFieldChange(event, fieldApi)}
     min=${toInputTime(field.min === "now" ? dayjs().format(field.format) : field.min, field.format)}
     max=${toInputTime(field.max, field.format)}
   />`;
 }
 
-function getEditedValue(data: ConfirmationCardData, field: ConfirmationCardField): string {
-  const cachedValue = editedValuesByCard.get(data)?.get(field.id);
-  if (cachedValue !== undefined) return cachedValue;
+function getFormState(data: ConfirmationCardData): ConfirmationFormState {
+  const cached = formStateByCard.get(data);
+  if (cached !== undefined) return cached;
+
+  const defaultValues: ConfirmationFormValues = Object.fromEntries(
+    data.fields.map((field) => [field.id, getInitialFieldValue(field)]),
+  );
+  const form = createConfirmationFormApi(defaultValues);
+  form.mount();
+  const fields = new Map<string, ConfirmationFieldApi>();
+  for (const field of data.fields) {
+    const fieldApi = createConfirmationFieldApi(
+      form,
+      field,
+      defaultValues[field.id] ?? "",
+    );
+    fieldApi.mount();
+    fields.set(field.id, fieldApi);
+  }
+  const state = { fields, form };
+  formStateByCard.set(data, state);
+  return state;
+}
+
+function createConfirmationFormApi(defaultValues: ConfirmationFormValues) {
+  return new FormApi({ defaultValues });
+}
+
+function createConfirmationFieldApi(
+  form: ConfirmationFormApi,
+  field: ConfirmationCardField,
+  defaultValue: string,
+) {
+  const validate = ({ value }: { value: string }) => getValidationError(field, value);
+  return new FieldApi({
+    defaultValue,
+    form,
+    name: field.id,
+    validators: {
+      onChange: validate,
+      onSubmit: validate,
+    },
+  });
+}
+
+function getInitialFieldValue(field: ConfirmationCardField): string {
   if (field.type === "time") return toInputTime(field.value, field.format);
   return field.value?.toString() ?? "";
 }
 
-function cacheEditedValue(data: ConfirmationCardData, fieldId: string, event: InputEvent): void {
-  let values = editedValuesByCard.get(data);
-  if (values === undefined) {
-    values = new Map<string, string>();
-    editedValuesByCard.set(data, values);
+function handleFieldChange(event: InputEvent, fieldApi: ConfirmationFieldApi): void {
+  const input = event.currentTarget as HTMLInputElement;
+  fieldApi.handleChange(input.value);
+  if (input.form !== null) {
+    updateFieldError(input.form, String(fieldApi.name), getFieldError(fieldApi));
   }
-  values.set(fieldId, (event.currentTarget as HTMLInputElement).value);
+}
+
+function getFieldError(fieldApi: ConfirmationFieldApi): string | undefined {
+  const error = fieldApi.state.meta.errors.find((item) => typeof item === "string");
+  return typeof error === "string" ? error : undefined;
+}
+
+function getValidationError(field: ConfirmationCardField, rawValue: string): string | undefined {
+  const validation = validateFieldValue(field, rawValue.trim());
+  return validation.success ? undefined : validation.error;
 }
 
 async function submitCard(
@@ -316,20 +415,25 @@ async function submitCard(
   ctx: WalliChatBlockContext,
   data: ConfirmationCardData,
   messageId: string,
+  formState: ConfirmationFormState,
 ) {
   event.preventDefault();
   if (ctx.isStreaming) return;
   const form = event.currentTarget as HTMLFormElement;
-  clearErrors(form);
+  await formState.form.validateAllFields("submit");
   const result: Record<string, string | number> = {};
   let valid = true;
   for (const field of data.fields) {
-    const rawValue = readFieldValue(form, field);
-    const validation = validateFieldValue(field, rawValue);
-    if (!validation.success) {
-      setFieldError(form, field.id, validation.error);
+    const fieldApi = formState.fields.get(field.id)!;
+    const error = getFieldError(fieldApi);
+    updateFieldError(form, field.id, error);
+    if (error !== undefined) {
       valid = false;
-    } else if (validation.value !== undefined) {
+      continue;
+    }
+    const rawValue = String(fieldApi.state.value ?? "").trim();
+    const validation = validateFieldValue(field, rawValue);
+    if (validation.success && validation.value !== undefined) {
       result[field.id] = validation.value;
     }
   }
@@ -354,24 +458,30 @@ async function submitCard(
   }
 }
 
-function readFieldValue(form: HTMLFormElement, field: ConfirmationCardField): string {
-  if (field.editable === false) return field.value?.toString() ?? "";
-  return (form.elements.namedItem(field.id) as HTMLInputElement | null)?.value.trim() ?? "";
-}
-
 function validateFieldValue(
   field: ConfirmationCardField,
   rawValue: string,
 ): { success: true; value?: string | number } | { error: string; success: false } {
   if (rawValue.length === 0) {
-    return field.required ? { error: "This field is required", success: false } : { success: true };
+    return field.required
+      ? {
+          error: field.errorMessages?.required ?? "This field is required",
+          success: false,
+        }
+      : { success: true };
   }
   if (field.type === "text") {
     let schema = z.string();
     if (field.minLength !== undefined)
-      schema = schema.min(field.minLength, `Minimum ${field.minLength} characters`);
+      schema = schema.min(
+        field.minLength,
+        field.errorMessages?.minLength ?? `Minimum ${field.minLength} characters`,
+      );
     if (field.maxLength !== undefined)
-      schema = schema.max(field.maxLength, `Maximum ${field.maxLength} characters`);
+      schema = schema.max(
+        field.maxLength,
+        field.errorMessages?.maxLength ?? `Maximum ${field.maxLength} characters`,
+      );
     const parsed = schema.safeParse(rawValue);
     return parsed.success
       ? { success: true, value: parsed.data }
@@ -379,29 +489,52 @@ function validateFieldValue(
   }
   if (field.type === "number") {
     const value = Number(rawValue);
-    if (!Number.isFinite(value)) return { error: "Enter a valid number", success: false };
+    if (!Number.isFinite(value))
+      return {
+        error: field.errorMessages?.invalid ?? "Enter a valid number",
+        success: false,
+      };
     if (field.min !== undefined && value < field.min)
-      return { error: `Minimum value is ${field.min}`, success: false };
+      return {
+        error: field.errorMessages?.min ?? `Minimum value is ${field.min}`,
+        success: false,
+      };
     if (field.max !== undefined && value > field.max)
-      return { error: `Maximum value is ${field.max}`, success: false };
+      return {
+        error: field.errorMessages?.max ?? `Maximum value is ${field.max}`,
+        success: false,
+      };
     if (field.decimals !== undefined && decimalPlaces(rawValue) > field.decimals) {
-      return { error: `Maximum ${field.decimals} decimal places`, success: false };
+      return {
+        error:
+          field.errorMessages?.decimals ?? `Maximum ${field.decimals} decimal places`,
+        success: false,
+      };
     }
     return { success: true, value };
   }
   const value = fromInputTime(rawValue, field.format);
   const parsed = dayjs(value, field.format, true);
-  if (!parsed.isValid()) return { error: `Use format ${field.format}`, success: false };
+  if (!parsed.isValid())
+    return {
+      error: field.errorMessages?.invalid ?? `Use format ${field.format}`,
+      success: false,
+    };
   const minimum =
     field.min === "now" ? dayjs() : field.min ? dayjs(field.min, field.format, true) : null;
   const maximum = field.max ? dayjs(field.max, field.format, true) : null;
   if (minimum && parsed.isBefore(minimum))
     return {
-      error: field.min === "now" ? "Time cannot be in the past" : `Minimum time is ${field.min}`,
+      error:
+        field.errorMessages?.min ??
+        (field.min === "now" ? "Time cannot be in the past" : `Minimum time is ${field.min}`),
       success: false,
     };
   if (maximum && parsed.isAfter(maximum))
-    return { error: `Maximum time is ${field.max}`, success: false };
+    return {
+      error: field.errorMessages?.max ?? `Maximum time is ${field.max}`,
+      success: false,
+    };
   return { success: true, value };
 }
 
@@ -425,23 +558,18 @@ function decimalPlaces(value: string): number {
   return value.includes(".") ? value.split(".")[1]!.length : 0;
 }
 
-function clearErrors(form: HTMLFormElement): void {
-  form.querySelectorAll<HTMLElement>("[data-error-for]").forEach((element) => {
-    element.textContent = "";
-  });
-  form.querySelectorAll<HTMLElement>('[aria-invalid="true"]').forEach((element) => {
-    element.removeAttribute("aria-invalid");
-    element.classList.remove(invalidFieldClass);
-  });
-}
-
-function setFieldError(form: HTMLFormElement, id: string, error: string): void {
+function updateFieldError(form: HTMLFormElement, id: string, error: string | undefined): void {
   const element = form.querySelector<HTMLElement>(`[data-error-for="${CSS.escape(id)}"]`);
-  if (element) element.textContent = error;
+  if (element) element.textContent = error ?? "";
   const field = form.querySelector<HTMLElement>(`[data-field-id="${CSS.escape(id)}"]`);
   const valueElement = field?.querySelector<HTMLElement>("input, [data-readonly-value]");
-  valueElement?.setAttribute("aria-invalid", "true");
-  valueElement?.classList.add(invalidFieldClass);
+  if (error === undefined) {
+    valueElement?.removeAttribute("aria-invalid");
+    valueElement?.classList.remove(invalidFieldClass);
+  } else {
+    valueElement?.setAttribute("aria-invalid", "true");
+    valueElement?.classList.add(invalidFieldClass);
+  }
 }
 
 function setFormDisabled(form: HTMLFormElement, disabled: boolean): void {

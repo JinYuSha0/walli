@@ -35,6 +35,11 @@ export const confirmationCardData: ConfirmationCardData = {
       minLength: 2,
       maxLength: 30,
       value: "Walli user",
+      errorMessages: {
+        required: "Enter a contact name",
+        minLength: "Contact name must contain at least 2 characters",
+        maxLength: "Contact name cannot exceed 30 characters",
+      },
     },
     {
       id: "quantity",
@@ -45,6 +50,11 @@ export const confirmationCardData: ConfirmationCardData = {
       max: 100,
       decimals: 0,
       value: 2,
+      errorMessages: {
+        min: "Quantity must be at least 1",
+        max: "Quantity cannot exceed 100",
+        decimals: "Quantity must be a whole number",
+      },
     },
     {
       id: "appointmentAt",
@@ -53,6 +63,10 @@ export const confirmationCardData: ConfirmationCardData = {
       format: "YYYY-MM-DD HH:mm",
       required: true,
       min: "now",
+      errorMessages: {
+        required: "Choose an appointment time",
+        min: "Appointment time cannot be in the past",
+      },
     },
     {
       id: "createdDate",
@@ -99,13 +113,19 @@ export const noticeMessages: WalliChatMessage[] = [
   {
     id: "storybook-notice-success",
     role: "assistant",
-    markdown: createNoticeMarkdown({ text: "The operation completed successfully.", variant: "success" }),
+    markdown: createNoticeMarkdown({
+      text: "The operation completed successfully.",
+      variant: "success",
+    }),
     showActions: false,
   },
   {
     id: "storybook-notice-error",
     role: "assistant",
-    markdown: createNoticeMarkdown({ text: "Submission failed. Check your input and try again.", variant: "error" }),
+    markdown: createNoticeMarkdown({
+      text: "Submission failed. Check your input and try again.",
+      variant: "error",
+    }),
     showActions: false,
   },
 ];
@@ -124,6 +144,7 @@ import {
   recommendedRepliesBlockDefinition,
 } from "@walli/chat-blocks";
 import "@walli/chat/theme.css";
+import "@walli/chat-blocks/theme.css";
 
 registerBlock(recommendedRepliesBlockDefinition);
 registerBlock(confirmationCardBlockDefinition);
@@ -191,6 +212,7 @@ import {
   recommendedRepliesBlockDefinition,
 } from "@walli/chat-blocks";
 import "@walli/chat/theme.css";
+import "@walli/chat-blocks/theme.css";
 
 registerBlock(recommendedRepliesBlockDefinition);
 
@@ -216,6 +238,7 @@ import {
   createConfirmationCardMarkdown,
 } from "@walli/chat-blocks";
 import "@walli/chat/theme.css";
+import "@walli/chat-blocks/theme.css";
 
 registerBlock(confirmationCardBlockDefinition);
 
@@ -230,6 +253,11 @@ const confirmation = {
       minLength: 2,
       maxLength: 30,
       value: "Walli user",
+      errorMessages: {
+        required: "Enter a contact name",
+        minLength: "Contact name must contain at least 2 characters",
+        maxLength: "Contact name cannot exceed 30 characters",
+      },
     },
     {
       id: "quantity",
@@ -239,6 +267,11 @@ const confirmation = {
       max: 100,
       decimals: 0,
       value: 2,
+      errorMessages: {
+        min: "Quantity must be at least 1",
+        max: "Quantity cannot exceed 100",
+        decimals: "Quantity must be a whole number",
+      },
     },
     {
       id: "appointmentAt",
@@ -247,6 +280,10 @@ const confirmation = {
       format: "YYYY-MM-DD HH:mm",
       required: true,
       min: "now",
+      errorMessages: {
+        required: "Choose an appointment time",
+        min: "Appointment time cannot be in the past",
+      },
     },
   ],
   action: { id: "confirm-appointment", label: "Confirm" },
@@ -268,6 +305,7 @@ chat.onAction = async ({ name, data }) => {
 const noticesSource = `import { registerBlock } from "@walli/chat";
 import { createNoticeMarkdown, noticeBlockDefinition } from "@walli/chat-blocks";
 import "@walli/chat/theme.css";
+import "@walli/chat-blocks/theme.css";
 
 registerBlock(noticeBlockDefinition);
 

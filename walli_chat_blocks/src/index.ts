@@ -11,6 +11,7 @@ export {
   type ConfirmationCardData,
   type ConfirmationCardField,
   type ConfirmationCardSubmission,
+  type ConfirmationFieldErrorMessages,
   type ConfirmationNumberField,
   type ConfirmationTextField,
   type ConfirmationTimeField,

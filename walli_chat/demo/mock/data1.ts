@@ -33,6 +33,11 @@ export const demoConfirmationCardData: ConfirmationCardData = {
       minLength: 2,
       maxLength: 30,
       value: "Walli 用户",
+      errorMessages: {
+        required: "请输入联系人",
+        minLength: "联系人至少需要 2 个字符",
+        maxLength: "联系人不能超过 30 个字符",
+      },
     },
     {
       id: "quantity",
@@ -44,6 +49,11 @@ export const demoConfirmationCardData: ConfirmationCardData = {
       max: 100,
       decimals: 0,
       value: 2,
+      errorMessages: {
+        min: "数量不能小于 1",
+        max: "数量不能超过 100",
+        decimals: "数量必须是整数",
+      },
     },
     {
       id: "appointmentAt",
@@ -53,6 +63,10 @@ export const demoConfirmationCardData: ConfirmationCardData = {
       required: true,
       editable: true,
       min: "now",
+      errorMessages: {
+        required: "请选择预约时间",
+        min: "预约时间不能早于当前时间",
+      },
     },
     {
       id: "createdDate",

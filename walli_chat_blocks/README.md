@@ -2,6 +2,11 @@
 
 Optional custom blocks for `@walli/chat`.
 
+```ts
+import "@walli/chat/theme.css";
+import "@walli/chat-blocks/theme.css";
+```
+
 ## Recommended replies
 
 Register the block once, then include its Markdown in an assistant message:
