@@ -1,10 +1,10 @@
-# @walli/chat-blocks
+# @wallilabs/chat-blocks
 
-Optional custom blocks for `@walli/chat`.
+Optional custom blocks for `@wallilabs/chat`.
 
 ```ts
-import "@walli/chat/theme.css";
-import "@walli/chat-blocks/theme.css";
+import "@wallilabs/chat/theme.css";
+import "@wallilabs/chat-blocks/theme.css";
 ```
 
 ## Recommended replies
@@ -12,11 +12,11 @@ import "@walli/chat-blocks/theme.css";
 Register the block once, then include its Markdown in an assistant message:
 
 ```ts
-import { registerBlock } from "@walli/chat";
+import { registerBlock } from "@wallilabs/chat";
 import {
   createRecommendedRepliesMarkdown,
   recommendedRepliesBlockDefinition,
-} from "@walli/chat-blocks";
+} from "@wallilabs/chat-blocks";
 
 registerBlock(recommendedRepliesBlockDefinition);
 
@@ -44,11 +44,11 @@ An empty block uses `defaultRecommendedReplies`. Clicking a reply calls the chat
 ## Confirmation card
 
 ```ts
-import { registerBlock } from "@walli/chat";
+import { registerBlock } from "@wallilabs/chat";
 import {
   confirmationCardBlockDefinition,
   createConfirmationCardMarkdown,
-} from "@walli/chat-blocks";
+} from "@wallilabs/chat-blocks";
 
 registerBlock(confirmationCardBlockDefinition);
 

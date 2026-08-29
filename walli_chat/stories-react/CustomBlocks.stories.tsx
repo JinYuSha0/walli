@@ -8,7 +8,7 @@ import {
   type ConfirmationCardData,
   type ConfirmationCardField,
   type ConfirmationCardSubmission,
-} from "@walli/chat-blocks";
+} from "@wallilabs/chat-blocks";
 import { useRef } from "react";
 import {
   WalliChat,
@@ -37,7 +37,7 @@ import {
   WalliChatComposer,
   registerBlock,
   type WalliChatRef,
-} from "@walli/chat/react";
+} from "@wallilabs/chat/react";
 import {
   confirmationCardBlockDefinition,
   createConfirmationCardMarkdown,
@@ -45,9 +45,9 @@ import {
   createRecommendedRepliesMarkdown,
   noticeBlockDefinition,
   recommendedRepliesBlockDefinition,
-} from "@walli/chat-blocks";
-import "@walli/chat/theme.css";
-import "@walli/chat-blocks/theme.css";
+} from "@wallilabs/chat-blocks";
+import "@wallilabs/chat/theme.css";
+import "@wallilabs/chat-blocks/theme.css";
 
 registerBlock(recommendedRepliesBlockDefinition);
 registerBlock(confirmationCardBlockDefinition);
@@ -113,13 +113,13 @@ export function CustomBlocks() {
   );
 }`;
 
-const reactRecommendedRepliesSource = `import { WalliChat, WalliChatComposer, registerBlock } from "@walli/chat/react";
+const reactRecommendedRepliesSource = `import { WalliChat, WalliChatComposer, registerBlock } from "@wallilabs/chat/react";
 import {
   createRecommendedRepliesMarkdown,
   recommendedRepliesBlockDefinition,
-} from "@walli/chat-blocks";
-import "@walli/chat/theme.css";
-import "@walli/chat-blocks/theme.css";
+} from "@wallilabs/chat-blocks";
+import "@wallilabs/chat/theme.css";
+import "@wallilabs/chat-blocks/theme.css";
 
 registerBlock(recommendedRepliesBlockDefinition);
 
@@ -146,14 +146,14 @@ export function RecommendedReplies() {
   );
 }`;
 
-const reactConfirmationCardSource = `import { WalliChat, registerBlock } from "@walli/chat/react";
+const reactConfirmationCardSource = `import { WalliChat, registerBlock } from "@wallilabs/chat/react";
 import {
   confirmationCardBlockDefinition,
   createConfirmationCardMarkdown,
   type ConfirmationCardData,
-} from "@walli/chat-blocks";
-import "@walli/chat/theme.css";
-import "@walli/chat-blocks/theme.css";
+} from "@wallilabs/chat-blocks";
+import "@wallilabs/chat/theme.css";
+import "@wallilabs/chat-blocks/theme.css";
 
 registerBlock(confirmationCardBlockDefinition);
 
@@ -222,10 +222,10 @@ export function ConfirmationCard() {
   );
 }`;
 
-const reactNoticesSource = `import { WalliChat, registerBlock } from "@walli/chat/react";
-import { createNoticeMarkdown, noticeBlockDefinition } from "@walli/chat-blocks";
-import "@walli/chat/theme.css";
-import "@walli/chat-blocks/theme.css";
+const reactNoticesSource = `import { WalliChat, registerBlock } from "@wallilabs/chat/react";
+import { createNoticeMarkdown, noticeBlockDefinition } from "@wallilabs/chat-blocks";
+import "@wallilabs/chat/theme.css";
+import "@wallilabs/chat-blocks/theme.css";
 
 registerBlock(noticeBlockDefinition);
 

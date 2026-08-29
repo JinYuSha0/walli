@@ -75,7 +75,7 @@ export const AllFeatures: Story = {
         code: `<walli-chat-composer placeholder="Message"></walli-chat-composer>
 
 <script type="module">
-  import "@walli/chat";
+  import "@wallilabs/chat";
   import { FileSpreadsheet, ImagePlus, Paperclip, Search } from "lucide";
 
   const composer = document.querySelector("walli-chat-composer");

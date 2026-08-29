@@ -1,7 +1,7 @@
 {
-  "name": "@walli/chat-blocks",
-  "version": "0.0.0-beta.0",
-  "description": "Custom block component for @walli/chat.",
+  "name": "@wallilabs/chat-blocks",
+  "version": "0.0.0-alpha.0",
+  "description": "Custom block component for @wallilabs/chat.",
   "keywords": [
     "web-components",
     "ai-chat",
@@ -51,7 +51,7 @@
     "prepublishOnly": "pnpm run build"
   },
   "peerDependencies": {
-    "@walli/chat": "workspace:*",
+    "@wallilabs/chat": "workspace:*",
     "lit": ">=3.3.0"
   },
   "dependencies": {
@@ -62,7 +62,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@walli/chat": "workspace:*",
+    "@wallilabs/chat": "workspace:*",
     "lit": "^3.3.3",
     "typescript": "~6.0.2",
     "unocss": "^66.7.5",

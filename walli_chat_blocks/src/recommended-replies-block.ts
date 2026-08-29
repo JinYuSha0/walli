@@ -1,4 +1,4 @@
-import type { WalliChatBlockContext, WalliChatTokenizedBlockDefinition } from "@walli/chat";
+import type { WalliChatBlockContext, WalliChatTokenizedBlockDefinition } from "@wallilabs/chat";
 import {
   layoutWithLines,
   measureLineStats,

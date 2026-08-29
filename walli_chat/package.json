@@ -1,6 +1,6 @@
 {
-  "name": "@walli/chat",
-  "version": "0.0.0-beta.0",
+  "name": "@wallilabs/chat",
+  "version": "0.0.0-alpha.0",
   "description": "High-performance, general-purpose AI chat component.",
   "keywords": [
     "web-components",
@@ -84,7 +84,7 @@
     }
   },
   "devDependencies": {
-    "@walli/chat-blocks": "workspace:*",
+    "@wallilabs/chat-blocks": "workspace:*",
     "@preact/signals-core": "^1.14.4",
     "@storybook/addon-a11y": "^10.5.10",
     "@storybook/addon-docs": "^10.5.10",

@@ -379,7 +379,7 @@ const FullChatDemo = component("FullChatDemo", () => {
 const fullChatCode = `<script setup lang="ts">
 import { ref } from "vue";
 import { FileSpreadsheet, ImagePlus, Search } from "lucide";
-import { WalliChat, WalliChatComposer } from "@walli/chat/vue";
+import { WalliChat, WalliChatComposer } from "@wallilabs/chat/vue";
 import { createStorySseStream } from "./story-stream";
 
 const chat = ref();
@@ -445,9 +445,9 @@ import {
   WalliChat,
   registerBlock,
   type WalliChatMessage,
-} from "@walli/chat/vue";
+} from "@wallilabs/chat/vue";
 import { noticeBlockDefinition } from "./notice-block";
-import "@walli/chat/theme.css";
+import "@wallilabs/chat/theme.css";
 
 const messages: WalliChatMessage[] = ${JSON.stringify(customBlockMessage, null, 2)};
 
@@ -461,9 +461,9 @@ onUnmounted(() => registration.unregister());
 
 const replaceBlockCode = `<script setup lang="ts">
 import { nextTick, onMounted, ref } from "vue";
-import { WalliChat, registerBlock } from "@walli/chat/vue";
+import { WalliChat, registerBlock } from "@wallilabs/chat/vue";
 import { replacementBlockDefinition } from "./replacement-block";
-import "@walli/chat/theme.css";
+import "@wallilabs/chat/theme.css";
 
 const chat = ref();
 
@@ -484,8 +484,8 @@ onMounted(async () => {
 
 const themeToggleCode = `<script setup lang="ts">
 import { ref } from "vue";
-import { WalliChat } from "@walli/chat/vue";
-import "@walli/chat/theme.css";
+import { WalliChat } from "@wallilabs/chat/vue";
+import "@wallilabs/chat/theme.css";
 
 const dark = ref(false);
 </script>
@@ -504,7 +504,7 @@ const dark = ref(false);
 
 const scrollControlsCode = `<script setup lang="ts">
 import { ref } from "vue";
-import { WalliChat, type WalliChatMessage } from "@walli/chat/vue";
+import { WalliChat, type WalliChatMessage } from "@wallilabs/chat/vue";
 
 const chat = ref();
 const index = ref(20);
@@ -541,7 +541,7 @@ const messages: WalliChatMessage[] = Array.from(
 
 const insertMessagesCode = `<script setup lang="ts">
 import { ref } from "vue";
-import { WalliChat } from "@walli/chat/vue";
+import { WalliChat } from "@wallilabs/chat/vue";
 
 const chat = ref();
 const stick = ref(false);
@@ -575,7 +575,7 @@ function paginationCode(loadAtTop: boolean) {
   const method = loadAtTop ? "insertMessagesAtTop" : "insertMessagesAtBottom";
   return `<script setup lang="ts">
 import { ref } from "vue";
-import { WalliChat } from "@walli/chat/vue";
+import { WalliChat } from "@wallilabs/chat/vue";
 
 const chat = ref();
 let loading = false;

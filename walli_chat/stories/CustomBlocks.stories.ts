@@ -3,7 +3,7 @@ import type {
   ConfirmationCardData,
   ConfirmationCardField,
   ConfirmationCardSubmission,
-} from "@walli/chat-blocks";
+} from "@wallilabs/chat-blocks";
 import {
   confirmationCardBlockDefinition,
   createConfirmationCardMarkdown,
@@ -11,7 +11,7 @@ import {
   createRecommendedRepliesMarkdown,
   noticeBlockDefinition,
   recommendedRepliesBlockDefinition,
-} from "@walli/chat-blocks";
+} from "@wallilabs/chat-blocks";
 import { html } from "lit";
 import { ref } from "lit/directives/ref.js";
 import type { WalliChatBlockAction, WalliChatMessage } from "../src/types";
@@ -134,7 +134,7 @@ type Args = {
   messages: WalliChatMessage[];
 };
 
-const webComponentsSource = `import { registerBlock } from "@walli/chat";
+const webComponentsSource = `import { registerBlock } from "@wallilabs/chat";
 import {
   confirmationCardBlockDefinition,
   createConfirmationCardMarkdown,
@@ -142,9 +142,9 @@ import {
   createRecommendedRepliesMarkdown,
   noticeBlockDefinition,
   recommendedRepliesBlockDefinition,
-} from "@walli/chat-blocks";
-import "@walli/chat/theme.css";
-import "@walli/chat-blocks/theme.css";
+} from "@wallilabs/chat-blocks";
+import "@wallilabs/chat/theme.css";
+import "@wallilabs/chat-blocks/theme.css";
 
 registerBlock(recommendedRepliesBlockDefinition);
 registerBlock(confirmationCardBlockDefinition);
@@ -206,13 +206,13 @@ chat.onAction = async ({ name, data, messageId }) => {
   }]);
 };`;
 
-const recommendedRepliesSource = `import { registerBlock } from "@walli/chat";
+const recommendedRepliesSource = `import { registerBlock } from "@wallilabs/chat";
 import {
   createRecommendedRepliesMarkdown,
   recommendedRepliesBlockDefinition,
-} from "@walli/chat-blocks";
-import "@walli/chat/theme.css";
-import "@walli/chat-blocks/theme.css";
+} from "@wallilabs/chat-blocks";
+import "@wallilabs/chat/theme.css";
+import "@wallilabs/chat-blocks/theme.css";
 
 registerBlock(recommendedRepliesBlockDefinition);
 
@@ -232,13 +232,13 @@ chat.messages = [{
   showActions: false,
 }];`;
 
-const confirmationCardSource = `import { registerBlock } from "@walli/chat";
+const confirmationCardSource = `import { registerBlock } from "@wallilabs/chat";
 import {
   confirmationCardBlockDefinition,
   createConfirmationCardMarkdown,
-} from "@walli/chat-blocks";
-import "@walli/chat/theme.css";
-import "@walli/chat-blocks/theme.css";
+} from "@wallilabs/chat-blocks";
+import "@wallilabs/chat/theme.css";
+import "@wallilabs/chat-blocks/theme.css";
 
 registerBlock(confirmationCardBlockDefinition);
 
@@ -302,10 +302,10 @@ chat.onAction = async ({ name, data }) => {
   if (name === "confirmation-card") await submitConfirmation(data);
 };`;
 
-const noticesSource = `import { registerBlock } from "@walli/chat";
-import { createNoticeMarkdown, noticeBlockDefinition } from "@walli/chat-blocks";
-import "@walli/chat/theme.css";
-import "@walli/chat-blocks/theme.css";
+const noticesSource = `import { registerBlock } from "@wallilabs/chat";
+import { createNoticeMarkdown, noticeBlockDefinition } from "@wallilabs/chat-blocks";
+import "@wallilabs/chat/theme.css";
+import "@wallilabs/chat-blocks/theme.css";
 
 registerBlock(noticeBlockDefinition);
 
@@ -395,7 +395,7 @@ const meta: Meta<Args> = {
     docs: {
       description: {
         component:
-          "Custom blocks provided by @walli/chat-blocks, rendered through the production walli-chat component.",
+          "Custom blocks provided by @wallilabs/chat-blocks, rendered through the production walli-chat component.",
       },
     },
   },

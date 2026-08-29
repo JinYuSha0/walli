@@ -1,7 +1,7 @@
-import "@walli/chat/theme.css";
-import "@walli/chat-blocks/theme.css";
+import "@wallilabs/chat/theme.css";
+import "@wallilabs/chat-blocks/theme.css";
 import { FileSpreadsheet, ImagePlus, Search } from "lucide";
-import { registerBlock } from "@walli/chat";
+import { registerBlock } from "@wallilabs/chat";
 import {
   confirmationCardBlockDefinition,
   createConfirmationCardMarkdown,
@@ -11,13 +11,13 @@ import {
   type ConfirmationCardField,
   type ConfirmationCardData,
   type ConfirmationCardSubmission,
-} from "@walli/chat-blocks";
+} from "@wallilabs/chat-blocks";
 import type {
   WalliChatComposerElement,
   WalliChatElement,
   WalliChatMessage,
   WalliChatStreamingHandle,
-} from "@walli/chat";
+} from "@wallilabs/chat";
 import { getDemoMessages } from "./store";
 import { createDemoSseRecords } from "./mock/stream";
 import { TimeScheduler } from "../src/core/helper";

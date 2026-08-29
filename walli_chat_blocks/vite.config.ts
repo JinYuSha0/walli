@@ -123,7 +123,7 @@ export default {
       external: [
         "@chenglou/pretext",
         "@tanstack/form-core",
-        "@walli/chat",
+        "@wallilabs/chat",
         "dayjs",
         "dayjs/plugin/customParseFormat.js",
         "lit",

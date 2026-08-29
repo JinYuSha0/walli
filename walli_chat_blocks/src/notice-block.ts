@@ -4,7 +4,7 @@ import {
   prepareWithSegments,
   type PreparedTextWithSegments,
 } from "@chenglou/pretext";
-import type { WalliChatTokenizedBlockDefinition } from "@walli/chat";
+import type { WalliChatTokenizedBlockDefinition } from "@wallilabs/chat";
 import { html } from "lit";
 import { CircleCheck, CircleX, Info, createElement, type IconNode } from "lucide";
 import { z } from "zod";

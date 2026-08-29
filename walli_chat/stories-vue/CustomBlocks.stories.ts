@@ -8,7 +8,7 @@ import {
   type ConfirmationCardData,
   type ConfirmationCardField,
   type ConfirmationCardSubmission,
-} from "@walli/chat-blocks";
+} from "@wallilabs/chat-blocks";
 import { defineComponent, h, ref } from "vue";
 import {
   WalliChat,
@@ -38,7 +38,7 @@ import {
   WalliChatComposer,
   registerBlock,
   type WalliChatExpose,
-} from "@walli/chat/vue";
+} from "@wallilabs/chat/vue";
 import {
   confirmationCardBlockDefinition,
   createConfirmationCardMarkdown,
@@ -46,9 +46,9 @@ import {
   createRecommendedRepliesMarkdown,
   noticeBlockDefinition,
   recommendedRepliesBlockDefinition,
-} from "@walli/chat-blocks";
-import "@walli/chat/theme.css";
-import "@walli/chat-blocks/theme.css";
+} from "@wallilabs/chat-blocks";
+import "@wallilabs/chat/theme.css";
+import "@wallilabs/chat-blocks/theme.css";
 
 registerBlock(recommendedRepliesBlockDefinition);
 registerBlock(confirmationCardBlockDefinition);
@@ -107,13 +107,13 @@ async function onAction({ name, data }) {
 </template>`;
 
 const vueRecommendedRepliesSource = `<script setup lang="ts">
-import { WalliChat, WalliChatComposer, registerBlock } from "@walli/chat/vue";
+import { WalliChat, WalliChatComposer, registerBlock } from "@wallilabs/chat/vue";
 import {
   createRecommendedRepliesMarkdown,
   recommendedRepliesBlockDefinition,
-} from "@walli/chat-blocks";
-import "@walli/chat/theme.css";
-import "@walli/chat-blocks/theme.css";
+} from "@wallilabs/chat-blocks";
+import "@wallilabs/chat/theme.css";
+import "@wallilabs/chat-blocks/theme.css";
 
 registerBlock(recommendedRepliesBlockDefinition);
 
@@ -140,14 +140,14 @@ const messages = [{
 </template>`;
 
 const vueConfirmationCardSource = `<script setup lang="ts">
-import { WalliChat, registerBlock } from "@walli/chat/vue";
+import { WalliChat, registerBlock } from "@wallilabs/chat/vue";
 import {
   confirmationCardBlockDefinition,
   createConfirmationCardMarkdown,
   type ConfirmationCardData,
-} from "@walli/chat-blocks";
-import "@walli/chat/theme.css";
-import "@walli/chat-blocks/theme.css";
+} from "@wallilabs/chat-blocks";
+import "@wallilabs/chat/theme.css";
+import "@wallilabs/chat-blocks/theme.css";
 
 registerBlock(confirmationCardBlockDefinition);
 
@@ -215,10 +215,10 @@ async function onAction({ name, data }) {
 </template>`;
 
 const vueNoticesSource = `<script setup lang="ts">
-import { WalliChat, registerBlock } from "@walli/chat/vue";
-import { createNoticeMarkdown, noticeBlockDefinition } from "@walli/chat-blocks";
-import "@walli/chat/theme.css";
-import "@walli/chat-blocks/theme.css";
+import { WalliChat, registerBlock } from "@wallilabs/chat/vue";
+import { createNoticeMarkdown, noticeBlockDefinition } from "@wallilabs/chat-blocks";
+import "@wallilabs/chat/theme.css";
+import "@wallilabs/chat-blocks/theme.css";
 
 registerBlock(noticeBlockDefinition);
 

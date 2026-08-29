@@ -1,4 +1,4 @@
-import type { WalliChatBlockContext, WalliChatTokenizedBlockDefinition } from "@walli/chat";
+import type { WalliChatBlockContext, WalliChatTokenizedBlockDefinition } from "@wallilabs/chat";
 import { FieldApi, FormApi } from "@tanstack/form-core";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat.js";

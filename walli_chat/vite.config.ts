@@ -102,19 +102,19 @@ export default defineConfig(({ command, mode }) => ({
   resolve: {
     alias: [
       {
-        find: /^@walli\/chat\/theme\.css$/,
+        find: /^@wallilabs\/chat\/theme\.css$/,
         replacement: resolve(sourceRoot, "theme.css"),
       },
       {
-        find: /^@walli\/chat-blocks\/theme\.css$/,
+        find: /^@wallilabs\/chat-blocks\/theme\.css$/,
         replacement: resolve(projectRoot, "../walli_chat_blocks/src/theme.css"),
       },
       {
-        find: /^@walli\/chat$/,
+        find: /^@wallilabs\/chat$/,
         replacement: resolve(sourceRoot, "index.ts"),
       },
       {
-        find: /^@walli\/chat-blocks$/,
+        find: /^@wallilabs\/chat-blocks$/,
         replacement: resolve(projectRoot, "../walli_chat_blocks/src/index.ts"),
       },
     ],

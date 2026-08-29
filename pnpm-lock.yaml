@@ -66,7 +66,7 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.3
         version: 19.2.4(@types/react@19.2.18)
-      '@walli/chat-blocks':
+      '@wallilabs/chat-blocks':
         specifier: workspace:*
         version: link:../walli_chat_blocks
       react:
@@ -112,7 +112,7 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@walli/chat':
+      '@wallilabs/chat':
         specifier: workspace:*
         version: link:../walli_chat
       lit:
@@ -151,7 +151,7 @@ importers:
       '@tanstack/react-router':
         specifier: ^1.170.18
         version: 1.170.18(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
-      '@walli/chat':
+      '@wallilabs/chat':
         specifier: workspace:*
         version: link:../walli_chat
       ai:

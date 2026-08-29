@@ -12,7 +12,7 @@
     "moduleResolution": "bundler",
     "baseUrl": ".",
     "paths": {
-      "@walli/chat-blocks": ["../walli_chat_blocks/src/index.ts"]
+      "@wallilabs/chat-blocks": ["../walli_chat_blocks/src/index.ts"]
     },
     "ignoreDeprecations": "6.0",
     "allowImportingTsExtensions": true,

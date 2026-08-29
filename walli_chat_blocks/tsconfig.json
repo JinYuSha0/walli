@@ -7,7 +7,7 @@
     "baseUrl": ".",
     "ignoreDeprecations": "6.0",
     "paths": {
-      "@walli/chat": ["../walli_chat/dist/types/index.d.ts"],
+      "@wallilabs/chat": ["../walli_chat/dist/types/index.d.ts"],
       "lit": ["../walli_chat/node_modules/lit/index.d.ts"]
     },
     "verbatimModuleSyntax": true,

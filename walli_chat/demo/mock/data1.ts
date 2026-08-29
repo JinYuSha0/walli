@@ -1,11 +1,11 @@
 import readmeZhCn from "../../../README.zh-CN.md?raw";
-import type { WalliChatMessage } from "@walli/chat";
+import type { WalliChatMessage } from "@wallilabs/chat";
 import {
   createConfirmationCardMarkdown,
   createNoticeMarkdown,
   createRecommendedRepliesMarkdown,
   type ConfirmationCardData,
-} from "@walli/chat-blocks";
+} from "@wallilabs/chat-blocks";
 
 export type MarkdownChatSeed = WalliChatMessage;
 

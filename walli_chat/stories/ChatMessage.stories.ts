@@ -197,7 +197,7 @@ const customBlockSource = `import {
   prepareWithSegments,
 } from "@chenglou/pretext";
 import { html } from "lit";
-import { registerBlock } from "@walli/chat";
+import { registerBlock } from "@wallilabs/chat";
 
 const padding = 16;
 const lineHeight = 22;
@@ -323,7 +323,7 @@ const replaceBlockSource = `import { html } from "lit";
 import {
   registerBlock,
   toolCallBlockDefinition,
-} from "@walli/chat";
+} from "@wallilabs/chat";
 
 const replacement = {
   ...toolCallBlockDefinition,
@@ -430,7 +430,7 @@ export const FullChat: Story = {
 </walli-chat>
 
 <script type="module">
-  import "@walli/chat";
+  import "@wallilabs/chat";
 
   const chat = document.querySelector("walli-chat");
   const composer = document.querySelector("walli-chat-composer");
@@ -636,7 +636,7 @@ export const ThemeToggle: Story = {
 </div>
 
 <script type="module">
-  import "@walli/chat";
+  import "@wallilabs/chat";
 
   const demo = document.querySelector("#theme-demo");
   const button = document.querySelector("#theme");
@@ -671,7 +671,7 @@ export const ScrollControls: Story = {
 <walli-chat></walli-chat>
 
 <script type="module">
-  import "@walli/chat";
+  import "@wallilabs/chat";
 
   const chat = document.querySelector("walli-chat");
   const index = document.querySelector("#index");
@@ -705,7 +705,7 @@ export const InsertMessages: Story = {
 <walli-chat></walli-chat>
 
 <script type="module">
-  import "@walli/chat";
+  import "@wallilabs/chat";
 
   const chat = document.querySelector("walli-chat");
   const stick = document.querySelector("#stick");
@@ -763,7 +763,7 @@ function createPaginationSource(loadAtTop: boolean): string {
   return `<walli-chat></walli-chat>
 
 <script type="module">
-  import "@walli/chat";
+  import "@wallilabs/chat";
 
   const chat = document.querySelector("walli-chat");
   chat.defaultScrollToBottom = ${loadAtTop};

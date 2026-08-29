@@ -3,7 +3,7 @@ declare module "virtual:walli-chat-uno-styles" {
   export default css;
 }
 
-declare module "@walli/chat-blocks/theme.css";
+declare module "@wallilabs/chat-blocks/theme.css";
 
 declare module "*.css";
 
