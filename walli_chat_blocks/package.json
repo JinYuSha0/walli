@@ -1,6 +1,6 @@
 {
   "name": "@wallilabs/chat-blocks",
-  "version": "0.0.0-alpha.0",
+  "version": "0.0.0-alpha.1",
   "description": "Custom block component for @wallilabs/chat.",
   "keywords": [
     "web-components",
