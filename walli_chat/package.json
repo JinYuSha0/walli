@@ -1,6 +1,6 @@
 {
   "name": "@wallilabs/chat",
-  "version": "0.0.0-alpha.0",
+  "version": "0.0.0-alpha.1",
   "description": "High-performance, general-purpose AI chat component.",
   "keywords": [
     "web-components",
