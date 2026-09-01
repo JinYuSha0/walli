@@ -5,6 +5,13 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "changeset": "changeset",
+    "changeset:status": "changeset status",
+    "changeset:pre:beta": "changeset pre enter beta",
+    "changeset:pre:exit": "changeset pre exit",
+    "version-packages": "changeset version",
+    "build:packages": "pnpm --filter @wallilabs/chat run build && pnpm --filter @wallilabs/chat-blocks run build",
+    "release": "pnpm run build:packages && changeset publish",
     "build:walli_core": "pnpm --filter @wallilabs/core run build",
     "check:walli_core": "pnpm --filter @wallilabs/core run check",
     "deploy:walli_core": "pnpm --filter @wallilabs/core run deploy",
@@ -13,14 +20,6 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint:walli_core": "pnpm --filter @wallilabs/core run lint",
-    "publish:chat:alpha": "pnpm --dir walli_chat run publish:alpha",
-    "publish:chat:beta": "pnpm --dir walli_chat run publish:beta",
-    "publish:chat:dry-run": "pnpm --dir walli_chat run publish:dry-run",
-    "publish:chat:latest": "pnpm --dir walli_chat run publish:latest",
-    "publish:chat-blocks:alpha": "pnpm --dir walli_chat_blocks run publish:alpha",
-    "publish:chat-blocks:beta": "pnpm --dir walli_chat_blocks run publish:beta",
-    "publish:chat-blocks:dry-run": "pnpm --dir walli_chat_blocks run publish:dry-run",
-    "publish:chat-blocks:latest": "pnpm --dir walli_chat_blocks run publish:latest",
     "test": "echo \"Error: no test specified\" && exit 1",
     "secrets": "pnpm --filter @wallilabs/core run secrets",
     "db:generate:walli_core": "pnpm --filter @wallilabs/core run db:generate",
@@ -33,6 +32,7 @@
   "license": "ISC",
   "packageManager": "pnpm@10.33.0",
   "devDependencies": {
+    "@changesets/cli": "^3.0.1",
     "prettier": "^3.9.5"
   }
 }

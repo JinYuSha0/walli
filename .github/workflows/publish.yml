@@ -1,114 +1,53 @@
 name: Publish npm packages
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
+  pull-requests: write
 
 concurrency:
-  group: npm-${{ github.event.release.tag_name }}
+  group: npm-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  publish-chat:
-    if: startsWith(github.event.release.tag_name, 'chat-v')
+  release:
     runs-on: ubuntu-latest
     environment: npm
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
         with:
           version: 10.33.0
           run_install: false
 
-      - uses: actions/setup-node@v6
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
         with:
           node-version: "24"
           registry-url: https://registry.npmjs.org/
           package-manager-cache: false
 
-      - run: pnpm install --frozen-lockfile
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-      - name: Validate version and select npm tag
-        id: release
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          version="${RELEASE_TAG#chat-v}"
-          package_version="$(node -p "require('./walli_chat/package.json').version")"
-          test "$version" = "$package_version"
-          if [[ "$version" == *-* ]]; then
-            npm_tag="${version#*-}"
-            npm_tag="${npm_tag%%.*}"
-          else
-            npm_tag="latest"
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "npm-tag=$npm_tag" >> "$GITHUB_OUTPUT"
-
-      - run: pnpm --filter @wallilabs/chat run build
-
-      - name: Pack publish artifact
-        run: pnpm --dir walli_chat pack --pack-destination "$RUNNER_TEMP"
-
-      - name: Publish to npm
-        env:
-          NPM_TAG: ${{ steps.release.outputs.npm-tag }}
-        run: npm publish "$RUNNER_TEMP"/wallilabs-chat-*.tgz --access public --tag "$NPM_TAG"
-
-  publish-chat-blocks:
-    if: startsWith(github.event.release.tag_name, 'chat-blocks-v')
-    runs-on: ubuntu-latest
-    environment: npm
-    timeout-minutes: 15
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: pnpm/action-setup@v4
+      - name: Create version pull request or publish packages
+        id: changesets
+        uses: changesets/action@v2
         with:
-          version: 10.33.0
-          run_install: false
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-          registry-url: https://registry.npmjs.org/
-          package-manager-cache: false
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: Validate version and select npm tag
-        id: release
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          version="${RELEASE_TAG#chat-blocks-v}"
-          package_version="$(node -p "require('./walli_chat_blocks/package.json').version")"
-          test "$version" = "$package_version"
-          if [[ "$version" == *-* ]]; then
-            npm_tag="${version#*-}"
-            npm_tag="${npm_tag%%.*}"
-          else
-            npm_tag="latest"
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "npm-tag=$npm_tag" >> "$GITHUB_OUTPUT"
-
-      # chat-blocks resolves @wallilabs/chat types from walli_chat/dist.
-      - run: pnpm --filter @wallilabs/chat run build
-      - run: pnpm --filter @wallilabs/chat-blocks run build
-
-      - name: Pack publish artifact
-        run: pnpm --dir walli_chat_blocks pack --pack-destination "$RUNNER_TEMP"
-
-      - name: Publish to npm
-        env:
-          NPM_TAG: ${{ steps.release.outputs.npm-tag }}
-        run: npm publish "$RUNNER_TEMP"/wallilabs-chat-blocks-*.tgz --access public --tag "$NPM_TAG"
+          commit-message: "chore: release packages"
+          create-github-releases: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-title: "chore: release packages"
+          publish-script: pnpm run release
+          version-script: pnpm run version-packages

@@ -50,11 +50,7 @@
   "scripts": {
     "build": "vite build && tsc -p tsconfig.build.json",
     "check": "tsc -p tsconfig.json",
-    "prepublishOnly": "pnpm run build",
-    "publish:alpha": "pnpm publish --access public --tag alpha",
-    "publish:beta": "pnpm publish --access public --tag beta",
-    "publish:dry-run": "npm_config_git_checks=false pnpm publish --access public --tag alpha --dry-run",
-    "publish:latest": "pnpm publish --access public --tag latest"
+    "prepublishOnly": "pnpm run build"
   },
   "peerDependencies": {
     "@wallilabs/chat": "workspace:*",
