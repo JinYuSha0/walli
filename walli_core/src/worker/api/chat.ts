@@ -193,7 +193,16 @@ const streamChat = async (
   }
 
   return streamSSE(c, async (stream) => {
+    let doneWritten = false;
+    let errorWritten = false;
+    const writeDone = async () => {
+      if (doneWritten) return;
+      doneWritten = true;
+      await stream.writeSSE({ data: "[DONE]" });
+    };
+
     try {
+      let fullContent = "";
       const result = streamText({
         model: prepared.model,
         instructions: prepared.instructions,
@@ -219,24 +228,31 @@ const streamChat = async (
       });
 
       for await (const chunk of uiMessageStream) {
+        if (chunk.type === "text-delta") fullContent += chunk.delta;
+        if (chunk.type === "error") errorWritten = true;
         await stream.writeSSE({ data: stringifySseData(chunk) });
       }
-      await stream.writeSSE({ data: "[DONE]" });
 
-      const [fullContent, usage] = await Promise.all([result.text, result.totalUsage]);
-      prepared.persistMessages([{ role: "assistant", content: fullContent }], {
-        inputTokens: usage.inputTokens,
-        outputTokens: usage.outputTokens,
-      });
+      if (!errorWritten) {
+        const usage = await result.usage;
+        prepared.persistMessages([{ role: "assistant", content: fullContent }], {
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+        });
+      }
+      await writeDone();
     } catch (error) {
       console.error(error);
-      await stream.writeSSE({
-        data: stringifySseData({
-          type: "error",
-          errorText: serializeError(error).message,
-        }),
-      });
-      await stream.writeSSE({ data: "[DONE]" });
+      if (!errorWritten) {
+        errorWritten = true;
+        await stream.writeSSE({
+          data: stringifySseData({
+            type: "error",
+            errorText: serializeError(error).message,
+          }),
+        });
+      }
+      await writeDone();
     }
   });
 };

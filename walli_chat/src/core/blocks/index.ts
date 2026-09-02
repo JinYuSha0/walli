@@ -7,6 +7,7 @@ import { inlineBlockDefinition } from "./inline-block";
 import { loadingBlockDefinition } from "./loading-block";
 import { ruleBlockDefinition } from "./rule-block";
 import {
+  errorBlockDefinition,
   reasoningBlockDefinition,
   startBlockDefinition,
   toolCallBlockDefinition,
@@ -23,6 +24,7 @@ registerBlock(tableBlockDefinition);
 registerBlock(loadingBlockDefinition);
 registerBlock(startBlockDefinition);
 registerBlock(reasoningBlockDefinition);
+registerBlock(errorBlockDefinition);
 registerBlock(toolCallBlockDefinition);
 
 export { assetsGroupBlockDefinition };
@@ -35,4 +37,5 @@ export { ruleBlockDefinition };
 export { tableBlockDefinition };
 export { startBlockDefinition };
 export { reasoningBlockDefinition };
+export { errorBlockDefinition };
 export { toolCallBlockDefinition };

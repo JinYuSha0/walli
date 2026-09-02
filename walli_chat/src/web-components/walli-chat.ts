@@ -72,6 +72,10 @@ function createReasoningBlockMarkdown(
   })}\n:::`;
 }
 
+function createErrorBlockMarkdown(text: string): string {
+  return `:::error-block\n${JSON.stringify({ text })}\n:::`;
+}
+
 @customElement("walli-chat")
 export class WalliChatElement extends LitElement {
   @property({ attribute: false }) accessor emptyContent: unknown;
@@ -398,6 +402,7 @@ export class WalliChatElement extends LitElement {
     let reasoning = "";
     let reasoningComplete = false;
     let reasoningStarted = false;
+    let streamError = "";
     const reasoningLabels = {
       thinking: options.reasoningLabels?.thinking ?? "Thinking",
       thought: options.reasoningLabels?.thought ?? "Thought",
@@ -452,9 +457,10 @@ export class WalliChatElement extends LitElement {
         reasoningBlock,
         text.length > 0
           ? text
-          : reasoningStarted || reasoningBlock.length > 0
+          : reasoningStarted || reasoningBlock.length > 0 || streamError.length > 0
             ? ""
             : STREAMING_START_MARKDOWN,
+        streamError.length > 0 ? createErrorBlockMarkdown(streamError) : "",
         ...toolBlocks,
       ]
         .filter(Boolean)
@@ -488,6 +494,13 @@ export class WalliChatElement extends LitElement {
           for (const toolCallId of completedToolCallIds) activeToolCalls.delete(toolCallId);
           completedToolCallIds.clear();
         }
+        rebuildMarkdown();
+        return;
+      }
+      if (data.type === "error") {
+        streamError = data.errorText;
+        activeToolCalls.clear();
+        completedToolCallIds.clear();
         rebuildMarkdown();
         return;
       }
@@ -558,6 +571,7 @@ export class WalliChatElement extends LitElement {
             )
           : "",
         text,
+        streamError.length > 0 ? createErrorBlockMarkdown(streamError) : "",
       ]
         .filter(Boolean)
         .join("\n\n");

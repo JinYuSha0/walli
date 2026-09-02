@@ -25,6 +25,8 @@
   --walli-accent-foreground: oklch(0.205 0 0);
   --walli-border: oklch(0.922 0 0);
   --walli-ring: oklch(0.708 0 0);
+  --walli-error: oklch(0.52 0.22 27.325);
+  --walli-error-background: color-mix(in oklch, var(--walli-error) 8%, transparent);
 }
 
 .dark {
@@ -54,4 +56,5 @@
   --walli-accent-foreground: oklch(0.985 0 0);
   --walli-border: oklch(1 0 0 / 10%);
   --walli-ring: oklch(0.556 0 0);
+  --walli-error: oklch(0.704 0.191 22.216);
 }

@@ -1,7 +1,8 @@
 import { html } from "lit";
 import { computed } from "@preact/signals-core";
-import { ChevronDown, createElement } from "lucide";
+import { ChevronDown, CircleX, createElement } from "lucide";
 import {
+  layoutWithLines,
   measureLineStats,
   prepareWithSegments,
   type PreparedTextWithSegments,
@@ -31,6 +32,14 @@ type ToolCallBlockData = {
   toolName: string;
 };
 
+type ErrorBlockData = {
+  text: string;
+};
+
+type PreparedErrorBlockData = ErrorBlockData & {
+  prepared: PreparedTextWithSegments;
+};
+
 const StreamBlockStyle = computed(() => {
   const startDotSize = getSpace(2);
   const startPaddingY = getSpace(3);
@@ -46,6 +55,13 @@ const StreamBlockStyle = computed(() => {
     reasoningHeaderLineHeight: getLineHeight("text-sm"),
     reasoningLineHeight: getLineHeight("text-sm"),
     reasoningPaddingY: getSpace(2),
+    errorFont: getFont("body", null, "text-sm", "font-sans", 500),
+    errorHorizontalPadding: getSpace(3.5),
+    errorVerticalPadding: getSpace(3),
+    errorIconSize: getSpace(6),
+    errorIconTextGap: getSpace(2.5),
+    errorLineHeight: getLineHeight("text-sm"),
+    errorMinimumHeight: getSpace(12),
     toolLabelFont: getFont("body", null, "text-sm", "font-sans", 500),
     toolLineHeight: getLineHeight("text-sm"),
     toolPaddingY: getSpace(2.5),
@@ -218,6 +234,92 @@ export const reasoningBlockDefinition = {
     </div>`;
   },
 } satisfies WalliChatTokenizedBlockDefinition<ReasoningBlockData, PreparedReasoningBlockData>;
+
+export const errorBlockDefinition = {
+  name: "error-block",
+  marginTop: getSpace(3),
+  styles: walliChatUnoCss,
+  tokenizer: {
+    tokenize(source) {
+      const match = /^:::error-block[ \t]*\n([^\n]+)\n:::[ \t]*(?:\n|$)/.exec(source);
+      if (!match) return undefined;
+      try {
+        const value = JSON.parse(match[1]!) as ErrorBlockData;
+        if (typeof value.text !== "string" || value.text.trim().length === 0) return undefined;
+        return { data: value, raw: match[0] };
+      } catch {
+        return undefined;
+      }
+    },
+  },
+  prepare(data) {
+    return {
+      ...data,
+      prepared: prepareWithSegments(data.text, getStreamBlockStyle("errorFont")),
+    };
+  },
+  materialize(data) {
+    return data;
+  },
+  measure(data, { availableWidth }) {
+    const contentWidth = Math.max(
+      1,
+      availableWidth -
+        getStreamBlockStyle("errorHorizontalPadding") * 2 -
+        getStreamBlockStyle("errorIconSize") -
+        getStreamBlockStyle("errorIconTextGap"),
+    );
+    const lineCount = measureLineStats(data.prepared, contentWidth).lineCount;
+    return {
+      height: Math.max(
+        getStreamBlockStyle("errorMinimumHeight"),
+        getStreamBlockStyle("errorVerticalPadding") * 2 +
+          lineCount * getStreamBlockStyle("errorLineHeight"),
+      ),
+      width: availableWidth,
+    };
+  },
+  render({ data, height, width }) {
+    const lineHeight = getStreamBlockStyle("errorLineHeight");
+    const iconSize = getStreamBlockStyle("errorIconSize");
+    const horizontalPadding = getStreamBlockStyle("errorHorizontalPadding");
+    const contentWidth = Math.max(
+      1,
+      width - horizontalPadding * 2 - iconSize - getStreamBlockStyle("errorIconTextGap"),
+    );
+    const textLayout = layoutWithLines(data.prepared, contentWidth, lineHeight);
+    const textLeft = horizontalPadding + iconSize + getStreamBlockStyle("errorIconTextGap");
+    const textTop = (height - textLayout.lines.length * lineHeight) / 2;
+    const icon = createElement(CircleX, {
+      "aria-hidden": "true",
+      height: 18,
+      strokeWidth: 2,
+      width: 18,
+    });
+
+    return html`<div
+      class="relative box-border h-full w-full overflow-hidden rounded-xl border border-solid font-sans text-sm font-medium leading-5 [background:var(--error-background,var(--walli-error-background))] [border-color:var(--error,var(--walli-error))] [color:var(--error,var(--walli-error))]"
+      role="alert"
+      aria-label=${data.text}
+    >
+      <span
+        class="absolute flex items-center justify-center"
+        style=${`left:${horizontalPadding}px;top:${(height - iconSize) / 2}px;width:${iconSize}px;height:${iconSize}px`}
+        aria-hidden="true"
+        >${icon}</span
+      >
+      ${textLayout.lines.map(
+        (line, index) =>
+          html`<span
+            class="absolute whitespace-pre"
+            style=${`left:${textLeft}px;top:${textTop + index * lineHeight}px;height:${lineHeight}px`}
+            aria-hidden="true"
+            >${line.text}</span
+          >`,
+      )}
+    </div>`;
+  },
+} satisfies WalliChatTokenizedBlockDefinition<ErrorBlockData, PreparedErrorBlockData>;
 
 export const toolCallBlockDefinition = {
   name: "toolcall-block",
