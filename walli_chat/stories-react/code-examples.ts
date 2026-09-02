@@ -22,6 +22,38 @@ export function Example() {
 
 export const exampleSources = {
   conversation: chat(conversation),
+  reasoningStream: `import { useRef, useState } from "react";
+import { WalliChat, type WalliChatRef } from "@wallilabs/chat/react";
+import { createReasoningStorySseStream } from "./story-stream";
+
+export function ReasoningStream() {
+  const chat = useRef<WalliChatRef>(null);
+  const [running, setRunning] = useState(false);
+
+  async function start() {
+    if (!chat.current || running) return;
+    setRunning(true);
+    try {
+      await chat.current.insertStreamingMessageAtBottom(
+        createReasoningStorySseStream(),
+        {
+          messageId: crypto.randomUUID(),
+          reasoningLabels: { thinking: "Thinking", thought: "Thought" },
+          stickToBottom: true,
+        },
+      ).finished;
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <>
+      <button disabled={running} onClick={start}>Start reasoning stream</button>
+      <WalliChat ref={chat} messages={[]} style={{ height: 560 }} />
+    </>
+  );
+}`,
   richMarkdown: chat(markdownShowcase),
   userMessage: chat(userMessage, 240),
   assistantMessage: chat(assistantMessage, 240),

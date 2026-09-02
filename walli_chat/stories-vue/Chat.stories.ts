@@ -22,7 +22,7 @@ import {
   userMessage,
 } from "../stories/ChatMessage.stories";
 import { fullChatWelcomeMessages } from "../stories-react/full-chat-data";
-import { createStorySseStream } from "../stories-react/story-stream";
+import { createReasoningStorySseStream, createStorySseStream } from "../stories-react/story-stream";
 import { chatSource, source } from "./source";
 
 type Args = { messages: WalliChatMessage[] };
@@ -376,6 +376,47 @@ const FullChatDemo = component("FullChatDemo", () => {
     ]);
 });
 
+const ReasoningStreamDemo = component("ReasoningStreamDemo", () => {
+  const chat = ref<WalliChatExpose>();
+  const running = ref(false);
+  const messages: WalliChatMessage[] = [
+    {
+      id: "vue-reasoning-prompt",
+      role: "user",
+      markdown: "Explain how reasoning differs from the final answer.",
+    },
+  ];
+
+  const start = async () => {
+    if (!chat.value || running.value) return;
+    running.value = true;
+    try {
+      await chat.value.insertStreamingMessageAtBottom(createReasoningStorySseStream(), {
+        getToolLabel: (name) => (name === "web_search" ? "Searching the web" : name),
+        messageId: `vue-reasoning-${crypto.randomUUID()}`,
+        reasoningLabels: { thinking: "Thinking", thought: "Thought" },
+        stickToBottom: true,
+      }).finished;
+    } finally {
+      running.value = false;
+    }
+  };
+
+  return () =>
+    frame([
+      h(
+        "button",
+        {
+          disabled: running.value,
+          onClick: start,
+          style: { ...buttonStyle, alignSelf: "flex-start" },
+        },
+        "Start reasoning stream",
+      ),
+      panel(h(WalliChat, { ref: chat, messages, style })),
+    ]);
+});
+
 const fullChatCode = `<script setup lang="ts">
 import { ref } from "vue";
 import { FileSpreadsheet, ImagePlus, Search } from "lucide";
@@ -437,6 +478,37 @@ async function submit(markdown: string) {
       @submit="submit"
     />
   </WalliChat>
+</template>`;
+
+const reasoningStreamCode = `<script setup lang="ts">
+import { ref } from "vue";
+import { WalliChat } from "@wallilabs/chat/vue";
+import { createReasoningStorySseStream } from "./story-stream";
+
+const chat = ref();
+const running = ref(false);
+
+async function start() {
+  if (!chat.value || running.value) return;
+  running.value = true;
+  try {
+    await chat.value.insertStreamingMessageAtBottom(
+      createReasoningStorySseStream(),
+      {
+        messageId: crypto.randomUUID(),
+        reasoningLabels: { thinking: "Thinking", thought: "Thought" },
+        stickToBottom: true,
+      },
+    ).finished;
+  } finally {
+    running.value = false;
+  }
+}
+</script>
+
+<template>
+  <button :disabled="running" @click="start">Start reasoning stream</button>
+  <WalliChat ref="chat" :messages="[]" style="height: 560px" />
 </template>`;
 
 const customBlockCode = `<script setup lang="ts">
@@ -607,6 +679,10 @@ async function onEndReached() {
 }
 
 export const FullChat: Story = { render: render(FullChatDemo), parameters: source(fullChatCode) };
+export const ReasoningStream: Story = {
+  render: render(ReasoningStreamDemo),
+  parameters: source(reasoningStreamCode),
+};
 export const Conversation: Story = { parameters: source(chatSource(conversation)) };
 export const RichMarkdown: Story = {
   args: { messages: markdownShowcase },

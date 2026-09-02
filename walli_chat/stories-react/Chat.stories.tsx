@@ -24,7 +24,7 @@ import {
 import { source } from "./source";
 import { exampleSources } from "./code-examples";
 import { fullChatWelcomeMessages } from "./full-chat-data";
-import { createStorySseStream } from "./story-stream";
+import { createReasoningStorySseStream, createStorySseStream } from "./story-stream";
 
 type Args = { messages: WalliChatMessage[] };
 const chatStyle: CSSProperties = { display: "block", height: "100%", width: "100%" };
@@ -72,6 +72,10 @@ type Story = StoryObj<Args>;
 export const FullChat: Story = {
   render: () => <FullChatDemo />,
   parameters: source(exampleSources.fullChat),
+};
+export const ReasoningStream: Story = {
+  render: () => <ReasoningStreamDemo />,
+  parameters: source(exampleSources.reasoningStream),
 };
 export const Conversation: Story = { parameters: source(exampleSources.conversation) };
 export const RichMarkdown: Story = {
@@ -423,6 +427,51 @@ function FullChatDemo() {
         />
       </WalliChat>
     </div>
+  );
+}
+
+function ReasoningStreamDemo() {
+  const chat = useRef<WalliChatRef>(null);
+  const [running, setRunning] = useState(false);
+  const messages = useMemo<WalliChatMessage[]>(
+    () => [
+      {
+        id: "react-reasoning-prompt",
+        role: "user",
+        markdown: "Explain how reasoning differs from the final answer.",
+      },
+    ],
+    [],
+  );
+
+  const start = async () => {
+    if (!chat.current || running) return;
+    setRunning(true);
+    try {
+      await chat.current.insertStreamingMessageAtBottom(createReasoningStorySseStream(), {
+        getToolLabel: (name) => (name === "web_search" ? "Searching the web" : name),
+        messageId: `react-reasoning-${crypto.randomUUID()}`,
+        reasoningLabels: { thinking: "Thinking", thought: "Thought" },
+        stickToBottom: true,
+      }).finished;
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <DemoFrame>
+      <button
+        disabled={running}
+        onClick={start}
+        style={{ ...buttonStyle, alignSelf: "flex-start" }}
+      >
+        Start reasoning stream
+      </button>
+      <ChatPanel>
+        <WalliChat ref={chat} messages={messages} style={chatStyle} />
+      </ChatPanel>
+    </DemoFrame>
   );
 }
 
