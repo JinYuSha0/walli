@@ -201,7 +201,7 @@ export const reasoningBlockDefinition = {
       >
         <button
           type="button"
-          class="flex h-full cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 font-inherit text-inherit transition-colors hover:text-foreground"
+          class="flex h-full cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 font-inherit text-inherit transition-colors [@media(hover:hover)_and_(pointer:fine)]:hover:text-foreground"
           aria-expanded=${data.collapsed !== true}
           @click=${() => {
             data.collapsed = data.collapsed !== true;

@@ -1176,7 +1176,7 @@ export class WalliChatElement extends LitElement {
 
   private reduceStreamingBottomPadding(distance: number): void {
     const message = this.getStreamingBottomPaddingMessage();
-    if (message === undefined) return;
+    if (message === undefined || message.streaming) return;
     const messageHeight = this.frame?.messages.find((item) => item.prepared === message)?.frame
       .totalHeight;
     const remainingHeight = Math.max(
