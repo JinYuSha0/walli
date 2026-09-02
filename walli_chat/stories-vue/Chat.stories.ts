@@ -25,7 +25,7 @@ import { fullChatWelcomeMessages } from "../stories-react/full-chat-data";
 import { createReasoningStorySseStream, createStorySseStream } from "../stories-react/story-stream";
 import { chatSource, source } from "./source";
 
-type Args = { messages: WalliChatMessage[] };
+type Args = InstanceType<typeof WalliChat>["$props"];
 const style = { display: "block", height: "100%", width: "100%" };
 const buttonStyle = {
   cursor: "pointer",
@@ -94,6 +94,21 @@ const meta = {
   parameters: {
     layout: "fullscreen",
     docs: { description: { component: "Vue versions of every walli-chat demo." } },
+  },
+  argTypes: {
+    action: { control: false },
+    bottomOcclusionHeight: { control: "number" },
+    class: { control: "text" },
+    defaultScrollToBottom: { control: "boolean" },
+    feedback: { control: false },
+    loading: { control: "boolean" },
+    messages: { control: "object" },
+    onAction: { control: false },
+    onEndReached: { control: false },
+    onEndReachedThreshold: { control: "number" },
+    reply: { control: false },
+    share: { control: false },
+    style: { control: "object" },
   },
   args: { messages: conversation },
   render: (args) => ({

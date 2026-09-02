@@ -5,6 +5,7 @@ import {
   WalliChat,
   WalliChatComposer,
   registerBlock,
+  type WalliChatProps,
   type WalliChatMessage,
   type WalliChatRef,
   type WalliChatStreamingHandle,
@@ -26,7 +27,7 @@ import { exampleSources } from "./code-examples";
 import { fullChatWelcomeMessages } from "./full-chat-data";
 import { createReasoningStorySseStream, createStorySseStream } from "./story-stream";
 
-type Args = { messages: WalliChatMessage[] };
+type Args = WalliChatProps;
 const chatStyle: CSSProperties = { display: "block", height: "100%", width: "100%" };
 const noMessages: WalliChatMessage[] = [];
 const buttonStyle: CSSProperties = {
@@ -62,6 +63,22 @@ const meta = {
   parameters: {
     layout: "fullscreen",
     docs: { description: { component: "React versions of every walli-chat demo." } },
+  },
+  argTypes: {
+    bottomOcclusionHeight: { control: "number" },
+    children: { control: false },
+    className: { control: "text" },
+    defaultScrollToBottom: { control: "boolean" },
+    emptyContent: { control: false },
+    loading: { control: "boolean" },
+    messages: { control: "object" },
+    onAction: { control: false },
+    onEndReached: { control: false },
+    onEndReachedThreshold: { control: "number" },
+    onFeedback: { control: false },
+    onReply: { control: false },
+    onShare: { control: false },
+    style: { control: "object" },
   },
   args: { messages: conversation },
   render: (args) => <ChatSurface {...args} />,

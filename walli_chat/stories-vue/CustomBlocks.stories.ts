@@ -286,32 +286,36 @@ const CustomBlocksSurface = defineComponent({
     };
 
     return () =>
-      h("div", { style: { height: "720px", width: "100%", background: "var(--walli-background)" } }, [
-        h(
-          WalliChat,
-          {
-            ref: chat,
-            messages: props.messages as WalliChatMessage[],
-            onAction: handleAction,
-            style: { display: "block", height: "100%", width: "100%" },
-          },
-          {
-            default: () =>
-              h(WalliChatComposer, {
-                slot: "composer",
-                value: "",
-                placeholder: "Choose a reply or type a message",
-                onSubmit: async (markdown: string) => {
-                  if (!markdown) return;
-                  chat.value?.insertMessagesAtBottom(
-                    [{ id: `vue-user-${crypto.randomUUID()}`, role: "user", markdown }],
-                    { stick: true },
-                  );
-                },
-              }),
-          },
-        ),
-      ]);
+      h(
+        "div",
+        { style: { height: "720px", width: "100%", background: "var(--walli-background)" } },
+        [
+          h(
+            WalliChat,
+            {
+              ref: chat,
+              messages: props.messages as WalliChatMessage[],
+              onAction: handleAction,
+              style: { display: "block", height: "100%", width: "100%" },
+            },
+            {
+              default: () =>
+                h(WalliChatComposer, {
+                  slot: "composer",
+                  value: "",
+                  placeholder: "Choose a reply or type a message",
+                  onSubmit: async (markdown: string) => {
+                    if (!markdown) return;
+                    chat.value?.insertMessagesAtBottom(
+                      [{ id: `vue-user-${crypto.randomUUID()}`, role: "user", markdown }],
+                      { stick: true },
+                    );
+                  },
+                }),
+            },
+          ),
+        ],
+      );
   },
 });
 
@@ -319,6 +323,9 @@ const meta = {
   title: "Vue/Custom Blocks",
   component: WalliChat,
   tags: ["autodocs"],
+  argTypes: {
+    messages: { table: { disable: true } },
+  },
   parameters: { layout: "fullscreen" },
   args: {
     messages: [recommendedRepliesMessage, confirmationCardMessage, ...noticeMessages],

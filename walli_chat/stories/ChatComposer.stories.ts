@@ -13,10 +13,16 @@ import "../src/web-components/walli-chat-composer";
 
 type Args = {
   disabled: boolean;
+  maxHeight: number;
+  menuItems: readonly WalliChatComposerMenuItem[];
   onCancel: () => void;
   onSubmit: (markdown: string, text: string) => Promise<void> | void;
+  onTranscribe: WalliChatComposerElement["onTranscribe"];
+  onUploadImages: WalliChatComposerElement["onUploadImages"];
   onValueChange: (value: string) => void;
   placeholder: string;
+  transcribingText: string;
+  uploadImagesTitle: string;
   value: string;
 };
 
@@ -45,25 +51,65 @@ const meta: Meta<Args> = {
   },
   args: {
     disabled: false,
+    maxHeight: 200,
+    menuItems: demoMenuItems.slice(1),
     onCancel: fn(),
     onSubmit: fn(),
     onValueChange: fn(),
     placeholder: "Message",
+    transcribingText: "Transcribing",
+    uploadImagesTitle: "Add files",
     value: "",
   },
-  render: ({ disabled, onCancel, onSubmit, onValueChange, placeholder, value }) => html`
+  argTypes: {
+    disabled: { description: "Disables text input and Composer actions." },
+    maxHeight: {
+      control: { min: 40, type: "number" },
+      description: "Maximum textarea height in pixels before it scrolls.",
+      table: { defaultValue: { summary: "200" } },
+    },
+    menuItems: {
+      control: "object",
+      description: "Additional actions displayed in the add menu.",
+    },
+    onCancel: { control: false, description: "Runs when an active operation is cancelled." },
+    onSubmit: { control: false, description: "Runs when the composed message is submitted." },
+    onTranscribe: {
+      control: false,
+      description: "Transcribes audio recorded by the Composer.",
+    },
+    onUploadImages: {
+      control: false,
+      description: "Uploads inserted images and files and reports their progress.",
+    },
+    onValueChange: { control: false, description: "Runs whenever the text value changes." },
+    placeholder: { description: "Placeholder shown when the Composer is empty." },
+    transcribingText: {
+      description: "Status text displayed while recorded audio is transcribed.",
+      table: { defaultValue: { summary: "Transcribing" } },
+    },
+    uploadImagesTitle: {
+      description: "Accessible label and tooltip for the attachment picker.",
+      table: { defaultValue: { summary: "Add files" } },
+    },
+    value: { description: "Controlled text value." },
+  },
+  render: (args) => html`
     <div style="box-sizing:border-box;min-height:360px;padding:220px 0 60px;overflow:visible">
       <div style="margin:0 auto;max-width:760px">
         <walli-chat-composer
-          .disabled=${disabled}
-          .placeholder=${placeholder}
-          .value=${value}
-          .menuItems=${demoMenuItems.slice(1)}
-          .onUploadImages=${mockUpload}
-          .onTranscribe=${mockTranscription}
-          .onCancel=${onCancel}
-          .onSubmit=${onSubmit}
-          .onValueChange=${onValueChange}
+          .disabled=${args.disabled}
+          .maxHeight=${args.maxHeight}
+          .placeholder=${args.placeholder}
+          .transcribingText=${args.transcribingText}
+          .uploadImagesTitle=${args.uploadImagesTitle}
+          .value=${args.value}
+          .menuItems=${args.menuItems}
+          .onUploadImages=${args.onUploadImages ?? mockUpload}
+          .onTranscribe=${args.onTranscribe ?? mockTranscription}
+          .onCancel=${args.onCancel}
+          .onSubmit=${args.onSubmit}
+          .onValueChange=${args.onValueChange}
         ></walli-chat-composer>
       </div>
     </div>
@@ -397,6 +443,7 @@ export const WithAttachments: Story = {
           "Programmatically inserted image and file attachments, using the same API as the demo.",
       },
       source: {
+        language: "ts",
         code: `const image = new File([svg], "walli-preview.svg", {
   type: "image/svg+xml",
 });

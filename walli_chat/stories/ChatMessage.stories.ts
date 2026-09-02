@@ -19,9 +19,20 @@ import "../src/web-components/walli-chat-composer";
 
 registerBlock(noticeBlockDefinition);
 
-type Args = {
-  messages: WalliChatMessage[];
-};
+type Args = Pick<
+  WalliChatElement,
+  | "bottomOcclusionHeight"
+  | "defaultScrollToBottom"
+  | "emptyContent"
+  | "loading"
+  | "messages"
+  | "onAction"
+  | "onEndReached"
+  | "onEndReachedThreshold"
+  | "onFeedback"
+  | "onReply"
+  | "onShare"
+>;
 
 export const conversation: WalliChatMessage[] = [
   {
@@ -400,17 +411,84 @@ const meta: Meta<Args> = {
     },
   },
   args: {
+    bottomOcclusionHeight: 8,
+    defaultScrollToBottom: true,
+    loading: false,
     messages: conversation,
+    onEndReachedThreshold: 0,
   },
-  render: ({ messages }) => html`
+  argTypes: {
+    bottomOcclusionHeight: {
+      control: { min: 0, type: "number" },
+      description: "Bottom viewport area, in pixels, excluded from visible-range calculations.",
+      table: { defaultValue: { summary: "8" }, type: { summary: "number" } },
+    },
+    defaultScrollToBottom: {
+      control: "boolean",
+      description: "Starts a non-empty conversation at the bottom when initially rendered.",
+      table: { defaultValue: { summary: "true" }, type: { summary: "boolean" } },
+    },
+    emptyContent: {
+      control: false,
+      description: "Content rendered when the conversation has no messages.",
+      table: { type: { summary: "unknown" } },
+    },
+    loading: {
+      control: "boolean",
+      description: "Shows the conversation loading state.",
+      table: { defaultValue: { summary: "false" }, type: { summary: "boolean" } },
+    },
+    messages: {
+      control: "object",
+      description: "Messages rendered by the conversation.",
+      table: { type: { summary: "readonly WalliChatMessage[]" } },
+    },
+    onAction: {
+      control: false,
+      description: "Handles actions emitted by custom blocks.",
+      table: { type: { summary: "WalliChatBlockActionCallback" } },
+    },
+    onEndReached: {
+      control: false,
+      description: "Runs when the configured pagination edge reaches its threshold.",
+      table: { type: { summary: "WalliChatEndReachedCallback" } },
+    },
+    onEndReachedThreshold: {
+      control: { min: 0, step: 0.1, type: "number" },
+      description: "Pagination threshold expressed as a viewport-height multiplier.",
+      table: { defaultValue: { summary: "0" }, type: { summary: "number" } },
+    },
+    onFeedback: {
+      control: false,
+      description: "Handles like and dislike actions.",
+      table: { type: { summary: "WalliChatFeedbackCallback" } },
+    },
+    onReply: {
+      control: false,
+      description: "Handles message reply actions.",
+      table: { type: { summary: "WalliChatMessageCallback" } },
+    },
+    onShare: {
+      control: false,
+      description: "Handles message share actions.",
+      table: { type: { summary: "WalliChatMessageCallback" } },
+    },
+  },
+  render: (args) => html`
     <div style="height:640px;width:100%;background:var(--walli-background)">
       <walli-chat
         style="display:block;height:100%;width:100%"
-        .messages=${messages}
-        .onFeedback=${(id: string, _markdown: string, feedback: string) =>
-          console.info("Feedback", { id, feedback })}
-        .onReply=${(id: string) => console.info("Reply", { id })}
-        .onShare=${(id: string) => console.info("Share", { id })}
+        .bottomOcclusionHeight=${args.bottomOcclusionHeight}
+        .defaultScrollToBottom=${args.defaultScrollToBottom}
+        .emptyContent=${args.emptyContent}
+        .loading=${args.loading}
+        .messages=${args.messages}
+        .onAction=${args.onAction}
+        .onEndReached=${args.onEndReached}
+        .onEndReachedThreshold=${args.onEndReachedThreshold}
+        .onFeedback=${args.onFeedback}
+        .onReply=${args.onReply}
+        .onShare=${args.onShare}
       ></walli-chat>
     </div>
   `,
@@ -426,22 +504,7 @@ const fullChatPlay: NonNullable<Story["play"]> = async ({ canvasElement }) => {
   await expect(canvasElement.querySelector('walli-chat-composer[slot="composer"]')).toBeTruthy();
 };
 
-export const FullChatBottomPadding: Story = {
-  play: fullChatPlay,
-  parameters: {
-    docs: {
-      source: {
-        code: `chat.insertStreamingMessageAtBottom(stream, {
-  messageId: crypto.randomUUID(),
-  bottomPaddingHeight: (chat.clientHeight * 2) / 3,
-});`,
-      },
-    },
-  },
-  render: () => renderFullChat("bottomPadding"),
-};
-
-export const FullChatStickToBottom: Story = {
+const FullChatStickToBottom: Story = {
   play: fullChatPlay,
   parameters: {
     docs: {
@@ -549,6 +612,30 @@ export const FullChatStickToBottom: Story = {
   },
   render: () => renderFullChat("stickToBottom"),
 };
+
+const fullChatStickToBottomSource = (
+  FullChatStickToBottom.parameters as {
+    docs: { source: { code: string } };
+  }
+).docs.source.code;
+
+export const FullChatBottomPadding: Story = {
+  play: fullChatPlay,
+  parameters: {
+    docs: {
+      description: FullChatStickToBottom.parameters?.docs?.description,
+      source: {
+        code: fullChatStickToBottomSource.replace(
+          "stickToBottom: true,",
+          "bottomPaddingHeight: (chat.clientHeight * 2) / 3,",
+        ),
+      },
+    },
+  },
+  render: () => renderFullChat("bottomPadding"),
+};
+
+export { FullChatStickToBottom };
 
 const reasoningStreamSource = `<walli-chat></walli-chat>
 <button type="button">Start reasoning stream</button>

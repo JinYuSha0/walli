@@ -318,6 +318,9 @@ const meta = {
   title: "React/Custom Blocks",
   component: WalliChat,
   tags: ["autodocs"],
+  argTypes: {
+    messages: { table: { disable: true } },
+  },
   parameters: { layout: "fullscreen" },
   args: {
     messages: [recommendedRepliesMessage, confirmationCardMessage, ...noticeMessages],

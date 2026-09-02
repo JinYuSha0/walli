@@ -4,6 +4,7 @@ import type { Preview } from "@storybook/react-vite";
 import walliChatUnoCss from "virtual:walli-chat-uno-styles";
 import walliChatBlocksThemeCss from "../../walli_chat_blocks/src/theme.css?inline";
 import "../src/theme.css";
+import { docsPage } from "../.storybook/docs-page";
 
 const style = document.createElement("style");
 style.dataset.walliStorybook = "true";
@@ -21,6 +22,7 @@ const preview: Preview = {
     },
     docs: {
       canvas: { sourceState: "shown" },
+      page: docsPage,
       toc: true,
     },
     layout: "centered",

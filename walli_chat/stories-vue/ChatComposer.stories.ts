@@ -9,7 +9,7 @@ import {
 import { mockTranscription, mockUpload } from "../stories/ChatComposer.stories";
 import { source } from "./source";
 
-type Args = { disabled: boolean; placeholder: string; value: string };
+type Args = InstanceType<typeof WalliChatComposer>["$props"];
 const menuItems: readonly WalliChatComposerMenuItem[] = [
   { icon: Paperclip, title: "Add files", onClick: () => console.info("Add files") },
   { icon: Search, title: "Search the web", onClick: () => console.info("Search") },
@@ -117,7 +117,33 @@ const meta = {
     layout: "padded",
     docs: { description: { component: "Vue versions of every walli-chat-composer demo." } },
   },
-  args: { disabled: false, placeholder: "Message", value: "" },
+  argTypes: {
+    class: { control: "text" },
+    disabled: { control: "boolean" },
+    maxHeight: { control: "number" },
+    menuItems: { control: "object" },
+    onCancel: { control: false },
+    onSubmit: { control: false },
+    onTranscribe: { control: false },
+    onUploadImages: { control: false },
+    placeholder: { control: "text" },
+    slot: { control: "text" },
+    style: { control: "object" },
+    transcribingText: { control: "text" },
+    "update:value": { control: false },
+    uploadImagesTitle: { control: "text" },
+    value: { control: "text" },
+    valueChange: { control: false },
+  },
+  args: {
+    disabled: false,
+    maxHeight: 200,
+    menuItems: [],
+    placeholder: "Message",
+    transcribingText: "Transcribing",
+    uploadImagesTitle: "Add files",
+    value: "",
+  },
   render: (args) => ({
     components: { ComposerDemo },
     setup: () => ({ args }),

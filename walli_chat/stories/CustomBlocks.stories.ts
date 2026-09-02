@@ -391,6 +391,9 @@ const meta: Meta<Args> = {
   title: "Components/Custom Blocks",
   excludeStories: /^[a-z]/,
   tags: ["autodocs"],
+  argTypes: {
+    messages: { table: { disable: true } },
+  },
   parameters: {
     layout: "fullscreen",
     docs: {

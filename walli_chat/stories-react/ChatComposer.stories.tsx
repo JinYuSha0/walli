@@ -9,7 +9,7 @@ import { demoMenuItems, mockTranscription, mockUpload } from "../stories/ChatCom
 import { source } from "./source";
 import { exampleSources } from "./code-examples";
 
-type Args = Pick<WalliChatComposerProps, "disabled" | "placeholder" | "value">;
+type Args = WalliChatComposerProps;
 
 function ComposerDemo({
   disabled = false,
@@ -39,7 +39,32 @@ const meta = {
     layout: "padded",
     docs: { description: { component: "React versions of every walli-chat-composer demo." } },
   },
-  args: { disabled: false, placeholder: "Message", value: "" },
+  argTypes: {
+    className: { control: "text" },
+    disabled: { control: "boolean" },
+    maxHeight: { control: "number" },
+    menuItems: { control: "object" },
+    onCancel: { control: false },
+    onSubmit: { control: false },
+    onTranscribe: { control: false },
+    onUploadImages: { control: false },
+    onValueChange: { control: false },
+    placeholder: { control: "text" },
+    slot: { control: "text" },
+    style: { control: "object" },
+    transcribingText: { control: "text" },
+    uploadImagesTitle: { control: "text" },
+    value: { control: "text" },
+  },
+  args: {
+    disabled: false,
+    maxHeight: 200,
+    menuItems: [],
+    placeholder: "Message",
+    transcribingText: "Transcribing",
+    uploadImagesTitle: "Add files",
+    value: "",
+  },
   render: (args) => (
     <ComposerDemo
       {...args}
