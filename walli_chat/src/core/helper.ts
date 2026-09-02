@@ -119,9 +119,12 @@ export function appendBlockGroup(
 
   for (let index = 0; index < group.length; index++) {
     const block = group[index]!;
+    const previous = target[target.length - 1];
+    const marginTop =
+      previous?.kind === "custom" ? (previous.definition.marginBottom ?? space) : space;
     target.push({
       ...block,
-      marginTop: index === 0 ? (target.length === 0 ? 0 : space) : block.marginTop,
+      marginTop: index === 0 ? (target.length === 0 ? 0 : marginTop) : block.marginTop,
     } satisfies PreparedBlock);
   }
 }

@@ -37,7 +37,10 @@ export type WalliChatScrollState = {
 
 export type WalliChatBlockContext = WalliChatBlockState & {
   action: (action: WalliChatBlockAction) => Promise<boolean>;
+  getBlockState: (messageId: string, key: string) => unknown;
   getScrollState: () => WalliChatScrollState;
+  requestRender: () => void;
+  setBlockState: (messageId: string, key: string, value: unknown) => void;
   insertMessagesAtBottom: (
     messages: readonly WalliChatMessage[],
     options?: WalliChatInsertMessagesOptions,
@@ -92,6 +95,7 @@ export type WalliChatTokenizedBlockDefinition<
   Materialized = Prepared,
 > = {
   name: string;
+  marginBottom?: number;
   marginTop?: number;
   measure: (data: Prepared, context: WalliChatBlockMeasureContext) => WalliChatBlockMetrics;
   render: (context: WalliChatTokenizedBlockRenderContext<Materialized>) => unknown;

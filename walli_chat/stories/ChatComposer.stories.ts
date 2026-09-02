@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import { html } from "lit";
 import { ref } from "lit/directives/ref.js";
 import { FileSpreadsheet, ImagePlus, Paperclip, Search } from "lucide";
+import { expect, fn, userEvent, waitFor } from "storybook/test";
 import type {
   WalliChatComposerMenuItem,
   WalliChatComposerTranscriptionContext,
@@ -12,6 +13,9 @@ import "../src/web-components/walli-chat-composer";
 
 type Args = {
   disabled: boolean;
+  onCancel: () => void;
+  onSubmit: (markdown: string, text: string) => Promise<void> | void;
+  onValueChange: (value: string) => void;
   placeholder: string;
   value: string;
 };
@@ -41,10 +45,13 @@ const meta: Meta<Args> = {
   },
   args: {
     disabled: false,
+    onCancel: fn(),
+    onSubmit: fn(),
+    onValueChange: fn(),
     placeholder: "Message",
     value: "",
   },
-  render: ({ disabled, placeholder, value }) => html`
+  render: ({ disabled, onCancel, onSubmit, onValueChange, placeholder, value }) => html`
     <div style="box-sizing:border-box;min-height:360px;padding:220px 0 60px;overflow:visible">
       <div style="margin:0 auto;max-width:760px">
         <walli-chat-composer
@@ -54,7 +61,9 @@ const meta: Meta<Args> = {
           .menuItems=${demoMenuItems.slice(1)}
           .onUploadImages=${mockUpload}
           .onTranscribe=${mockTranscription}
-          .onSubmit=${(message: string) => console.info("Submitted from Storybook", message)}
+          .onCancel=${onCancel}
+          .onSubmit=${onSubmit}
+          .onValueChange=${onValueChange}
         ></walli-chat-composer>
       </div>
     </div>
@@ -65,6 +74,7 @@ export default meta;
 type Story = StoryObj<Args>;
 
 export const AllFeatures: Story = {
+  play: assertDefaultComposer,
   parameters: {
     docs: {
       description: {
@@ -164,6 +174,12 @@ export const AllFeatures: Story = {
 
 export const WithDraft: Story = {
   args: { value: "Can you summarize this conversation?" },
+  play: async ({ canvasElement }) => {
+    const { composer, textarea } = await getComposerParts(canvasElement);
+    await expect(composer.value).toBe("Can you summarize this conversation?");
+    await expect(textarea).toHaveValue("Can you summarize this conversation?");
+    await expect(getSendButton(composer)).toBeEnabled();
+  },
   parameters: {
     docs: {
       source: {
@@ -180,6 +196,12 @@ export const WithDraft: Story = {
 
 export const Disabled: Story = {
   args: { disabled: true },
+  play: async ({ canvasElement }) => {
+    const { composer, textarea } = await getComposerParts(canvasElement);
+    await expect(composer.disabled).toBe(true);
+    await expect(textarea).toBeDisabled();
+    await expect(getSendButton(composer)).toBeDisabled();
+  },
   parameters: {
     docs: {
       source: {
@@ -189,7 +211,89 @@ export const Disabled: Story = {
   },
 };
 
+export const SubmitWithEnter: Story = {
+  args: {
+    onSubmit: fn(),
+    onValueChange: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const composer = canvasElement.querySelector<WalliChatComposerElement>("walli-chat-composer");
+    await expect(composer).toBeTruthy();
+    await composer!.updateComplete;
+    const textarea = composer!.renderRoot.querySelector("textarea");
+    await expect(textarea).toBeTruthy();
+
+    await userEvent.type(textarea!, "Hello Walli{enter}");
+
+    await waitFor(() => expect(args.onSubmit).toHaveBeenCalledTimes(1));
+    await expect(args.onSubmit).toHaveBeenCalledWith("Hello Walli", "Hello Walli", []);
+    await expect(args.onValueChange).toHaveBeenCalledWith("Hello Walli");
+  },
+};
+
+export const ShiftEnterCreatesNewLine: Story = {
+  args: {
+    onSubmit: fn(),
+    onValueChange: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const composer = canvasElement.querySelector<WalliChatComposerElement>("walli-chat-composer")!;
+    await composer.updateComplete;
+    const textarea = composer.renderRoot.querySelector("textarea")!;
+
+    await userEvent.type(textarea, "First line{shift>}{enter}{/shift}Second line");
+
+    await expect(args.onSubmit).not.toHaveBeenCalled();
+    await expect(textarea).toHaveValue("First line\nSecond line");
+  },
+};
+
+export const WhitespaceCannotSubmit: Story = {
+  args: {
+    onSubmit: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const composer = canvasElement.querySelector<WalliChatComposerElement>("walli-chat-composer")!;
+    await composer.updateComplete;
+    const textarea = composer.renderRoot.querySelector("textarea")!;
+
+    await userEvent.type(textarea, "   {enter}");
+
+    await expect(args.onSubmit).not.toHaveBeenCalled();
+    await expect(
+      composer.renderRoot.querySelector<HTMLButtonElement>('button[aria-label="Send message"]'),
+    ).toBeDisabled();
+  },
+};
+
+export const ActionMenuKeyboardDismissal: Story = {
+  args: {
+    onSubmit: fn(),
+  },
+  play: async ({ canvasElement }) => {
+    const composer = canvasElement.querySelector<WalliChatComposerElement>("walli-chat-composer")!;
+    await composer.updateComplete;
+    const addButton = composer.renderRoot.querySelector<HTMLButtonElement>(
+      'button[aria-label="Add"]',
+    )!;
+
+    await userEvent.click(addButton);
+    await expect(addButton).toHaveAttribute("aria-expanded", "true");
+    await expect(composer.renderRoot.querySelector('[role="menu"]')).toBeTruthy();
+
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(addButton).toHaveAttribute("aria-expanded", "false"));
+  },
+};
+
 export const WithTranscription: Story = {
+  play: async ({ canvasElement }) => {
+    const { composer } = await getComposerParts(canvasElement);
+    await expect(composer.onTranscribe).toEqual(expect.any(Function));
+    await expect(
+      composer.renderRoot.querySelector('button[aria-label="Start transcription"]'),
+    ).toBeTruthy();
+  },
   parameters: {
     docs: {
       description: {
@@ -235,6 +339,13 @@ export const WithTranscription: Story = {
 };
 
 export const WithActionMenu: Story = {
+  play: async ({ canvasElement }) => {
+    const { composer } = await getComposerParts(canvasElement);
+    await expect(composer.menuItems).toHaveLength(4);
+    await waitFor(() =>
+      expect(composer.renderRoot.querySelectorAll('[role="menuitem"]')).toHaveLength(4),
+    );
+  },
   parameters: {
     docs: {
       description: {
@@ -271,6 +382,14 @@ export const WithActionMenu: Story = {
 };
 
 export const WithAttachments: Story = {
+  play: async ({ canvasElement }) => {
+    const { composer } = await getComposerParts(canvasElement);
+    await waitFor(() =>
+      expect(composer.renderRoot.querySelectorAll('button[aria-label^="Remove "]')).toHaveLength(2),
+    );
+    await expect(composer.renderRoot.querySelector('[aria-label="Selected files"]')).toBeTruthy();
+    await expect(getSendButton(composer)).toBeDisabled();
+  },
   parameters: {
     docs: {
       description: {
@@ -319,6 +438,36 @@ const timer = window.setInterval(() => {
     </div>
   `,
 };
+
+async function getComposerParts(canvasElement: HTMLElement): Promise<{
+  composer: WalliChatComposerElement;
+  textarea: HTMLTextAreaElement;
+}> {
+  const composer = canvasElement.querySelector<WalliChatComposerElement>("walli-chat-composer");
+  await expect(composer).toBeTruthy();
+  await composer!.updateComplete;
+  const textarea = composer!.renderRoot.querySelector<HTMLTextAreaElement>("textarea");
+  await expect(textarea).toBeTruthy();
+  return { composer: composer!, textarea: textarea! };
+}
+
+function getSendButton(composer: WalliChatComposerElement): HTMLButtonElement {
+  return composer.renderRoot.querySelector<HTMLButtonElement>('button[aria-label="Send message"]')!;
+}
+
+async function assertDefaultComposer({
+  canvasElement,
+}: {
+  canvasElement: HTMLElement;
+}): Promise<void> {
+  const { composer, textarea } = await getComposerParts(canvasElement);
+  await expect(textarea).toHaveAttribute("placeholder", "Message");
+  await expect(composer.menuItems).toHaveLength(3);
+  await expect(getSendButton(composer)).toBeDisabled();
+  await expect(
+    composer.renderRoot.querySelector('button[aria-label="Start transcription"]'),
+  ).toBeTruthy();
+}
 
 function initializeAttachmentStory(element: Element | undefined): void {
   if (!(element instanceof HTMLElement) || element.localName !== "walli-chat-composer") return;

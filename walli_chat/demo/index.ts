@@ -156,7 +156,7 @@ if (composer) {
       },
     ]);
     composer.value = "";
-    return startDemoStreaming();
+    return startDemoStreaming({ includeReasoning: true });
   };
   composer.onCancel = stopDemoStreaming;
   composer.onUploadImages = async (files, setProgress, setResult) => {
@@ -333,15 +333,19 @@ streamButton.addEventListener("click", () => {
   void startDemoStreaming();
 });
 
-async function startDemoStreaming(): Promise<void> {
+async function startDemoStreaming(options: { includeReasoning?: boolean } = {}): Promise<void> {
   if (!chat || activeStreamingHandle !== null) return;
 
   streamButton.textContent = "再次点击停止";
 
   try {
-    const handle = chat.insertStreamingMessageAtBottom(createMarkdownDemoStream(), {
+    const handle = chat.insertStreamingMessageAtBottom(createMarkdownDemoStream(options), {
       getToolLabel: (toolName) => `调用 ${toolName} 工具中`,
       messageId: `demo-stream-${Date.now()}`,
+      reasoningLabels: {
+        thinking: "思考中",
+        thought: "已思考",
+      },
       stickToBottom: true,
     });
     activeStreamingHandle = handle;
@@ -550,13 +554,14 @@ function createBottomInsertionBatch(): WalliChatMessage[] {
   ];
 }
 
-function createMarkdownDemoStream(): ReadableStream<string> {
-  const records = createDemoSseRecords();
+function createMarkdownDemoStream(options: { includeReasoning?: boolean }): ReadableStream<string> {
+  const records = createDemoSseRecords(options);
   let offset = 0;
 
   return new ReadableStream<string>({
     async pull(controller) {
       if (offset >= records.length) {
+        controller.enqueue("data: [DONE]\n\n");
         controller.close();
         return;
       }
@@ -567,11 +572,12 @@ function createMarkdownDemoStream(): ReadableStream<string> {
         timeScheduler.schedule(Date.now() + delay, resolve);
       });
       const record = records[offset++]!;
-      controller.enqueue(createSseRecord(record.event, record.data));
+      controller.enqueue(createSseRecord(record));
     },
   });
 }
 
-function createSseRecord(event: string, data: unknown): string {
-  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+function createSseRecord(record: Record<string, unknown>): string {
+  const { delayAfter: _delayAfter, ...data } = record;
+  return `data: ${JSON.stringify(data)}\n\n`;
 }

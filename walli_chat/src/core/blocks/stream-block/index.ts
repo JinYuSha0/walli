@@ -1,5 +1,6 @@
 import { html } from "lit";
 import { computed } from "@preact/signals-core";
+import { ChevronDown, createElement } from "lucide";
 import {
   measureLineStats,
   prepareWithSegments,
@@ -11,6 +12,18 @@ import type { WalliChatTokenizedBlockDefinition } from "../../block-registry";
 import walliChatUnoCss from "virtual:walli-chat-uno-styles";
 
 type StartBlockData = Record<string, never>;
+
+type ReasoningBlockData = {
+  collapsed?: boolean;
+  complete?: boolean;
+  text: string;
+  thinkingLabel?: string;
+  thoughtLabel?: string;
+};
+
+type PreparedReasoningBlockData = ReasoningBlockData & {
+  prepared: PreparedTextWithSegments;
+};
 
 type ToolCallBlockData = {
   label?: string;
@@ -27,6 +40,12 @@ const StreamBlockStyle = computed(() => {
     startPaddingX: getSpace(1),
     startPaddingY,
     startBlockHeight: startDotSize + startPaddingY * 2,
+    reasoningFont: getFont("body", null, "text-sm", "font-sans", 400),
+    reasoningContentInset: getSpace(3.5),
+    reasoningGap: getSpace(2),
+    reasoningHeaderLineHeight: getLineHeight("text-sm"),
+    reasoningLineHeight: getLineHeight("text-sm"),
+    reasoningPaddingY: getSpace(2),
     toolLabelFont: getFont("body", null, "text-sm", "font-sans", 500),
     toolLineHeight: getLineHeight("text-sm"),
     toolPaddingY: getSpace(2.5),
@@ -79,6 +98,126 @@ export const startBlockDefinition = {
     </div>`;
   },
 } satisfies WalliChatTokenizedBlockDefinition<StartBlockData>;
+
+export const reasoningBlockDefinition = {
+  name: "reasoning-block",
+  marginBottom: getSpace(2),
+  styles: walliChatUnoCss,
+  tokenizer: {
+    tokenize(source) {
+      const match = /^:::reasoning-block[ \t]*\n([^\n]+)\n:::[ \t]*(?:\n|$)/.exec(source);
+      if (!match) return undefined;
+      try {
+        const value = JSON.parse(match[1]!) as ReasoningBlockData;
+        if (
+          typeof value.text !== "string" ||
+          (value.thinkingLabel !== undefined && typeof value.thinkingLabel !== "string") ||
+          (value.thoughtLabel !== undefined && typeof value.thoughtLabel !== "string")
+        ) {
+          return undefined;
+        }
+        return { data: value, raw: match[0] };
+      } catch {
+        return undefined;
+      }
+    },
+  },
+  prepare(data) {
+    return {
+      ...data,
+      prepared: prepareWithSegments(data.text, getStreamBlockStyle("reasoningFont")),
+    };
+  },
+  materialize(data) {
+    return data;
+  },
+  measure(data, { availableWidth }) {
+    if (data.collapsed === true) {
+      return {
+        height:
+          getStreamBlockStyle("reasoningPaddingY") * 2 +
+          getStreamBlockStyle("reasoningHeaderLineHeight"),
+        width: availableWidth,
+      };
+    }
+    const contentWidth = Math.max(1, availableWidth - getStreamBlockStyle("reasoningContentInset"));
+    const { lineCount } = measureLineStats(data.prepared, contentWidth);
+    return {
+      height:
+        getStreamBlockStyle("reasoningPaddingY") * 2 +
+        getStreamBlockStyle("reasoningHeaderLineHeight") +
+        getStreamBlockStyle("reasoningGap") +
+        Math.max(1, lineCount) * getStreamBlockStyle("reasoningLineHeight"),
+      width: availableWidth,
+    };
+  },
+  render({ ctx, data, messageId }) {
+    const paddingY = getStreamBlockStyle("reasoningPaddingY");
+    const headerLineHeight = getStreamBlockStyle("reasoningHeaderLineHeight");
+    const lineHeight = getStreamBlockStyle("reasoningLineHeight");
+    const textTop = paddingY + headerLineHeight + getStreamBlockStyle("reasoningGap");
+    const contentInset = getStreamBlockStyle("reasoningContentInset");
+    const statusLabel =
+      data.complete === true
+        ? (data.thoughtLabel ?? "Thought")
+        : (data.thinkingLabel ?? "Thinking");
+    const collapseIcon = createElement(ChevronDown, {
+      "aria-hidden": "true",
+      height: 14,
+      width: 14,
+      class: "flex-none opacity-60 transition-transform duration-150",
+      style: `transform:rotate(${data.collapsed === true ? "-90deg" : "0deg"})`,
+    });
+
+    return html`<div
+      class="absolute inset-0 box-border overflow-hidden font-sans text-muted-foreground"
+      aria-label=${statusLabel}
+      role="status"
+    >
+      <div
+        class="absolute flex items-center font-medium"
+        style=${`left:0;top:${paddingY}px;height:${headerLineHeight}px;line-height:${headerLineHeight}px;`}
+      >
+        <button
+          type="button"
+          class="flex h-full cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 font-inherit text-inherit transition-colors hover:text-foreground"
+          aria-expanded=${data.collapsed !== true}
+          @click=${() => {
+            data.collapsed = data.collapsed !== true;
+            ctx.setBlockState(messageId, "reasoningCollapsed", data.collapsed);
+            ctx.requestRender();
+          }}
+        >
+          <span
+            class=${
+              data.complete === true
+                ? ""
+                : "animate-walli-shimmer bg-clip-text text-transparent [-webkit-background-clip:text]"
+            }
+            >${statusLabel}</span
+          >
+          ${collapseIcon}
+        </button>
+      </div>
+      ${
+        data.collapsed === true
+          ? null
+          : html`
+              <div
+                class="absolute bg-border"
+                style=${`left:0;top:${textTop}px;bottom:${paddingY}px;width:1px;`}
+                aria-hidden="true"
+              ></div>
+              <div
+                class="absolute whitespace-pre-wrap break-words"
+                style=${`left:${contentInset}px;right:0;top:${textTop}px;font:${getStreamBlockStyle("reasoningFont")};line-height:${lineHeight}px;`}
+                .textContent=${data.text}
+              ></div>
+            `
+      }
+    </div>`;
+  },
+} satisfies WalliChatTokenizedBlockDefinition<ReasoningBlockData, PreparedReasoningBlockData>;
 
 export const toolCallBlockDefinition = {
   name: "toolcall-block",

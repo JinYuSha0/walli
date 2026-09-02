@@ -6,7 +6,11 @@ import { imageBlockDefinition } from "./image-block";
 import { inlineBlockDefinition } from "./inline-block";
 import { loadingBlockDefinition } from "./loading-block";
 import { ruleBlockDefinition } from "./rule-block";
-import { startBlockDefinition, toolCallBlockDefinition } from "./stream-block";
+import {
+  reasoningBlockDefinition,
+  startBlockDefinition,
+  toolCallBlockDefinition,
+} from "./stream-block";
 import { tableBlockDefinition } from "./table-block";
 
 registerBlock(assetsGroupBlockDefinition);
@@ -18,6 +22,7 @@ registerBlock(ruleBlockDefinition);
 registerBlock(tableBlockDefinition);
 registerBlock(loadingBlockDefinition);
 registerBlock(startBlockDefinition);
+registerBlock(reasoningBlockDefinition);
 registerBlock(toolCallBlockDefinition);
 
 export { assetsGroupBlockDefinition };
@@ -29,4 +34,5 @@ export { loadingBlockDefinition };
 export { ruleBlockDefinition };
 export { tableBlockDefinition };
 export { startBlockDefinition };
+export { reasoningBlockDefinition };
 export { toolCallBlockDefinition };

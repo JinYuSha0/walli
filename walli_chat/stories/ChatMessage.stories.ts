@@ -1,7 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
+import type { UIMessageChunk } from "ai";
 import { html } from "lit";
 import { ref } from "lit/directives/ref.js";
 import { FileSpreadsheet, ImagePlus, Search } from "lucide";
+import { expect, userEvent, waitFor } from "storybook/test";
 import type {
   WalliChatComposerTranscriptionContext,
   WalliChatMessage,
@@ -418,6 +420,12 @@ export default meta;
 type Story = StoryObj<Args>;
 
 export const FullChat: Story = {
+  play: async ({ canvasElement }) => {
+    const chat = await getRenderedChat(canvasElement);
+    await expect(chat.messages).toHaveLength(1);
+    await expect(chat.messages[0]?.id).toBe("full-chat-welcome");
+    await expect(canvasElement.querySelector('walli-chat-composer[slot="composer"]')).toBeTruthy();
+  },
   parameters: {
     docs: {
       description: {
@@ -465,62 +473,56 @@ export const FullChat: Story = {
   function createSseStream() {
     const records = [
       {
-        event: "delta",
-        data: {
-          text: [
-            "## Analysis",
-            "",
-            "1. Inspect context",
-            "   - Read messages",
-            "   - Extract requirements",
-            "     - Keep streaming",
-            "     - Test nesting",
-            "",
-          ].join("\\n"),
-        },
+        type: "text-delta",
+        id: "text-1",
+        delta: [
+          "## Analysis",
+          "",
+          "1. Inspect context",
+          "   - Read messages",
+          "   - Extract requirements",
+          "     - Keep streaming",
+          "     - Test nesting",
+          "",
+        ].join("\\n"),
       },
       {
-        event: "tool-call",
-        data: {
-          toolCallId: "search-1",
-          toolName: "web_search",
-          input: { query: "streaming Markdown tables" },
-        },
+        type: "tool-input-available",
+        toolCallId: "search-1",
+        toolName: "web_search",
+        input: { query: "streaming Markdown tables" },
       },
       {
-        event: "tool-result",
-        data: {
-          toolCallId: "search-1",
-          toolName: "web_search",
-          output: { results: 3 },
-        },
+        type: "tool-output-available",
+        toolCallId: "search-1",
+        output: { results: 3 },
       },
       {
-        event: "delta",
-        data: {
-          text: [
-            "Search completed.",
-            "",
-            "| Capability | Result |",
-            "| --- | --- |",
-            "| Nested lists | Stable |",
-            "| Tool calls | Visible |",
-          ].join("\\n"),
-        },
+        type: "text-delta",
+        id: "text-1",
+        delta: [
+          "Search completed.",
+          "",
+          "| Capability | Result |",
+          "| --- | --- |",
+          "| Nested lists | Stable |",
+          "| Tool calls | Visible |",
+        ].join("\\n"),
       },
     ];
     let index = 0;
 
     return new ReadableStream({
       async pull(controller) {
-        if (index === records.length) return controller.close();
+        if (index === records.length) {
+          controller.enqueue("data: [DONE]\\n\\n");
+          return controller.close();
+        }
         const record = records[index++];
         await new Promise((resolve) =>
-          setTimeout(resolve, record.event === "tool-result" ? 2000 : 600),
+          setTimeout(resolve, record.type === "tool-output-available" ? 2000 : 600),
         );
-        controller.enqueue(
-          "event: " + record.event + "\\ndata: " + JSON.stringify(record.data) + "\\n\\n",
-        );
+        controller.enqueue("data: " + JSON.stringify(record) + "\\n\\n");
       },
     });
   }
@@ -531,7 +533,240 @@ export const FullChat: Story = {
   render: () => renderFullChat(),
 };
 
+const reasoningStreamSource = `<walli-chat></walli-chat>
+<button type="button">Start reasoning stream</button>
+
+<script type="module">
+  import "@wallilabs/chat";
+
+  const chat = document.querySelector("walli-chat");
+  const button = document.querySelector("button");
+
+  button.addEventListener("click", async () => {
+    const handle = chat.insertStreamingMessageAtBottom(createReasoningStream(), {
+      messageId: crypto.randomUUID(),
+      reasoningLabels: {
+        thinking: "Thinking",
+        thought: "Thought",
+      },
+      stickToBottom: true,
+    });
+
+    await handle.finished;
+  });
+
+  function createReasoningStream() {
+    const records = [
+      { type: "reasoning-start", id: "reasoning-1" },
+      { type: "reasoning-delta", id: "reasoning-1", delta: "Inspecting the request. " },
+      { type: "reasoning-delta", id: "reasoning-1", delta: "Preparing the answer." },
+      { type: "reasoning-end", id: "reasoning-1" },
+      { type: "text-start", id: "text-1" },
+      { type: "text-delta", id: "text-1", delta: "Here is the final answer." },
+      { type: "text-end", id: "text-1" },
+      { type: "finish" },
+    ];
+    let index = 0;
+
+    return new ReadableStream({
+      async pull(controller) {
+        if (index === records.length) {
+          controller.enqueue("data: [DONE]\\n\\n");
+          return controller.close();
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        controller.enqueue("data: " + JSON.stringify(records[index++]) + "\\n\\n");
+      },
+    });
+  }
+</script>`;
+
+export const ReasoningStream: Story = {
+  render: () => renderReasoningStream(),
+  play: async ({ canvasElement }) => {
+    const chat = canvasElement.querySelector<WalliChatElement>("walli-chat")!;
+    await userEvent.click(canvasElement.querySelector<HTMLButtonElement>("button")!);
+
+    await waitFor(
+      () =>
+        expect(
+          chat.renderRoot.querySelector('walli-custom-block[data-block="reasoning-block"]'),
+        ).toBeTruthy(),
+      { timeout: 2_000 },
+    );
+    await expect(
+      chat.renderRoot.querySelector('walli-custom-block[data-block="start-block"]'),
+    ).toBeFalsy();
+    const streamingReasoningBlock = chat.renderRoot.querySelector<HTMLElement>(
+      'walli-custom-block[data-block="reasoning-block"]',
+    )!;
+    const streamingReasoningContent = streamingReasoningBlock.querySelector<HTMLElement>(
+      "walli-custom-block-content",
+    )!;
+    await expect(
+      streamingReasoningContent.shadowRoot!.querySelector("button")?.textContent,
+    ).toContain("Thinking");
+    await waitFor(() => expect(chat.messages.at(-1)?.markdown).toContain("Inspecting"), {
+      timeout: 2_000,
+    });
+    const firstReasoningFrame = chat.messages.at(-1)?.markdown ?? "";
+    const thinkingToggle =
+      streamingReasoningContent.shadowRoot!.querySelector<HTMLButtonElement>("button")!;
+    await userEvent.click(thinkingToggle);
+    await waitFor(() => expect(chat.messages.at(-1)?.markdown).toContain("temporary reasoning"), {
+      timeout: 5_000,
+    });
+    await expect(chat.messages.at(-1)?.markdown.length).toBeGreaterThan(firstReasoningFrame.length);
+    await expect(
+      streamingReasoningContent.shadowRoot!.querySelector("button")?.getAttribute("aria-expanded"),
+    ).toBe("false");
+
+    await waitFor(
+      () =>
+        expect(
+          chat.renderRoot.querySelector('walli-custom-block[data-block="toolcall-block"]'),
+        ).toBeTruthy(),
+      { timeout: 10_000 },
+    );
+    await expect(chat.messages.at(-1)?.markdown).toContain("Searching the web");
+
+    await waitFor(() => expect(chat.messages.at(-1)?.markdown).toContain('"complete":true'), {
+      timeout: 12_000,
+    });
+    await expect(chat.messages.at(-1)?.markdown).not.toContain("Here is the final answer.");
+    const completedReasoningContent = chat.renderRoot
+      .querySelector<HTMLElement>('walli-custom-block[data-block="reasoning-block"]')!
+      .querySelector<HTMLElement>("walli-custom-block-content")!;
+    await expect(
+      completedReasoningContent.shadowRoot!.querySelector("button span")?.textContent,
+    ).toContain("Thought");
+
+    await waitFor(
+      () => expect(chat.messages.at(-1)?.markdown).toContain("Here is the final answer."),
+      { timeout: 12_000 },
+    );
+    const bodyStreamingBlock = chat.renderRoot.querySelector<HTMLElement>(
+      'walli-custom-block[data-block="reasoning-block"]',
+    )!;
+    const bodyStreamingContent = bodyStreamingBlock.querySelector<HTMLElement>(
+      "walli-custom-block-content",
+    )!;
+    const bodyStreamingToggle =
+      bodyStreamingContent.shadowRoot!.querySelector<HTMLButtonElement>("button")!;
+    await expect(bodyStreamingToggle.getAttribute("aria-expanded")).toBe("false");
+    await waitFor(() => {
+      const completedBlock = chat.renderRoot.querySelector<HTMLElement>(
+        'walli-custom-block[data-block="reasoning-block"]',
+      )!;
+      const completedContent = completedBlock.querySelector<HTMLElement>(
+        "walli-custom-block-content",
+      )!;
+      const completedLabel = completedContent.shadowRoot!.querySelector("button span");
+      expect(completedLabel?.textContent).toContain("Thought");
+      expect(completedLabel?.classList.contains("animate-walli-shimmer")).toBe(false);
+      expect(
+        completedContent.shadowRoot!.querySelector("button")?.getAttribute("aria-expanded"),
+      ).toBe("false");
+    });
+    await waitFor(
+      () => {
+        expect(
+          chat.renderRoot.querySelector('walli-custom-block[data-block="reasoning-block"]'),
+        ).toBeTruthy();
+        expect(
+          chat.renderRoot.querySelector('walli-custom-block[data-block="toolcall-block"]'),
+        ).toBeFalsy();
+      },
+      { timeout: 2_000 },
+    );
+    await expect(chat.messages.at(-1)?.markdown).toContain("Inspecting the request");
+    await waitFor(() =>
+      expect(canvasElement.querySelector<HTMLButtonElement>("button")!.disabled).toBe(false),
+    );
+
+    const reasoningBlock = chat.renderRoot.querySelector<HTMLElement>(
+      'walli-custom-block[data-block="reasoning-block"]',
+    )!;
+    const reasoningContent = reasoningBlock.querySelector<HTMLElement>(
+      "walli-custom-block-content",
+    )!;
+    const toggle = reasoningContent.shadowRoot!.querySelector<HTMLButtonElement>("button")!;
+    await expect(toggle.textContent).toContain("Thought");
+    await expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    await userEvent.click(toggle);
+    await waitFor(() => {
+      const nextBlock = chat.renderRoot.querySelector<HTMLElement>(
+        'walli-custom-block[data-block="reasoning-block"]',
+      )!;
+      const nextContent = nextBlock.querySelector<HTMLElement>("walli-custom-block-content")!;
+      expect(nextContent.shadowRoot!.querySelector("button")?.getAttribute("aria-expanded")).toBe(
+        "true",
+      );
+      expect(nextContent.shadowRoot!.querySelector(".whitespace-pre-wrap")).toBeTruthy();
+    });
+
+    const abortedMessageId = `reasoning-abort-${crypto.randomUUID()}`;
+    const abortedHandle = chat.insertStreamingMessageAtBottom(createInterruptedReasoningStream(), {
+      messageId: abortedMessageId,
+    });
+    await waitFor(() =>
+      expect(chat.messages.find((message) => message.id === abortedMessageId)?.markdown).toContain(
+        "Stopping during reasoning",
+      ),
+    );
+    abortedHandle.abort();
+    await abortedHandle.finished;
+    await expect(
+      chat.messages.find((message) => message.id === abortedMessageId)?.markdown,
+    ).toContain('"complete":true');
+
+    const failedMessageId = `reasoning-error-${crypto.randomUUID()}`;
+    const failedHandle = chat.insertStreamingMessageAtBottom(createFailedReasoningStream(), {
+      messageId: failedMessageId,
+    });
+    await expect(failedHandle.finished).rejects.toThrow("Simulated stream failure");
+    await expect(
+      chat.messages.find((message) => message.id === failedMessageId)?.markdown,
+    ).toContain('"complete":true');
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Simulates Vercel AI SDK reasoning and text stream parts. Reasoning replaces the start indicator, remains after completion, and can be collapsed.",
+      },
+      source: {
+        code: reasoningStreamSource,
+      },
+    },
+  },
+};
+
+function createInterruptedReasoningStream(): ReadableStream<string> {
+  return new ReadableStream<string>({
+    start(controller) {
+      controller.enqueue('data: {"type":"reasoning-start","id":"reasoning-1"}\n\n');
+      controller.enqueue(
+        'data: {"type":"reasoning-delta","id":"reasoning-1","delta":"Stopping during reasoning."}\n\n',
+      );
+    },
+  });
+}
+
+function createFailedReasoningStream(): ReadableStream<string> {
+  return new ReadableStream<string>({
+    start(controller) {
+      controller.enqueue('data: {"type":"reasoning-start","id":"reasoning-1"}\n\n');
+      controller.enqueue(
+        'data: {"type":"reasoning-delta","id":"reasoning-1","delta":"Reasoning before an error."}\n\n',
+      );
+      window.setTimeout(() => controller.error(new Error("Simulated stream failure")), 20);
+    },
+  });
+}
+
 export const Conversation: Story = {
+  play: assertArgsMessagesRendered,
   parameters: {
     docs: {
       source: {
@@ -543,6 +778,7 @@ export const Conversation: Story = {
 
 export const RichMarkdown: Story = {
   args: { messages: markdownShowcase },
+  play: assertArgsMessagesRendered,
   parameters: {
     docs: {
       description: {
@@ -557,6 +793,7 @@ export const RichMarkdown: Story = {
 
 export const UserMessage: Story = {
   args: { messages: userMessage },
+  play: assertArgsMessagesRendered,
   render: ({ messages }) => renderCompactMessages(messages),
   parameters: {
     docs: {
@@ -567,6 +804,7 @@ export const UserMessage: Story = {
 
 export const AssistantMessage: Story = {
   args: { messages: assistantMessage },
+  play: assertArgsMessagesRendered,
   render: ({ messages }) => renderCompactMessages(messages),
   parameters: {
     docs: {
@@ -577,6 +815,7 @@ export const AssistantMessage: Story = {
 
 export const ImageMessage: Story = {
   args: { messages: imageMessage },
+  play: assertArgsMessagesRendered,
   parameters: {
     docs: {
       description: {
@@ -590,6 +829,11 @@ export const ImageMessage: Story = {
 
 export const CustomBlock: Story = {
   args: { messages: customBlockMessage },
+  play: async ({ canvasElement, args }) => {
+    const chat = await getRenderedChat(canvasElement);
+    await expect(chat.messages.map(({ id }) => id)).toEqual(args.messages.map(({ id }) => id));
+    await expect(chat.renderRoot.querySelector("walli-custom-block")).toBeTruthy();
+  },
   parameters: {
     docs: {
       description: {
@@ -606,6 +850,14 @@ export const CustomBlock: Story = {
 
 export const RepalceBlock: Story = {
   render: () => renderReplaceBlock(),
+  play: async ({ canvasElement }) => {
+    const chat = await getRenderedChat(canvasElement);
+    await expect(chat.messages.map(({ id }) => id)).toEqual([
+      "replace-block-user",
+      "replace-block-assistant",
+    ]);
+    await expect(chat.renderRoot.querySelector("walli-custom-block")).toBeTruthy();
+  },
   parameters: {
     docs: {
       description: {
@@ -654,6 +906,19 @@ export const ThemeToggle: Story = {
     },
   },
   render: () => renderThemeToggle(),
+  play: async ({ canvasElement }) => {
+    const button = canvasElement.querySelector<HTMLButtonElement>('button[aria-pressed="false"]')!;
+    const surface = canvasElement.querySelector<HTMLElement>("[data-theme-surface]")!;
+
+    await userEvent.click(button);
+    await expect(button).toHaveAttribute("aria-pressed", "true");
+    await expect(button).toHaveTextContent("Switch to light mode");
+    await expect(surface).toHaveClass("dark");
+
+    await userEvent.click(button);
+    await expect(button).toHaveAttribute("aria-pressed", "false");
+    await expect(surface).not.toHaveClass("dark");
+  },
 };
 
 export const ScrollControls: Story = {
@@ -689,6 +954,20 @@ export const ScrollControls: Story = {
     },
   },
   render: () => renderScrollControls(),
+  play: async ({ canvasElement }) => {
+    const chat = canvasElement.querySelector<WalliChatElement>("walli-chat")!;
+    await chat.updateComplete;
+    const viewport = chat.renderRoot.querySelector<HTMLElement>(".chat-viewport")!;
+
+    await userEvent.click(canvasElement.querySelector<HTMLInputElement>('[role="switch"]')!);
+    await userEvent.click(canvasElement.querySelector<HTMLButtonElement>("button:nth-of-type(2)")!);
+    await waitFor(() =>
+      expect(viewport.scrollTop).toBeGreaterThan(Math.max(0, viewport.scrollHeight - 800)),
+    );
+
+    await userEvent.click(canvasElement.querySelector<HTMLButtonElement>("button:first-of-type")!);
+    await waitFor(() => expect(viewport.scrollTop).toBeLessThan(2));
+  },
 };
 
 export const InsertMessages: Story = {
@@ -729,9 +1008,28 @@ export const InsertMessages: Story = {
     },
   },
   render: () => renderInsertMessages(),
+  play: async ({ canvasElement }) => {
+    const chat = canvasElement.querySelector<WalliChatElement>("walli-chat")!;
+    await chat.updateComplete;
+    const viewport = chat.renderRoot.querySelector<HTMLElement>(".chat-viewport")!;
+
+    chat.scrollTo({ top: 300, animated: false });
+    await waitFor(() => expect(viewport.scrollTop).toBeGreaterThan(0));
+    const before = viewport.scrollTop;
+
+    await userEvent.click(canvasElement.querySelector<HTMLButtonElement>("button:first-of-type")!);
+    await waitFor(() => expect(chat.messages[0]?.id).toContain("insert-top-1"));
+    await expect(viewport.scrollTop).toBeGreaterThan(before);
+  },
 };
 
 export const LoadOlderAtTop: Story = {
+  play: async ({ canvasElement }) => {
+    const chat = await getRenderedChat(canvasElement);
+    await expect(chat.defaultScrollToBottom).toBe(true);
+    await expect(chat.messages.length).toBeGreaterThanOrEqual(12);
+    await expect(chat.messages[0]?.id).toContain("pagination-");
+  },
   parameters: {
     docs: {
       description: {
@@ -746,6 +1044,12 @@ export const LoadOlderAtTop: Story = {
 };
 
 export const LoadNewerAtBottom: Story = {
+  play: async ({ canvasElement }) => {
+    const chat = await getRenderedChat(canvasElement);
+    await expect(chat.defaultScrollToBottom).toBe(false);
+    await expect(chat.messages.length).toBeGreaterThanOrEqual(12);
+    await expect(chat.messages[0]?.id).toContain("pagination-");
+  },
   parameters: {
     docs: {
       description: {
@@ -758,6 +1062,27 @@ export const LoadNewerAtBottom: Story = {
   },
   render: () => renderPaginationLoading(false),
 };
+
+async function getRenderedChat(canvasElement: HTMLElement): Promise<WalliChatElement> {
+  const chat = canvasElement.querySelector<WalliChatElement>("walli-chat");
+  await expect(chat).toBeTruthy();
+  await chat!.updateComplete;
+  await waitFor(() =>
+    expect(chat!.renderRoot.querySelectorAll("walli-message").length).toBeGreaterThan(0),
+  );
+  return chat!;
+}
+
+async function assertArgsMessagesRendered({
+  args,
+  canvasElement,
+}: {
+  args: Args;
+  canvasElement: HTMLElement;
+}): Promise<void> {
+  const chat = await getRenderedChat(canvasElement);
+  await expect(chat.messages.map(({ id }) => id)).toEqual(args.messages.map(({ id }) => id));
+}
 
 function createPaginationSource(loadAtTop: boolean): string {
   return `<walli-chat></walli-chat>
@@ -795,6 +1120,123 @@ function renderCompactMessages(messages: WalliChatMessage[]) {
       ></walli-chat>
     </div>
   `;
+}
+
+function renderReasoningStream() {
+  let chat: WalliChatElement | undefined;
+  let running = false;
+  return html`
+    <div
+      style="box-sizing:border-box;display:flex;height:560px;width:100%;flex-direction:column;gap:12px;padding:16px;background:var(--walli-background)"
+    >
+      <button
+        type="button"
+        ?disabled=${running}
+        style="align-self:flex-start;cursor:pointer;border:1px solid var(--walli-border);border-radius:999px;background:var(--walli-card);color:var(--walli-card-foreground);padding:8px 14px;font:600 13px sans-serif"
+        @click=${async (event: Event) => {
+          if (!chat || running) return;
+          const button = event.currentTarget as HTMLButtonElement;
+          running = true;
+          button.disabled = true;
+          const handle = chat.insertStreamingMessageAtBottom(createReasoningDemoStream(), {
+            getToolLabel: (toolName) =>
+              toolName === "web_search" ? "Searching the web" : toolName,
+            messageId: `reasoning-demo-${crypto.randomUUID()}`,
+            stickToBottom: true,
+          });
+          await handle.finished;
+          running = false;
+          if (button.isConnected) button.disabled = false;
+        }}
+      >
+        Start reasoning stream
+      </button>
+      <div style="min-height:0;flex:1;border:1px solid var(--walli-border);border-radius:16px">
+        <walli-chat
+          ${ref((element) => {
+            if (element?.localName === "walli-chat") chat = element as WalliChatElement;
+          })}
+          style="display:block;height:100%;width:100%;border-radius:inherit"
+          .messages=${
+            [
+              {
+                id: "reasoning-demo-prompt",
+                role: "user",
+                markdown: "Explain how temporary reasoning differs from the final answer.",
+              },
+            ] satisfies WalliChatMessage[]
+          }
+        ></walli-chat>
+      </div>
+    </div>
+  `;
+}
+
+function createReasoningDemoStream(): ReadableStream<string> {
+  const reasoning = [
+    "Inspecting the request and separating temporary reasoning from the final answer. ",
+    "I should verify how the stream changes state, how the reasoning block is measured, ",
+    "and whether completed tool calls disappear without removing the reasoning history. ",
+    "Next I will organize the answer so the visible result stays concise while this longer ",
+    "reasoning section exercises wrapping, scrolling, and collapse-height recalculation.",
+  ].join("");
+  const records: Array<UIMessageChunk & { delay: number }> = [
+    { delay: 0, type: "reasoning-start", id: "reasoning-1" },
+    ...(reasoning.match(/[\s\S]{1,7}/g) ?? []).map((text): UIMessageChunk & { delay: number } => ({
+      delay: 140,
+      type: "reasoning-delta",
+      id: "reasoning-1",
+      delta: text,
+    })),
+    { delay: 100, type: "reasoning-end", id: "reasoning-1" },
+    {
+      delay: 100,
+      type: "tool-input-available",
+      toolCallId: "reasoning-search",
+      toolName: "web_search",
+      input: { query: "reasoning UI" },
+    },
+    {
+      delay: 200,
+      type: "tool-output-available",
+      toolCallId: "reasoning-search",
+      output: { results: 1 },
+    },
+    {
+      delay: 900,
+      type: "text-start",
+      id: "text-1",
+    },
+    {
+      delay: 500,
+      type: "text-delta",
+      id: "text-1",
+      delta: "Here is the final answer. ",
+    },
+    {
+      delay: 80,
+      type: "text-delta",
+      id: "text-1",
+      delta: "Reasoning was temporary; this text remains in the message.",
+    },
+    { delay: 0, type: "text-end", id: "text-1" },
+    { delay: 0, type: "finish" },
+  ];
+  let index = 0;
+
+  return new ReadableStream<string>({
+    async pull(controller) {
+      const record = records[index++];
+      if (!record) {
+        controller.enqueue("data: [DONE]\n\n");
+        controller.close();
+        return;
+      }
+      await new Promise<void>((resolve) => window.setTimeout(resolve, record.delay));
+      const { delay: _delay, ...data } = record;
+      controller.enqueue(`data: ${JSON.stringify(data)}\n\n`);
+    },
+  });
 }
 
 function renderReplaceBlock() {
@@ -1197,61 +1639,50 @@ function renderFullChat() {
 }
 
 export function createStorySseStream(): ReadableStream<string> {
-  type StoryStreamRecord = {
-    delay: number;
-    event: "delta" | "start" | "tool-call" | "tool-result";
-    data: unknown;
-  };
+  type StoryStreamRecord = UIMessageChunk & { delay: number };
   const records: StoryStreamRecord[] = [
     {
       delay: 200,
-      event: "start",
-      data: { model: "storybook/walli-stream-demo" },
+      type: "start",
+      messageId: "storybook/walli-stream-demo",
     },
   ];
 
   const appendMarkdown = (markdown: string) => {
+    records.push({ delay: 0, type: "text-start", id: "text-1" });
     for (const text of markdown.match(/[\s\S]{1,14}/g) ?? []) {
-      records.push({ delay: 55, event: "delta", data: { text } });
+      records.push({ delay: 55, type: "text-delta", id: "text-1", delta: text });
     }
+    records.push({ delay: 0, type: "text-end", id: "text-1" });
   };
 
-  appendMarkdown(
+  const appendReasoning = (reasoning: string) => {
+    records.push({ delay: 0, type: "reasoning-start", id: "reasoning-1" });
+    for (const text of reasoning.match(/[\s\S]{1,7}/g) ?? []) {
+      records.push({ delay: 120, type: "reasoning-delta", id: "reasoning-1", delta: text });
+    }
+    records.push({ delay: 0, type: "reasoning-end", id: "reasoning-1" });
+  };
+
+  appendReasoning(
     [
-      "## Streaming analysis",
-      "",
-      "I’ll organize the response, then run one search before rendering the table.",
-      "",
-      "### Plan",
-      "",
-      "1. Inspect the conversation context",
-      "   - Read recent messages",
-      "   - Extract the user’s requirements",
-      "     - Preserve streaming behavior",
-      "     - Exercise nested block layout",
-      "2. Search for supporting information",
-      "3. Summarize the result in a table",
-      "",
+      "I’ll inspect the conversation context, identify the requirements, ",
+      "and prepare the search before writing the final response.",
     ].join("\n"),
   );
   records.push(
     {
       delay: 250,
-      event: "tool-call",
-      data: {
-        input: { query: "streaming Markdown tables and nested lists" },
-        toolCallId: "storybook-web-search",
-        toolName: "web_search",
-      },
+      type: "tool-input-available",
+      input: { query: "streaming Markdown tables and nested lists" },
+      toolCallId: "storybook-web-search",
+      toolName: "web_search",
     },
     {
       delay: 2_000,
-      event: "tool-result",
-      data: {
-        output: { results: 3 },
-        toolCallId: "storybook-web-search",
-        toolName: "web_search",
-      },
+      type: "tool-output-available",
+      output: { results: 3 },
+      toolCallId: "storybook-web-search",
     },
   );
   appendMarkdown(
@@ -1277,17 +1708,20 @@ export function createStorySseStream(): ReadableStream<string> {
       "The complex streaming demonstration is complete.",
     ].join("\n"),
   );
+  records.push({ delay: 0, type: "finish" });
   let index = 0;
 
   return new ReadableStream<string>({
     async pull(controller) {
       if (index >= records.length) {
+        controller.enqueue("data: [DONE]\n\n");
         controller.close();
         return;
       }
       const record = records[index++]!;
       await new Promise<void>((resolve) => window.setTimeout(resolve, record.delay));
-      controller.enqueue(`event: ${record.event}\ndata: ${JSON.stringify(record.data)}\n\n`);
+      const { delay: _delay, ...data } = record;
+      controller.enqueue(`data: ${JSON.stringify(data)}\n\n`);
     },
   });
 }

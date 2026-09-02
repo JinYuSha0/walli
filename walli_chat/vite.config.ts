@@ -1,13 +1,15 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import type { Plugin } from "vite";
 import { readdir, readFile } from "node:fs/promises";
 import { extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { storybookTest } from "@storybook/addon-vitest/vitest-plugin";
+import { playwright } from "@vitest/browser-playwright";
 import { visualizer } from "rollup-plugin-visualizer";
 import { createGenerator, presetWind3, type PresetWind3Theme } from "unocss";
 import { walliUnoTheme } from "./uno.theme.ts";
 import { walliChatBlocksUnoCss } from "../walli_chat_blocks/vite.config.ts";
-
 const walliChatUnoCssId = "virtual:walli-chat-uno-styles";
 const resolvedWalliChatUnoCssId = `\0${walliChatUnoCssId}`;
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
@@ -64,7 +66,6 @@ export function walliChatUnoCss(): Plugin {
           }
         }
       }
-
       const uno = await createGenerator<PresetWind3Theme>({
         presets: [presetWind3()],
         theme: walliUnoTheme,
@@ -77,11 +78,13 @@ export function walliChatUnoCss(): Plugin {
     },
   };
 }
-
 export default defineConfig(({ command, mode }) => ({
-  root: command === "serve" || mode === "demo" ? demoRoot : projectRoot,
+  root: (command === "serve" && mode !== "test") || mode === "demo" ? demoRoot : projectRoot,
   cacheDir: resolve(projectRoot, "node_modules/.vite/walli-chat-demo"),
-  publicDir: command === "serve" || mode === "demo" ? resolve(projectRoot, "public") : false,
+  publicDir:
+    (command === "serve" && mode !== "test") || mode === "demo"
+      ? resolve(projectRoot, "public")
+      : false,
   plugins: [
     walliChatUnoCss(),
     walliChatBlocksUnoCss(),
@@ -145,4 +148,31 @@ export default defineConfig(({ command, mode }) => ({
             },
           },
         },
+  test: {
+    projects: [
+      {
+        extends: true,
+        plugins: [
+          // The plugin will run tests for the stories defined in your Storybook config
+          // See options at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon#storybooktest
+          storybookTest({
+            configDir: resolve(projectRoot, ".storybook"),
+          }),
+        ],
+        test: {
+          name: "storybook",
+          browser: {
+            enabled: true,
+            headless: true,
+            provider: playwright({}),
+            instances: [
+              {
+                browser: "chromium",
+              },
+            ],
+          },
+        },
+      },
+    ],
+  },
 }));

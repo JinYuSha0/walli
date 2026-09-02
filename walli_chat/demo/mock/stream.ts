@@ -1,8 +1,9 @@
-export type DemoSseRecord = {
-  data: unknown;
-  delayAfter?: number;
-  event: "start" | "delta" | "tool-call" | "tool-result";
-};
+import type { UIMessageChunk } from "ai";
+
+export type DemoSseRecord = UIMessageChunk & { delayAfter?: number };
+
+const STREAMING_REASONING_DEMO =
+  "我会先检查问题目标和现有上下文，确认流式协议中的 reasoning-delta、text-delta 与工具调用顺序。然后验证思考内容在多行换行时的测量高度、流结束后的保留状态，以及折叠和重新展开是否会正确触发列表重新布局。最后再组织最终回答，确保正文保持简洁，同时这个较长的思考区可以覆盖滚动、自动跟随和多语言标题等界面场景。";
 
 const STREAMING_MARKDOWN_DEMO = `# Walli 流式 Markdown 演示
 
@@ -60,7 +61,9 @@ await chat.insertStreamingMessageAtBottom(response.body);
 当这段文字完整显示时，代表 ReadableStream 已经关闭，返回的 Promise 也已经在最终渲染完成后 resolved。
 `;
 
-export function createDemoSseRecords(): DemoSseRecord[] {
+export function createDemoSseRecords(
+  options: { includeReasoning?: boolean } = {},
+): DemoSseRecord[] {
   const stepsBoundary = STREAMING_MARKDOWN_DEMO.indexOf("\n\n## 执行步骤");
   const comparisonBoundary = STREAMING_MARKDOWN_DEMO.indexOf("\n\n## 数据对比");
   if (stepsBoundary < 0 || comparisonBoundary < 0) {
@@ -69,74 +72,82 @@ export function createDemoSseRecords(): DemoSseRecord[] {
 
   const records: DemoSseRecord[] = [
     {
-      data: {
-        model: "openai/gpt-5.4-mini",
-        sessionId: "3b586ffb-1f4b-4c51-a08d-cfe0963f6a1b",
-      },
       delayAfter: 700,
-      event: "start",
+      type: "start",
+      messageId: "3b586ffb-1f4b-4c51-a08d-cfe0963f6a1b",
     },
   ];
 
-  appendMarkdownRecords(records, STREAMING_MARKDOWN_DEMO.slice(0, stepsBoundary));
+  if (options.includeReasoning === true) {
+    records.push({ type: "reasoning-start", id: "reasoning-1" });
+    records.push(
+      ...(STREAMING_REASONING_DEMO.match(/[\s\S]{1,6}/g) ?? []).map((text): DemoSseRecord => ({
+        delta: text,
+        delayAfter: 120,
+        type: "reasoning-delta",
+        id: "reasoning-1",
+      })),
+    );
+    records.push({ delayAfter: 700, type: "reasoning-end", id: "reasoning-1" });
+  }
+
+  appendMarkdownRecords(records, STREAMING_MARKDOWN_DEMO.slice(0, stepsBoundary), "text-1");
   records.push(
     {
-      data: {
-        toolCallId: "call_N3vGSq4X9BrLWt72fqWPwMle",
-        toolName: "memory_search",
-        input: {
-          query: "summarize previous conversation topics and any user preferences or ongoing tasks",
-          userId: "x1JL36bVBGB7NyhCQMHik0JvJAUA4LUd",
-          clientPlatform: "web",
-          limit: 5,
-        },
+      toolCallId: "call_N3vGSq4X9BrLWt72fqWPwMle",
+      toolName: "memory_search",
+      input: {
+        query: "summarize previous conversation topics and any user preferences or ongoing tasks",
+        userId: "x1JL36bVBGB7NyhCQMHik0JvJAUA4LUd",
+        clientPlatform: "web",
+        limit: 5,
       },
       delayAfter: 4000,
-      event: "tool-call",
+      type: "tool-input-available",
     },
     {
-      data: {
-        toolCallId: "call_N3vGSq4X9BrLWt72fqWPwMle",
-        toolName: "memory_search",
-        output: { memories: [] },
-      },
-      event: "tool-result",
+      toolCallId: "call_N3vGSq4X9BrLWt72fqWPwMle",
+      output: { memories: [] },
+      type: "tool-output-available",
     },
   );
 
-  appendMarkdownRecords(records, STREAMING_MARKDOWN_DEMO.slice(stepsBoundary, comparisonBoundary));
+  appendMarkdownRecords(
+    records,
+    STREAMING_MARKDOWN_DEMO.slice(stepsBoundary, comparisonBoundary),
+    "text-2",
+  );
   records.push(
     {
-      data: {
-        toolCallId: "call_k7DP3mQw92VxA1tR8yZcH5Ln",
-        toolName: "web_search",
-        input: { query: "Walli streaming Markdown documentation" },
-      },
+      toolCallId: "call_k7DP3mQw92VxA1tR8yZcH5Ln",
+      toolName: "web_search",
+      input: { query: "Walli streaming Markdown documentation" },
       delayAfter: 4000,
-      event: "tool-call",
+      type: "tool-input-available",
     },
     {
-      data: {
-        toolCallId: "call_k7DP3mQw92VxA1tR8yZcH5Ln",
-        toolName: "web_search",
-        output: { results: [] },
-      },
-      event: "tool-result",
+      toolCallId: "call_k7DP3mQw92VxA1tR8yZcH5Ln",
+      output: { results: [] },
+      type: "tool-output-available",
     },
   );
-  appendMarkdownRecords(records, STREAMING_MARKDOWN_DEMO.slice(comparisonBoundary));
+  appendMarkdownRecords(records, STREAMING_MARKDOWN_DEMO.slice(comparisonBoundary), "text-3");
+  records.push({ type: "finish" });
 
   return records;
 }
 
-function appendMarkdownRecords(records: DemoSseRecord[], markdown: string): void {
+function appendMarkdownRecords(records: DemoSseRecord[], markdown: string, id: string): void {
+  records.push({ type: "text-start", id });
   records.push(
     ...chunkMarkdown(markdown).map((text): DemoSseRecord => ({
-      data: { text },
+      delta: text,
       delayAfter: 35,
-      event: "delta",
+      type: "text-delta",
+      id,
     })),
   );
+  records.push({ type: "text-end", id });
 }
 
 function chunkMarkdown(markdown: string): string[] {

@@ -2,6 +2,7 @@ import "./walli-message";
 import "./walli-scroll-to-bottom-button";
 import "./walli-loading";
 import { html, LitElement, nothing } from "lit";
+import type { UIMessageChunk } from "ai";
 import { customElement, eventOptions, property, query, state } from "lit/decorators.js";
 import walliChatUnoCss from "virtual:walli-chat-uno-styles";
 import prismThemeCss from "../core/styles/prism-theme.css?inline";
@@ -56,6 +57,21 @@ type PendingScrollRequest = {
 
 const STREAMING_START_MARKDOWN = ":::start-block\n";
 
+function createReasoningBlockMarkdown(
+  text: string,
+  complete: boolean,
+  collapsed: boolean,
+  labels: { thinking: string; thought: string },
+): string {
+  return `:::reasoning-block\n${JSON.stringify({
+    collapsed,
+    complete,
+    text,
+    thinkingLabel: labels.thinking,
+    thoughtLabel: labels.thought,
+  })}\n:::`;
+}
+
 @customElement("walli-chat")
 export class WalliChatElement extends LitElement {
   @property({ attribute: false }) accessor emptyContent: unknown;
@@ -69,6 +85,7 @@ export class WalliChatElement extends LitElement {
   @property({ attribute: false }) accessor bottomOcclusionHeight =
     getCommonStyle("bottomOcclusionHeight");
   private _messages: readonly WalliChatMessage[] = [];
+  private readonly blockStates = new Map<string, Map<string, unknown>>();
   private preparedMessages: PreparedChatMessage[] = [];
   private topInsertedMessageGroups: WalliChatMessage[][] = [];
   private bottomInsertedMessageGroups: WalliChatMessage[][] = [];
@@ -378,6 +395,13 @@ export class WalliChatElement extends LitElement {
     };
     signal.addEventListener("abort", handleAbort, { once: true });
     let text = "";
+    let reasoning = "";
+    let reasoningComplete = false;
+    let reasoningStarted = false;
+    const reasoningLabels = {
+      thinking: options.reasoningLabels?.thinking ?? "Thinking",
+      thought: options.reasoningLabels?.thought ?? "Thought",
+    };
     let markdown = message.markdown;
     let renderedMarkdown = "";
     let renderRaf: number | null = null;
@@ -406,6 +430,16 @@ export class WalliChatElement extends LitElement {
     };
 
     const rebuildMarkdown = () => {
+      const reasoningCollapsed = this.getBlockState(message.id, "reasoningCollapsed") === true;
+      const reasoningBlock =
+        reasoning.length > 0
+          ? createReasoningBlockMarkdown(
+              reasoning,
+              reasoningComplete,
+              reasoningCollapsed,
+              reasoningLabels,
+            )
+          : "";
       const toolBlocks = [...activeToolCalls.values()].map(
         (toolCall) =>
           `:::toolcall-block\n${JSON.stringify({
@@ -414,25 +448,51 @@ export class WalliChatElement extends LitElement {
             toolName: toolCall.toolName,
           })}\n:::`,
       );
-      markdown = [text.length > 0 ? text : STREAMING_START_MARKDOWN, ...toolBlocks].join("\n\n");
+      markdown = [
+        reasoningBlock,
+        text.length > 0
+          ? text
+          : reasoningStarted || reasoningBlock.length > 0
+            ? ""
+            : STREAMING_START_MARKDOWN,
+        ...toolBlocks,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
       scheduleRender();
     };
 
     const applyEvent = (event: ServerSentEvent) => {
-      if (event.event === "start") return;
-      if (event.event === "delta") {
-        const data = parseEventData<{ text?: unknown }>(event);
-        if (typeof data?.text === "string" && data.text.length > 0) {
-          text += data.text;
+      const data = parseEventData<UIMessageChunk>(event);
+      if (data === null) return;
+      if (data.type === "start") return;
+      if (data.type === "reasoning-start") {
+        reasoningStarted = true;
+        return;
+      }
+      if (data.type === "reasoning-delta") {
+        reasoningStarted = true;
+        if (typeof data.delta === "string" && data.delta.length > 0) reasoning += data.delta;
+        rebuildMarkdown();
+        return;
+      }
+      if (data.type === "reasoning-end" || data.type === "text-start") {
+        reasoningComplete = reasoning.length > 0;
+        rebuildMarkdown();
+        return;
+      }
+      if (data.type === "text-delta") {
+        reasoningComplete = reasoning.length > 0;
+        if (typeof data.delta === "string" && data.delta.length > 0) {
+          text += data.delta;
           for (const toolCallId of completedToolCallIds) activeToolCalls.delete(toolCallId);
           completedToolCallIds.clear();
         }
         rebuildMarkdown();
         return;
       }
-      if (event.event === "tool-call") {
-        const data = parseEventData<{ toolCallId?: unknown; toolName?: unknown }>(event);
-        if (typeof data?.toolCallId === "string" && typeof data.toolName === "string") {
+      if (data.type === "tool-input-available") {
+        if (typeof data.toolCallId === "string" && typeof data.toolName === "string") {
           activeToolCalls.set(data.toolCallId, {
             label: options.getToolLabel?.(data.toolName),
             toolCallId: data.toolCallId,
@@ -442,9 +502,8 @@ export class WalliChatElement extends LitElement {
         rebuildMarkdown();
         return;
       }
-      if (event.event === "tool-result") {
-        const data = parseEventData<{ toolCallId?: unknown }>(event);
-        if (typeof data?.toolCallId === "string" && activeToolCalls.has(data.toolCallId)) {
+      if (data.type === "tool-output-available" || data.type === "tool-output-error") {
+        if (typeof data.toolCallId === "string" && activeToolCalls.has(data.toolCallId)) {
           completedToolCallIds.add(data.toolCallId);
         }
         return;
@@ -486,10 +545,24 @@ export class WalliChatElement extends LitElement {
       pendingRender = null;
       activeToolCalls.clear();
       completedToolCallIds.clear();
-      markdown = text;
+      reasoningComplete = reasoning.length > 0;
+      const completedMessageIndex = this._messages.indexOf(message);
+      const reasoningCollapsed = this.getBlockState(message.id, "reasoningCollapsed") === true;
+      markdown = [
+        reasoning.length > 0
+          ? createReasoningBlockMarkdown(
+              reasoning,
+              reasoningComplete,
+              reasoningCollapsed,
+              reasoningLabels,
+            )
+          : "",
+        text,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
       message.markdown = markdown;
       reader?.releaseLock();
-      const completedMessageIndex = this._messages.indexOf(message);
       if (completedMessageIndex >= 0) {
         this.preparedMessages[completedMessageIndex] = createPreparedChatMessages([message])[0]!;
       }
@@ -767,13 +840,29 @@ export class WalliChatElement extends LitElement {
     return {
       isStreaming: this.activeStreamingMessageCount > 0,
       action: this.handleBlockAction,
+      getBlockState: (messageId, key) => this.getBlockState(messageId, key),
       getScrollState: () => this.getScrollState(),
+      requestRender: () => this.invalidateFrame({ keepMountedRows: true }),
+      setBlockState: (messageId, key, value) => this.setBlockState(messageId, key, value),
       insertMessagesAtBottom: (messages, options) => this.insertMessagesAtBottom(messages, options),
       insertMessagesAtTop: (messages, options) => this.insertMessagesAtTop(messages, options),
       scrollTo: (options) => this.scrollTo(options),
       scrollToIndex: (options) => this.scrollToIndex(options),
       submit: (text) => this.submitMessage(text),
     };
+  }
+
+  private getBlockState(messageId: string, key: string): unknown {
+    return this.blockStates.get(messageId)?.get(key);
+  }
+
+  private setBlockState(messageId: string, key: string, value: unknown): void {
+    let state = this.blockStates.get(messageId);
+    if (state === undefined) {
+      state = new Map();
+      this.blockStates.set(messageId, state);
+    }
+    state.set(key, value);
   }
 
   private readonly handleBlockAction = async (

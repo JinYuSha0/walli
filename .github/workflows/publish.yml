@@ -41,6 +41,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Playwright Chromium
+        run: pnpm --filter @wallilabs/chat exec playwright install --with-deps chromium
+
+      - name: Run release gate
+        run: pnpm --filter @wallilabs/chat run test:release
+
       - name: Create version pull request or publish packages
         id: changesets
         uses: changesets/action@v2

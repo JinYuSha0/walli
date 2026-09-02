@@ -87,13 +87,17 @@ export type WalliChatComposerMenuItem = {
   title: string;
 };
 
-/** A UTF-8 Server-Sent Events stream, or a promise for one, containing chat events. */
+/** A Vercel AI SDK UI Message Stream (SSE), or a promise for one. */
 export type WalliChatTextStream =
   ReadableStream<string | Uint8Array> | PromiseLike<ReadableStream<string | Uint8Array>>;
 
 export type WalliChatStreamingOptions = {
   getToolLabel?: (toolName: string) => string;
   messageId: string;
+  reasoningLabels?: {
+    thinking?: string;
+    thought?: string;
+  };
   stickToBottom?: boolean;
 };
 

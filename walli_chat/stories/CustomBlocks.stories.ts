@@ -14,6 +14,7 @@ import {
 } from "@wallilabs/chat-blocks";
 import { html } from "lit";
 import { ref } from "lit/directives/ref.js";
+import { expect, waitFor } from "storybook/test";
 import type { WalliChatBlockAction, WalliChatMessage } from "../src/types";
 import { registerBlock } from "../src/core/block-registry";
 import type { WalliChatElement } from "../src/web-components/walli-chat";
@@ -409,20 +410,41 @@ export default meta;
 type Story = StoryObj<Args>;
 
 export const AllBlocks: Story = {
+  play: assertBlockMessages,
   parameters: { docs: { source: { code: webComponentsSource, language: "ts" } } },
 };
 
 export const RecommendedReplies: Story = {
   args: { messages: [recommendedRepliesMessage] },
+  play: assertBlockMessages,
   parameters: { docs: { source: { code: recommendedRepliesSource, language: "ts" } } },
 };
 
 export const ConfirmationCard: Story = {
   args: { messages: [confirmationCardMessage] },
+  play: assertBlockMessages,
   parameters: { docs: { source: { code: confirmationCardSource, language: "ts" } } },
 };
 
 export const Notices: Story = {
   args: { messages: noticeMessages },
+  play: assertBlockMessages,
   parameters: { docs: { source: { code: noticesSource, language: "ts" } } },
 };
+
+async function assertBlockMessages({
+  args,
+  canvasElement,
+}: {
+  args: Args;
+  canvasElement: HTMLElement;
+}): Promise<void> {
+  const chat = canvasElement.querySelector<WalliChatElement>("walli-chat");
+  await expect(chat).toBeTruthy();
+  await chat!.updateComplete;
+  await expect(chat!.messages.map(({ id }) => id)).toEqual(args.messages.map(({ id }) => id));
+  await waitFor(() =>
+    expect(chat!.renderRoot.querySelectorAll("walli-message").length).toBeGreaterThan(0),
+  );
+  await expect(chat!.renderRoot.querySelector("walli-custom-block")).toBeTruthy();
+}

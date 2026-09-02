@@ -3,3 +3,7 @@
 .token.operator {
   background: transparent;
 }
+
+.token.function {
+  color: #b42346;
+}

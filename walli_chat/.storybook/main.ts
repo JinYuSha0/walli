@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 const config: StorybookConfig = {
   stories: ["../stories/**/*.stories.@(js|jsx|mjs|ts|tsx)"],
   staticDirs: ["../public"],
-  addons: ["@storybook/addon-docs", "@storybook/addon-a11y"],
+  addons: ["@storybook/addon-docs", "@storybook/addon-a11y", "@storybook/addon-vitest"],
   framework: {
     name: "@storybook/web-components-vite",
     options: {},

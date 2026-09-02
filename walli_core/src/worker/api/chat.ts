@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { Context, MiddlewareHandler } from "hono";
 import { streamSSE } from "hono/streaming";
-import { isStepCount, streamText } from "ai";
+import { isStepCount, streamText, toUIMessageStream, UI_MESSAGE_STREAM_HEADERS } from "ai";
 import { z } from "zod";
 import type { ModelMessage } from "ai";
 import {
@@ -188,11 +188,12 @@ const streamChat = async (
     throw error;
   }
 
-  c.header("X-Accel-Buffering", "no");
+  for (const [name, value] of Object.entries(UI_MESSAGE_STREAM_HEADERS)) {
+    c.header(name, value);
+  }
 
   return streamSSE(c, async (stream) => {
     try {
-      let fullContent = "";
       const result = streamText({
         model: prepared.model,
         instructions: prepared.instructions,
@@ -204,104 +205,38 @@ const streamChat = async (
         abortSignal: c.req.raw.signal,
       });
 
-      await stream.writeSSE({
-        event: "start",
-        data: stringifySseData({
+      const uiMessageStream = toUIMessageStream({
+        stream: result.stream,
+        tools: prepared.tools,
+        sendReasoning: true,
+        sendSources: true,
+        generateMessageId: () => crypto.randomUUID(),
+        messageMetadata: () => ({
           model: settings.primaryModel,
           sessionId: prepared.sessionId,
         }),
+        onError: (error) => serializeError(error).message,
       });
 
-      for await (const part of result.stream) {
-        if (part.type === "text-delta") {
-          fullContent += part.text;
-          await stream.writeSSE({
-            event: "delta",
-            data: stringifySseData({
-              text: part.text,
-            }),
-          });
-          continue;
-        }
-
-        if (part.type === "tool-call") {
-          await stream.writeSSE({
-            event: "tool-call",
-            data: stringifySseData({
-              toolCallId: part.toolCallId,
-              toolName: part.toolName,
-              input: part.input,
-            }),
-          });
-          continue;
-        }
-
-        if (part.type === "tool-result") {
-          await stream.writeSSE({
-            event: "tool-result",
-            data: stringifySseData({
-              toolCallId: part.toolCallId,
-              toolName: part.toolName,
-              output: part.output,
-            }),
-          });
-          continue;
-        }
-
-        if (part.type === "tool-error") {
-          await stream.writeSSE({
-            event: "tool-error",
-            data: stringifySseData({
-              toolCallId: part.toolCallId,
-              toolName: part.toolName,
-              error: serializeError(part.error),
-            }),
-          });
-          continue;
-        }
-
-        if (part.type === "finish") {
-          prepared.persistMessages(
-            [
-              {
-                role: "assistant",
-                content: fullContent,
-              },
-            ],
-            {
-              inputTokens: part.totalUsage.inputTokens,
-              outputTokens: part.totalUsage.outputTokens,
-            },
-          );
-          await stream.writeSSE({
-            event: "finish",
-            data: stringifySseData({
-              text: fullContent,
-              finishReason: part.finishReason,
-              sessionId: prepared.sessionId,
-              // usage: part.totalUsage,
-            }),
-          });
-          continue;
-        }
-
-        if (part.type === "error") {
-          await stream.writeSSE({
-            event: "error",
-            data: stringifySseData({
-              error: serializeError(part.error),
-            }),
-          });
-        }
+      for await (const chunk of uiMessageStream) {
+        await stream.writeSSE({ data: stringifySseData(chunk) });
       }
+      await stream.writeSSE({ data: "[DONE]" });
+
+      const [fullContent, usage] = await Promise.all([result.text, result.totalUsage]);
+      prepared.persistMessages([{ role: "assistant", content: fullContent }], {
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+      });
     } catch (error) {
       console.error(error);
       await stream.writeSSE({
-        event: "error",
         data: stringifySseData({
-          error: serializeError(error),
+          type: "error",
+          errorText: serializeError(error).message,
         }),
       });
+      await stream.writeSSE({ data: "[DONE]" });
     }
   });
 };

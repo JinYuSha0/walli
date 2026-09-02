@@ -178,6 +178,7 @@ class WalliCustomBlockElement extends BlockShellElement<CustomBlockLayout> {
   override set layout(layout: CustomBlockRenderLayout) {
     this.ctx = layout.ctx;
     this.messageId = layout.messageId;
+    this.dataset.block = layout.block.definition.name;
     super.layout = layout;
   }
 
