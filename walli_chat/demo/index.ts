@@ -156,7 +156,7 @@ if (composer) {
       },
     ]);
     composer.value = "";
-    return startDemoStreaming({ includeReasoning: true });
+    return startDemoStreaming({ includeReasoning: true, useBottomPadding: true });
   };
   composer.onCancel = stopDemoStreaming;
   composer.onUploadImages = async (files, setProgress, setResult) => {
@@ -333,32 +333,57 @@ streamButton.addEventListener("click", () => {
   void startDemoStreaming();
 });
 
-async function startDemoStreaming(options: { includeReasoning?: boolean } = {}): Promise<void> {
+const bottomPaddingButton = document.createElement("button");
+bottomPaddingButton.textContent = "流式底部占位测试";
+applyButtonStyle(bottomPaddingButton);
+bottomPaddingButton.addEventListener("click", () => {
+  if (activeStreamingHandle !== null) {
+    stopDemoStreaming();
+    return;
+  }
+
+  void startDemoStreaming({ short: true, useBottomPadding: true });
+});
+
+async function startDemoStreaming(
+  options: { includeReasoning?: boolean; short?: boolean; useBottomPadding?: boolean } = {},
+): Promise<void> {
   if (!chat || activeStreamingHandle !== null) return;
 
   streamButton.textContent = "再次点击停止";
 
   try {
-    const handle = chat.insertStreamingMessageAtBottom(createMarkdownDemoStream(options), {
-      getToolLabel: (toolName) => `调用 ${toolName} 工具中`,
+    const stream = createMarkdownDemoStream(options);
+    const commonOptions = {
+      getToolLabel: (toolName: string) => `调用 ${toolName} 工具中`,
       messageId: `demo-stream-${Date.now()}`,
       reasoningLabels: {
         thinking: "思考中",
         thought: "已思考",
       },
-      stickToBottom: true,
-    });
+    };
+    const handle = options.useBottomPadding
+      ? chat.insertStreamingMessageAtBottom(stream, {
+          ...commonOptions,
+          bottomPaddingHeight: (chat.clientHeight * 2) / 3,
+        })
+      : chat.insertStreamingMessageAtBottom(stream, {
+          ...commonOptions,
+          stickToBottom: true,
+        });
     activeStreamingHandle = handle;
     await handle.finished;
   } finally {
     activeStreamingHandle = null;
     streamButton.textContent = "流式输出长 Markdown";
+    bottomPaddingButton.textContent = "流式底部占位测试";
   }
 }
 
 function stopDemoStreaming(): void {
   activeStreamingHandle?.abort("Demo streaming stopped by user");
   streamButton.textContent = "正在停止…";
+  bottomPaddingButton.textContent = "正在停止…";
 }
 
 const indexInput = document.createElement("input");
@@ -446,6 +471,7 @@ controlsContent.append(
   appendWithoutActionsButton,
   themeButton,
   streamButton,
+  bottomPaddingButton,
   indexInput,
   scrollButton,
   animatedScrollButton,
@@ -554,8 +580,36 @@ function createBottomInsertionBatch(): WalliChatMessage[] {
   ];
 }
 
-function createMarkdownDemoStream(options: { includeReasoning?: boolean }): ReadableStream<string> {
-  const records = createDemoSseRecords(options);
+function createMarkdownDemoStream(options: {
+  includeReasoning?: boolean;
+  short?: boolean;
+}): ReadableStream<string> {
+  const records = options.short
+    ? [
+        { type: "start" },
+        ...(options.includeReasoning
+          ? [
+              { type: "reasoning-start", id: "short-reasoning" },
+              {
+                type: "reasoning-delta",
+                id: "short-reasoning",
+                delta: "正在整理一个简短回复。",
+                delayAfter: 400,
+              },
+              { type: "reasoning-end", id: "short-reasoning" },
+            ]
+          : []),
+        { type: "text-start", id: "short-text" },
+        {
+          type: "text-delta",
+          id: "short-text",
+          delta: "这是一条简短回复。你可以向上滚动，测试底部占位是否按滚动距离逐步收回。",
+          delayAfter: 500,
+        },
+        { type: "text-end", id: "short-text" },
+        { type: "finish" },
+      ]
+    : createDemoSseRecords(options);
   let offset = 0;
 
   return new ReadableStream<string>({

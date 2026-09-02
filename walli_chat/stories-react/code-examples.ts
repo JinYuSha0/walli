@@ -235,8 +235,8 @@ export function FullChat() {
           activeStream.current = chat.current.insertStreamingMessageAtBottom(
             createStorySseStream(),
             {
+              bottomPaddingHeight: ((chat.current.element?.clientHeight ?? 720) * 2) / 3,
               messageId: crypto.randomUUID(),
-              stickToBottom: true,
             },
           );
           await activeStream.current.finished;

@@ -18,12 +18,13 @@ import type { WalliChatMessage } from "../types";
 
 export function createPreparedChatMessages(
   messages: readonly WalliChatMessage[],
-  options: { streaming?: boolean } = {},
+  options: { bottomPaddingHeight?: number; streaming?: boolean } = {},
 ): PreparedChatMessage[] {
   return messages.map((seed) => {
     const blocks = parseMarkdownBlocks(seed.markdown, options.streaming);
     return {
       blocks: seed.role === "user" ? groupUserMessageAssets(blocks) : blocks,
+      bottomPaddingHeight: options.bottomPaddingHeight,
       markdown: seed.markdown,
       id: seed.id,
       role: seed.role,

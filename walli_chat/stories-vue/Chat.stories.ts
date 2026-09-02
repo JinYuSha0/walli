@@ -323,58 +323,69 @@ const PaginationDemo = defineComponent({
   },
 });
 
-const FullChatDemo = component("FullChatDemo", () => {
-  const chat = ref<WalliChatExpose>();
-  const value = ref("");
-  let active: WalliChatStreamingHandle | undefined;
-  const submit = async (markdown: string) => {
-    if (!chat.value || !markdown) return;
-    chat.value.insertMessagesAtBottom(
-      [{ id: `vue-user-${crypto.randomUUID()}`, role: "user", markdown }],
-      { stick: true },
-    );
-    value.value = "";
-    active = chat.value.insertStreamingMessageAtBottom(createStorySseStream(), {
-      getToolLabel: (name) => ({ web_search: "Searching the web" })[name] ?? name,
-      messageId: `vue-assistant-${crypto.randomUUID()}`,
-      stickToBottom: true,
-    });
-    try {
-      await active.finished;
-    } finally {
-      active = undefined;
-    }
-  };
-  return () =>
-    h("div", { style: { height: "720px", width: "100%" } }, [
-      h(
-        WalliChat,
-        { ref: chat, messages: fullChatWelcomeMessages, style },
-        {
-          default: () =>
-            h(WalliChatComposer, {
-              slot: "composer",
-              placeholder: "Message Walli",
-              value: value.value,
-              "onUpdate:value": (next: string) => (value.value = next),
-              menuItems: [
-                { icon: Search, title: "Search the web", onClick: () => console.info("Search") },
-                { icon: ImagePlus, title: "Insert image", onClick: () => console.info("Image") },
-                {
-                  icon: FileSpreadsheet,
-                  title: "Insert spreadsheet",
-                  onClick: () => console.info("Spreadsheet"),
-                },
-              ],
-              onUploadImages: mockFullChatUpload,
-              onTranscribe: mockFullChatTranscription,
-              onCancel: () => active?.abort(new DOMException("Cancelled", "AbortError")),
-              onSubmit: submit,
-            }),
-        },
-      ),
-    ]);
-});
+const FullChatDemo = component(
+  "FullChatDemo",
+  (props: { mode: "bottomPadding" | "stickToBottom" }) => {
+    const chat = ref<WalliChatExpose>();
+    const value = ref("");
+    let active: WalliChatStreamingHandle | undefined;
+    const submit = async (markdown: string) => {
+      if (!chat.value || !markdown) return;
+      chat.value.insertMessagesAtBottom(
+        [{ id: `vue-user-${crypto.randomUUID()}`, role: "user", markdown }],
+        { stick: true },
+      );
+      value.value = "";
+      const commonOptions = {
+        getToolLabel: (name) => ({ web_search: "Searching the web" })[name] ?? name,
+        messageId: `vue-assistant-${crypto.randomUUID()}`,
+      };
+      active = chat.value.insertStreamingMessageAtBottom(
+        createStorySseStream(),
+        props.mode === "bottomPadding"
+          ? {
+              ...commonOptions,
+              bottomPaddingHeight: ((chat.value.element?.clientHeight ?? 720) * 2) / 3,
+            }
+          : { ...commonOptions, stickToBottom: true },
+      );
+      try {
+        await active.finished;
+      } finally {
+        active = undefined;
+      }
+    };
+    return () =>
+      h("div", { style: { height: "720px", width: "100%" } }, [
+        h(
+          WalliChat,
+          { ref: chat, messages: fullChatWelcomeMessages, style },
+          {
+            default: () =>
+              h(WalliChatComposer, {
+                slot: "composer",
+                placeholder: "Message Walli",
+                value: value.value,
+                "onUpdate:value": (next: string) => (value.value = next),
+                menuItems: [
+                  { icon: Search, title: "Search the web", onClick: () => console.info("Search") },
+                  { icon: ImagePlus, title: "Insert image", onClick: () => console.info("Image") },
+                  {
+                    icon: FileSpreadsheet,
+                    title: "Insert spreadsheet",
+                    onClick: () => console.info("Spreadsheet"),
+                  },
+                ],
+                onUploadImages: mockFullChatUpload,
+                onTranscribe: mockFullChatTranscription,
+                onCancel: () => active?.abort(new DOMException("Cancelled", "AbortError")),
+                onSubmit: submit,
+              }),
+          },
+        ),
+      ]);
+  },
+);
 
 const ReasoningStreamDemo = component("ReasoningStreamDemo", () => {
   const chat = ref<WalliChatExpose>();
@@ -678,7 +689,19 @@ async function onEndReached() {
 </template>`;
 }
 
-export const FullChat: Story = { render: render(FullChatDemo), parameters: source(fullChatCode) };
+export const FullChatBottomPadding: Story = {
+  render: render(FullChatDemo, { mode: "bottomPadding" }),
+  parameters: source(
+    fullChatCode.replace(
+      "{ messageId: crypto.randomUUID(), stickToBottom: true },",
+      `{\n      messageId: crypto.randomUUID(),\n      bottomPaddingHeight: ((chat.value.element?.clientHeight ?? 720) * 2) / 3,\n    },`,
+    ),
+  ),
+};
+export const FullChatStickToBottom: Story = {
+  render: render(FullChatDemo, { mode: "stickToBottom" }),
+  parameters: source(fullChatCode),
+};
 export const ReasoningStream: Story = {
   render: render(ReasoningStreamDemo),
   parameters: source(reasoningStreamCode),

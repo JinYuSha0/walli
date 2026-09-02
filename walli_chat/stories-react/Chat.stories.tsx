@@ -69,9 +69,18 @@ const meta = {
 export default meta;
 type Story = StoryObj<Args>;
 
-export const FullChat: Story = {
-  render: () => <FullChatDemo />,
+export const FullChatBottomPadding: Story = {
+  render: () => <FullChatDemo mode="bottomPadding" />,
   parameters: source(exampleSources.fullChat),
+};
+export const FullChatStickToBottom: Story = {
+  render: () => <FullChatDemo mode="stickToBottom" />,
+  parameters: source(
+    exampleSources.fullChat.replace(
+      "bottomPaddingHeight: ((chat.current.element?.clientHeight ?? 720) * 2) / 3,",
+      "stickToBottom: true,",
+    ),
+  ),
 };
 export const ReasoningStream: Story = {
   render: () => <ReasoningStreamDemo />,
@@ -378,7 +387,7 @@ function PaginationDemo({ loadAtTop }: { loadAtTop: boolean }) {
   );
 }
 
-function FullChatDemo() {
+function FullChatDemo({ mode }: { mode: "bottomPadding" | "stickToBottom" }) {
   const chat = useRef<WalliChatRef>(null);
   const activeStream = useRef<WalliChatStreamingHandle | undefined>(undefined);
   const [value, setValue] = useState("");
@@ -410,13 +419,18 @@ function FullChatDemo() {
               { stick: true },
             );
             setValue("");
+            const commonOptions = {
+              getToolLabel: (name: string) => ({ web_search: "Searching the web" })[name] ?? name,
+              messageId: `react-assistant-${crypto.randomUUID()}`,
+            };
             activeStream.current = chat.current.insertStreamingMessageAtBottom(
               createStorySseStream(),
-              {
-                getToolLabel: (name) => ({ web_search: "Searching the web" })[name] ?? name,
-                messageId: `react-assistant-${crypto.randomUUID()}`,
-                stickToBottom: true,
-              },
+              mode === "bottomPadding"
+                ? {
+                    ...commonOptions,
+                    bottomPaddingHeight: ((chat.current.element?.clientHeight ?? 720) * 2) / 3,
+                  }
+                : { ...commonOptions, stickToBottom: true },
             );
             try {
               await activeStream.current.finished;

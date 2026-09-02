@@ -82,6 +82,7 @@ export type PreparedBlock =
 
 export type PreparedChatMessage = {
   blocks: PreparedBlock[];
+  bottomPaddingHeight?: number;
   markdown: string;
   id: string;
   role: "assistant" | "user";

@@ -167,12 +167,17 @@ export const reasoningBlockDefinition = {
       width: availableWidth,
     };
   },
-  render({ ctx, data, messageId }) {
+  render({ ctx, data, messageId, width }) {
     const paddingY = getStreamBlockStyle("reasoningPaddingY");
     const headerLineHeight = getStreamBlockStyle("reasoningHeaderLineHeight");
     const lineHeight = getStreamBlockStyle("reasoningLineHeight");
     const textTop = paddingY + headerLineHeight + getStreamBlockStyle("reasoningGap");
     const contentInset = getStreamBlockStyle("reasoningContentInset");
+    const textLayout = layoutWithLines(
+      data.prepared,
+      Math.max(1, width - contentInset),
+      lineHeight,
+    );
     const statusLabel =
       data.complete === true
         ? (data.thoughtLabel ?? "Thought")
@@ -224,11 +229,18 @@ export const reasoningBlockDefinition = {
                 style=${`left:0;top:${textTop}px;bottom:${paddingY}px;width:1px;`}
                 aria-hidden="true"
               ></div>
-              <div
-                class="absolute whitespace-pre-wrap break-words"
-                style=${`left:${contentInset}px;right:0;top:${textTop}px;font:${getStreamBlockStyle("reasoningFont")};line-height:${lineHeight}px;`}
-                .textContent=${data.text}
-              ></div>
+              <div class="whitespace-pre-wrap">
+                <span class="sr-only">${data.text}</span>
+                ${textLayout.lines.map(
+                  (line, index) =>
+                    html`<span
+                      class="absolute whitespace-pre"
+                      style=${`left:${contentInset}px;right:0;top:${textTop + index * lineHeight}px;height:${lineHeight}px;font:${getStreamBlockStyle("reasoningFont")};line-height:${lineHeight}px;`}
+                      aria-hidden="true"
+                      >${line.text}</span
+                    >`,
+                )}
+              </div>
             `
       }
     </div>`;

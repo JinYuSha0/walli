@@ -91,15 +91,30 @@ export type WalliChatComposerMenuItem = {
 export type WalliChatTextStream =
   ReadableStream<string | Uint8Array> | PromiseLike<ReadableStream<string | Uint8Array>>;
 
-export type WalliChatStreamingOptions = {
+type WalliChatStreamingOptionsBase = {
   getToolLabel?: (toolName: string) => string;
   messageId: string;
   reasoningLabels?: {
     thinking?: string;
     thought?: string;
   };
-  stickToBottom?: boolean;
 };
+
+export type WalliChatStreamingOptions = WalliChatStreamingOptionsBase &
+  (
+    | {
+        /**
+         * Minimum height, in pixels, reserved from the streaming message's top
+         * to the bottom. This mode positions once, then does not follow output.
+         */
+        bottomPaddingHeight: number;
+        stickToBottom?: never;
+      }
+    | {
+        bottomPaddingHeight?: never;
+        stickToBottom?: boolean;
+      }
+  );
 
 export type WalliChatStreamingHandle = {
   abort: (reason?: unknown) => void;

@@ -221,6 +221,9 @@ export class WalliChatElement extends LitElement {
           ? { animated, target: optionsOrX.target }
           : { animated, top: optionsOrX.top ?? 0 };
     if ("target" in request && request.target === "bottom") {
+      if (this.clearStreamingBottomPadding()) {
+        this.invalidateFrame({ keepMountedRows: true });
+      }
       this.isUserScrolling = false;
       this.isScrollingToBottom = true;
       this.isAtBottom = true;
@@ -353,10 +356,20 @@ export class WalliChatElement extends LitElement {
       markdown: STREAMING_START_MARKDOWN,
     };
     const parser = new StreamingMarkdownParser();
+    const bottomPaddingHeight = Number.isFinite(options.bottomPaddingHeight)
+      ? Math.max(0, options.bottomPaddingHeight ?? 0)
+      : 0;
+    if (bottomPaddingHeight > 0) this.clearStreamingBottomPadding();
     this.applyMessagesInsertion("bottom", [...this._messages, message], this._messages, {
+      bottomPaddingHeight: bottomPaddingHeight || undefined,
       streaming: true,
     });
-    if (options.stickToBottom) {
+    if (bottomPaddingHeight > 0) {
+      this.isScrollingToBottom = true;
+      this.isAtBottom = true;
+      this.pendingScrollRequest = { animated: true, target: "bottom" };
+      this.scheduleScrollRequest();
+    } else if (options.stickToBottom) {
       this.handleScrollToBottom();
     }
 
@@ -578,7 +591,11 @@ export class WalliChatElement extends LitElement {
       message.markdown = markdown;
       reader?.releaseLock();
       if (completedMessageIndex >= 0) {
-        this.preparedMessages[completedMessageIndex] = createPreparedChatMessages([message])[0]!;
+        const bottomPaddingHeight =
+          this.preparedMessages[completedMessageIndex]?.bottomPaddingHeight;
+        this.preparedMessages[completedMessageIndex] = createPreparedChatMessages([message], {
+          bottomPaddingHeight,
+        })[0]!;
       }
       this.invalidateFrame({ keepMountedRows: true });
       await this.updateComplete;
@@ -604,6 +621,7 @@ export class WalliChatElement extends LitElement {
       id: message.id,
       role: "assistant",
       showActions: message.showActions ?? true,
+      bottomPaddingHeight: this.preparedMessages[index]?.bottomPaddingHeight,
       streaming: true,
     };
     this.invalidateFrame({ keepMountedRows: true });
@@ -611,6 +629,7 @@ export class WalliChatElement extends LitElement {
 
   private shouldFollowStreamingMessage(): boolean {
     return (
+      !this.hasStreamingBottomPadding() &&
       this.isAtBottom &&
       !this.isUserScrolling &&
       (this.pendingScrollRequest === null || this.pendingScrollRequest.source === "streaming")
@@ -640,7 +659,7 @@ export class WalliChatElement extends LitElement {
       if (this.containerSize.width !== width || this.containerSize.height !== height) {
         this.containerSize = { width, height };
         this.scheduleProjection();
-        if (this.isAtBottom) {
+        if (this.isAtBottom && !this.hasStreamingBottomPadding()) {
           this.pendingScrollRequest = { animated: false, target: "bottom" };
           this.scheduleScrollRequest();
         } else if (this.pendingScrollRequest !== null) {
@@ -765,7 +784,7 @@ export class WalliChatElement extends LitElement {
 
   private handleBottomOcclusionChange(): void {
     this.invalidateFrame({ keepMountedRows: true });
-    if (this.isAtBottom) {
+    if (this.isAtBottom && !this.hasStreamingBottomPadding()) {
       this.pendingScrollRequest = { animated: false, target: "bottom" };
       this.scheduleScrollRequest();
     }
@@ -805,6 +824,9 @@ export class WalliChatElement extends LitElement {
   private handleScroll(event: Event) {
     const viewport = event.currentTarget as HTMLDivElement | null;
     let scrollTop = viewport?.scrollTop ?? 0;
+    const upwardScrollDistance = this.isUserScrolling
+      ? Math.max(0, this.viewportScrollTop - scrollTop)
+      : 0;
     if (
       viewport !== null &&
       this.isUserScrolling &&
@@ -813,6 +835,9 @@ export class WalliChatElement extends LitElement {
     ) {
       scrollTop = this.activeTopInsertionScrollFloor;
       viewport.scrollTop = scrollTop;
+    }
+    if (upwardScrollDistance > 0) {
+      this.reduceStreamingBottomPadding(upwardScrollDistance);
     }
     this.viewportScrollTop = scrollTop;
     if (viewport !== null) {
@@ -982,12 +1007,10 @@ export class WalliChatElement extends LitElement {
       previousFrame.composerBottomInsetHeight === this.composerBottomInsetHeight;
 
     if (!canReuseFrame) {
-      this.frame = buildConversationFrame(
-        this.preparedMessages,
+      this.frame = this.buildConversationFrame(
         chatWidth,
         topOcclusionHeight,
         bottomOcclusionHeight,
-        this.composerBottomInsetHeight,
       );
     }
 
@@ -1102,13 +1125,7 @@ export class WalliChatElement extends LitElement {
       previousFrame.bottomOcclusionHeight === bottomOcclusionHeight &&
       previousFrame.composerBottomInsetHeight === this.composerBottomInsetHeight
         ? previousFrame
-        : buildConversationFrame(
-            this.preparedMessages,
-            chatWidth,
-            topOcclusionHeight,
-            bottomOcclusionHeight,
-            this.composerBottomInsetHeight,
-          );
+        : this.buildConversationFrame(chatWidth, topOcclusionHeight, bottomOcclusionHeight);
 
     this.frame = frame;
     if (
@@ -1130,6 +1147,63 @@ export class WalliChatElement extends LitElement {
     }
 
     return frame;
+  }
+
+  private buildConversationFrame(
+    chatWidth: number,
+    topOcclusionHeight: number,
+    bottomOcclusionHeight: number,
+  ): ConversationFrame {
+    const frame = buildConversationFrame(
+      this.preparedMessages,
+      chatWidth,
+      topOcclusionHeight,
+      bottomOcclusionHeight,
+      this.composerBottomInsetHeight,
+    );
+    const preparedMessage = this.getStreamingBottomPaddingMessage();
+    if (preparedMessage === undefined) return frame;
+    const message = frame.messages.find((item) => item.prepared === preparedMessage);
+    if (message === undefined) return frame;
+    const remainingHeight = Math.max(
+      0,
+      message.prepared.bottomPaddingHeight! - message.frame.totalHeight,
+    );
+    return remainingHeight === 0
+      ? frame
+      : { ...frame, totalHeight: frame.totalHeight + remainingHeight };
+  }
+
+  private reduceStreamingBottomPadding(distance: number): void {
+    const message = this.getStreamingBottomPaddingMessage();
+    if (message === undefined) return;
+    const messageHeight = this.frame?.messages.find((item) => item.prepared === message)?.frame
+      .totalHeight;
+    const remainingHeight = Math.max(
+      0,
+      message.bottomPaddingHeight! - (messageHeight ?? message.bottomPaddingHeight!),
+    );
+    message.bottomPaddingHeight =
+      distance >= remainingHeight ? undefined : message.bottomPaddingHeight! - distance;
+    this.invalidateFrame({ keepMountedRows: true });
+  }
+
+  private hasStreamingBottomPadding(): boolean {
+    return this.getStreamingBottomPaddingMessage()?.streaming === true;
+  }
+
+  private getStreamingBottomPaddingMessage(): PreparedChatMessage | undefined {
+    return this.preparedMessages.findLast((message) => (message.bottomPaddingHeight ?? 0) > 0);
+  }
+
+  private clearStreamingBottomPadding(): boolean {
+    let changed = false;
+    for (const message of this.preparedMessages) {
+      if (message.bottomPaddingHeight === undefined) continue;
+      message.bottomPaddingHeight = undefined;
+      changed = true;
+    }
+    return changed;
   }
 
   private resolveScrollTop(
@@ -1292,7 +1366,7 @@ export class WalliChatElement extends LitElement {
     kind: "top" | "bottom",
     nextMessages: readonly WalliChatMessage[],
     previousMessages: readonly WalliChatMessage[],
-    preparationOptions?: { streaming?: boolean },
+    preparationOptions?: { bottomPaddingHeight?: number; streaming?: boolean },
   ): void {
     const shouldMaintainAnchor = kind === "top" && this.pendingScrollRequest === null;
     const viewportHeight = this.viewportElement?.clientHeight ?? this.containerSize.height;

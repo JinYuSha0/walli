@@ -419,13 +419,30 @@ const meta: Meta<Args> = {
 export default meta;
 type Story = StoryObj<Args>;
 
-export const FullChat: Story = {
-  play: async ({ canvasElement }) => {
-    const chat = await getRenderedChat(canvasElement);
-    await expect(chat.messages).toHaveLength(1);
-    await expect(chat.messages[0]?.id).toBe("full-chat-welcome");
-    await expect(canvasElement.querySelector('walli-chat-composer[slot="composer"]')).toBeTruthy();
+const fullChatPlay: NonNullable<Story["play"]> = async ({ canvasElement }) => {
+  const chat = await getRenderedChat(canvasElement);
+  await expect(chat.messages).toHaveLength(1);
+  await expect(chat.messages[0]?.id).toBe("full-chat-welcome");
+  await expect(canvasElement.querySelector('walli-chat-composer[slot="composer"]')).toBeTruthy();
+};
+
+export const FullChatBottomPadding: Story = {
+  play: fullChatPlay,
+  parameters: {
+    docs: {
+      source: {
+        code: `chat.insertStreamingMessageAtBottom(stream, {
+  messageId: crypto.randomUUID(),
+  bottomPaddingHeight: (chat.clientHeight * 2) / 3,
+});`,
+      },
+    },
   },
+  render: () => renderFullChat("bottomPadding"),
+};
+
+export const FullChatStickToBottom: Story = {
+  play: fullChatPlay,
   parameters: {
     docs: {
       description: {
@@ -530,7 +547,7 @@ export const FullChat: Story = {
       },
     },
   },
-  render: () => renderFullChat(),
+  render: () => renderFullChat("stickToBottom"),
 };
 
 const reasoningStreamSource = `<walli-chat></walli-chat>
@@ -1557,7 +1574,7 @@ function renderPaginationLoading(loadAtTop: boolean) {
   `;
 }
 
-function renderFullChat() {
+function renderFullChat(mode: "bottomPadding" | "stickToBottom") {
   let chat: WalliChatElement | undefined;
   let composer: WalliChatComposerElement | undefined;
   let activeStream: WalliChatStreamingHandle | undefined;
@@ -1618,14 +1635,22 @@ function renderFullChat() {
               { stick: true },
             );
             composer.value = "";
-            activeStream = chat.insertStreamingMessageAtBottom(createStorySseStream(), {
+            const commonOptions = {
               getToolLabel: (toolName) =>
                 ({
                   web_search: "Searching the web",
                 })[toolName] ?? toolName,
               messageId: `full-chat-assistant-${crypto.randomUUID()}`,
-              stickToBottom: true,
-            });
+            };
+            activeStream = chat.insertStreamingMessageAtBottom(
+              createStorySseStream(),
+              mode === "bottomPadding"
+                ? {
+                    ...commonOptions,
+                    bottomPaddingHeight: (chat.clientHeight * 2) / 3,
+                  }
+                : { ...commonOptions, stickToBottom: true },
+            );
             try {
               await activeStream.finished;
             } finally {
