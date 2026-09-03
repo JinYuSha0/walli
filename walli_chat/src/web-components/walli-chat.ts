@@ -136,6 +136,13 @@ export class WalliChatElement extends LitElement {
   set messages(messages: readonly WalliChatMessage[]) {
     const previousMessages = this._messages;
     if (Object.is(messages, previousMessages)) return;
+    if (
+      messages.length === previousMessages.length &&
+      messages.every((message, index) => this.isSameMessage(message, previousMessages[index]))
+    ) {
+      this._messages = messages;
+      return;
+    }
     this.topInsertedMessageGroups = [];
     this.bottomInsertedMessageGroups = [];
 
@@ -414,7 +421,6 @@ export class WalliChatElement extends LitElement {
     let text = "";
     let reasoning = "";
     let reasoningComplete = false;
-    let reasoningStarted = false;
     let streamError = "";
     const reasoningLabels = {
       thinking: options.reasoningLabels?.thinking ?? "Thinking",
@@ -466,18 +472,13 @@ export class WalliChatElement extends LitElement {
             toolName: toolCall.toolName,
           })}\n:::`,
       );
-      markdown = [
+      const blocks = [
         reasoningBlock,
-        text.length > 0
-          ? text
-          : reasoningStarted || reasoningBlock.length > 0 || streamError.length > 0
-            ? ""
-            : STREAMING_START_MARKDOWN,
+        text,
         streamError.length > 0 ? createErrorBlockMarkdown(streamError) : "",
         ...toolBlocks,
-      ]
-        .filter(Boolean)
-        .join("\n\n");
+      ].filter(Boolean);
+      markdown = (blocks.length > 0 ? blocks : [STREAMING_START_MARKDOWN]).join("\n\n");
       scheduleRender();
     };
 
@@ -486,11 +487,9 @@ export class WalliChatElement extends LitElement {
       if (data === null) return;
       if (data.type === "start") return;
       if (data.type === "reasoning-start") {
-        reasoningStarted = true;
         return;
       }
       if (data.type === "reasoning-delta") {
-        reasoningStarted = true;
         if (typeof data.delta === "string" && data.delta.length > 0) reasoning += data.delta;
         rebuildMarkdown();
         return;
