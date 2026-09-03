@@ -7,7 +7,7 @@ import { memorySearchTool, memorySummaryTool } from "./memory";
 import { scheduledTaskTool } from "./scheduled-task";
 import { textToVoiceTool } from "./text-to-voice";
 import { timestampTool } from "./timestamp";
-import { voiceToTextTool } from "./voice-to-text";
+import { createVoiceToTextModelInput, voiceToTextTool } from "./voice-to-text";
 import type { ToolConfig } from "../const";
 
 export const BUILT_IN_TOOLS = [
@@ -25,6 +25,7 @@ export const BUILT_IN_TOOLS = [
 // This lets callers pass schema-valid input directly and avoids an extra planner LLM call.
 export const BUILT_IN_TOOL_MODEL_INPUT_ADAPTERS = {
   [imageToTextTool.name]: createImageToTextModelInput,
+  [voiceToTextTool.name]: createVoiceToTextModelInput,
 } satisfies Record<string, (input: Record<string, unknown>) => Record<string, unknown>>;
 
 export const BUILT_IN_TOOL_MODEL_OUTPUT_ADAPTERS = {

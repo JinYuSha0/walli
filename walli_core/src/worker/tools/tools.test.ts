@@ -881,11 +881,17 @@ describe("chat tools", () => {
     ).resolves.toEqual({
       ok: true,
       input: {
-        file: "https://example.com/audio.mp3",
+        audio: "https://example.com/audio.mp3",
+        initial_prompt: undefined,
+        language: undefined,
+        task: "transcribe",
       },
     });
-    expect(aiRun).toHaveBeenCalledWith("openai/gpt-4o-transcribe", {
-      file: "https://example.com/audio.mp3",
+    expect(aiRun).toHaveBeenCalledWith("@cf/openai/whisper-large-v3-turbo", {
+      audio: "https://example.com/audio.mp3",
+      initial_prompt: undefined,
+      language: undefined,
+      task: "transcribe",
     });
 
     await expect(
@@ -1085,11 +1091,17 @@ describe("chat tools", () => {
     ).resolves.toEqual({
       ok: true,
       input: {
-        file: "data:audio/ogg;base64,AAAA",
+        audio: "AAAA",
+        initial_prompt: undefined,
+        language: undefined,
+        task: "transcribe",
       },
     });
-    expect(aiRun).toHaveBeenCalledWith("openai/gpt-4o-transcribe", {
-      file: "data:audio/ogg;base64,AAAA",
+    expect(aiRun).toHaveBeenCalledWith("@cf/openai/whisper-large-v3-turbo", {
+      audio: "AAAA",
+      initial_prompt: undefined,
+      language: undefined,
+      task: "transcribe",
     });
   });
 
@@ -1168,7 +1180,7 @@ describe("chat tools", () => {
       ok: true,
       input: {},
     });
-    expect(aiRun).toHaveBeenCalledWith("openai/gpt-4o-transcribe", {});
+    expect(aiRun).toHaveBeenCalledWith("@cf/openai/whisper-large-v3-turbo", {});
   });
 
   it("adapts image model results to text output", async () => {

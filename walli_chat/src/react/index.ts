@@ -57,6 +57,8 @@ import type {
   WalliChatTextStream,
 } from "../types";
 
+export { Trash2 as WalliChatTrashIcon } from "lucide";
+
 export type WalliChatComposerProps = {
   className?: string;
   disabled?: boolean;

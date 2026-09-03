@@ -25,14 +25,14 @@ import { createUserDoName } from "../durable-objects/user/types";
 
 const chatMessageSchema = z
   .object({
-    role: z.enum(["user", "assistant"]),
+    role: z.literal("user"),
     content: z.string(),
   })
   .strict();
 
 const internalChatMessageSchema = z
   .object({
-    role: z.enum(["system", "user", "assistant"]),
+    role: z.literal("user"),
     content: z.string(),
   })
   .strict();
@@ -42,20 +42,49 @@ const chatRequestSchema = z
     appId: z.string().optional(),
     userId: z.string().trim().min(1),
     token: z.string().optional(),
-    sessionId: z.string().trim().min(1).optional(),
-    messages: z.array(chatMessageSchema).min(1),
+    sessionId: z.string().trim().min(1),
+    messages: z.array(chatMessageSchema).length(1),
   })
   .strict();
 
 const internalChatRequestSchema = z
   .object({
-    sessionId: z.string().trim().min(1).optional(),
-    messages: z.array(internalChatMessageSchema).min(1),
+    sessionId: z.string().trim().min(1),
+    messages: z.array(internalChatMessageSchema).length(1),
   })
   .strict();
 
+const chatHistoryRequestSchema = z
+  .object({
+    appId: z.string().optional(),
+    userId: z.string().trim().min(1),
+    token: z.string().optional(),
+    sessionId: z.string().trim().min(1),
+    cursor: z.number().int().positive().optional(),
+    limit: z.number().int().min(1).max(100).default(30),
+  })
+  .strict();
+
+const chatSessionRequestSchema = z
+  .object({
+    appId: z.string().optional(),
+    userId: z.string().trim().min(1),
+    token: z.string().optional(),
+  })
+  .strict();
+
+const chatSessionDeleteRequestSchema = chatSessionRequestSchema.extend({
+  sessionId: z.string().trim().min(1),
+});
+
+const internalChatHistoryQuerySchema = z.object({
+  sessionId: z.string().trim().min(1),
+  cursor: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+});
+
 type ParsedChatRequest = {
-  sessionId?: string;
+  sessionId: string;
   messages: Array<z.infer<typeof internalChatMessageSchema>>;
 };
 
@@ -73,6 +102,58 @@ const serializeError = (error: unknown) => {
 };
 
 const stringifySseData = (data: unknown) => JSON.stringify(data);
+
+const toWebHistoryMessage = (message: { id: string; content: string }) => {
+  try {
+    const parsed = JSON.parse(message.content) as unknown;
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !("role" in parsed) ||
+      !("content" in parsed)
+    ) {
+      return undefined;
+    }
+
+    const { role, content } = parsed as { role?: unknown; content?: unknown };
+    if ((role !== "user" && role !== "assistant") || typeof content !== "string") {
+      return undefined;
+    }
+
+    return { id: message.id, role, markdown: content };
+  } catch {
+    return undefined;
+  }
+};
+
+const getChatHistoryPage = async (
+  c: Context<AppBindings>,
+  input: {
+    clientPlatform: Parameters<typeof createUserDoName>[0];
+    userId: string;
+    sessionId: string;
+    cursor?: number;
+    limit: number;
+  },
+) => {
+  const userDO = c.env.USER_DO.getByName(createUserDoName(input.clientPlatform, input.userId));
+  const [session, rows] = await Promise.all([
+    userDO.getSession(input.sessionId),
+    userDO.listMessagesBefore(input.sessionId, input.cursor, input.limit + 1),
+  ]);
+  const hasMore = rows.length > input.limit;
+  const pageRows = hasMore ? rows.slice(1) : rows;
+
+  return {
+    sessionId: input.sessionId,
+    title: session?.title ?? "",
+    messages: pageRows.flatMap((message) => {
+      const parsed = toWebHistoryMessage(message);
+      return parsed ? [parsed] : [];
+    }),
+    nextCursor: hasMore && pageRows[0] ? pageRows[0].seq : null,
+  };
+};
 
 const getUserInfoFromAuthBody = (body: unknown) => {
   if (typeof body !== "object" || body === null) {
@@ -94,7 +175,7 @@ const getUserInfoFromAuthBody = (body: unknown) => {
   return undefined;
 };
 
-const verifyChatAuth = async (
+export const verifyChatAuth = async (
   authSettings: Awaited<ReturnType<typeof getClientAuthSettings>>,
   credentials: {
     appId?: string;
@@ -271,7 +352,7 @@ const handleChatCors: MiddlewareHandler<AppBindings> = async (c, next) => {
   if (isAllowedOrigin) {
     c.header("Access-Control-Allow-Origin", origin);
     c.header("Access-Control-Allow-Headers", "content-type, authorization");
-    c.header("Access-Control-Allow-Methods", "POST, OPTIONS");
+    c.header("Access-Control-Allow-Methods", "POST, DELETE, OPTIONS");
     c.header("Access-Control-Allow-Credentials", "true");
     c.header("Vary", "Origin");
   }
@@ -285,6 +366,104 @@ const handleChatCors: MiddlewareHandler<AppBindings> = async (c, next) => {
 
 export const chatRoute = new Hono<AppBindings>()
   .use("/api/chat", handleChatCors)
+  .use("/api/chat/*", handleChatCors)
+  .post("/api/chat/session", async (c) => {
+    const bodyResult = chatSessionRequestSchema.safeParse(await c.req.json().catch(() => null));
+    if (!bodyResult.success) {
+      return c.json({ error: "Invalid body", issues: z.treeifyError(bodyResult.error) }, 400);
+    }
+
+    const platform = getClientPlatformFromClientId(bodyResult.data.appId);
+    if (!platform) return c.json({ error: "Invalid appId" }, 403);
+
+    const basicSettings = await getClientBasicSettings(c.env.APP_KV, platform);
+    if (!basicSettings.enabled) return c.json({ error: "Client disabled" }, 403);
+
+    const authSettings = await getClientAuthSettings(c.env.APP_KV, platform);
+    if (!authSettings.authEnabled) {
+      return c.json(
+        { error: "Auth disabled", message: "Enable auth before using the external chat API" },
+        403,
+      );
+    }
+
+    const authResult = await verifyChatAuth(authSettings, bodyResult.data);
+    if (!authResult.authorized) return c.json({ error: "Forbidden" }, 403);
+
+    const userDO = c.env.USER_DO.getByName(
+      createUserDoName(platform, bodyResult.data.userId),
+    );
+    const session = await userDO.createSession({ client: platform });
+
+    return c.json(
+      {
+        id: session.id,
+        title: session.title,
+        createdAt: session.createdAt,
+      },
+      201,
+    );
+  })
+  .delete("/api/chat/session", async (c) => {
+    const bodyResult = chatSessionDeleteRequestSchema.safeParse(await c.req.json().catch(() => null));
+    if (!bodyResult.success) {
+      return c.json({ error: "Invalid body", issues: z.treeifyError(bodyResult.error) }, 400);
+    }
+
+    const platform = getClientPlatformFromClientId(bodyResult.data.appId);
+    if (!platform) return c.json({ error: "Invalid appId" }, 403);
+
+    const basicSettings = await getClientBasicSettings(c.env.APP_KV, platform);
+    if (!basicSettings.enabled) return c.json({ error: "Client disabled" }, 403);
+
+    const authSettings = await getClientAuthSettings(c.env.APP_KV, platform);
+    if (!authSettings.authEnabled) {
+      return c.json(
+        { error: "Auth disabled", message: "Enable auth before using the external chat API" },
+        403,
+      );
+    }
+
+    const authResult = await verifyChatAuth(authSettings, bodyResult.data);
+    if (!authResult.authorized) return c.json({ error: "Forbidden" }, 403);
+
+    const userDO = c.env.USER_DO.getByName(createUserDoName(platform, bodyResult.data.userId));
+    return c.json(await userDO.deleteSession(bodyResult.data.sessionId));
+  })
+  .post("/api/chat/history", async (c) => {
+    const bodyResult = chatHistoryRequestSchema.safeParse(await c.req.json().catch(() => null));
+
+    if (!bodyResult.success) {
+      return c.json({ error: "Invalid body", issues: z.treeifyError(bodyResult.error) }, 400);
+    }
+
+    const platform = getClientPlatformFromClientId(bodyResult.data.appId);
+    if (!platform) return c.json({ error: "Invalid appId" }, 403);
+
+    const basicSettings = await getClientBasicSettings(c.env.APP_KV, platform);
+    if (!basicSettings.enabled) return c.json({ error: "Client disabled" }, 403);
+
+    const authSettings = await getClientAuthSettings(c.env.APP_KV, platform);
+    if (!authSettings.authEnabled) {
+      return c.json(
+        { error: "Auth disabled", message: "Enable auth before using the external chat API" },
+        403,
+      );
+    }
+
+    const authResult = await verifyChatAuth(authSettings, bodyResult.data);
+    if (!authResult.authorized) return c.json({ error: "Forbidden" }, 403);
+
+    return c.json(
+      await getChatHistoryPage(c, {
+        clientPlatform: platform,
+        userId: bodyResult.data.userId,
+        sessionId: bodyResult.data.sessionId,
+        cursor: bodyResult.data.cursor,
+        limit: bodyResult.data.limit,
+      }),
+    );
+  })
   .post("/api/chat", async (c) => {
     const bodyResult = chatRequestSchema.safeParse(await c.req.json().catch(() => null));
 
@@ -344,6 +523,46 @@ export const chatRoute = new Hono<AppBindings>()
     );
   })
   .use("/api/internal/chat", requireAdmin)
+  .use("/api/internal/chat/*", requireAdmin)
+  .get("/api/internal/chat/history", async (c) => {
+    const user = c.get("user");
+
+    if (!user) {
+      return c.json(parseResponse(errorResponseSchema, { error: "Unauthorized" }), 401);
+    }
+
+    const queryResult = internalChatHistoryQuerySchema.safeParse(c.req.query());
+
+    if (!queryResult.success) {
+      return c.json({ error: "Invalid query", issues: z.treeifyError(queryResult.error) }, 400);
+    }
+
+    return c.json(
+      await getChatHistoryPage(c, {
+        clientPlatform: "web",
+        userId: user.id,
+        sessionId: queryResult.data.sessionId,
+        cursor: queryResult.data.cursor,
+        limit: queryResult.data.limit,
+      }),
+    );
+  })
+  .delete("/api/internal/chat/session", async (c) => {
+    const user = c.get("user");
+    if (!user) {
+      return c.json(parseResponse(errorResponseSchema, { error: "Unauthorized" }), 401);
+    }
+
+    const queryResult = z
+      .object({ sessionId: z.string().trim().min(1) })
+      .safeParse(c.req.query());
+    if (!queryResult.success) {
+      return c.json({ error: "Invalid query", issues: z.treeifyError(queryResult.error) }, 400);
+    }
+
+    const userDO = c.env.USER_DO.getByName(createUserDoName("web", user.id));
+    return c.json(await userDO.deleteSession(queryResult.data.sessionId));
+  })
   .post("/api/internal/chat", async (c) => {
     const user = c.get("user");
 

@@ -384,7 +384,7 @@ export const DEFAULT_SETTINGS = {
       tags: ["text-generation", "tool-calling"],
     },
     {
-      name: "openai/gpt-4o-transcribe",
+      name: "@cf/openai/whisper-large-v3-turbo",
       tags: ["speech-to-text"],
     },
     {

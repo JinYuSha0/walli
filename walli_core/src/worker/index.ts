@@ -7,6 +7,7 @@ import { rootRoute } from "./api/root";
 import { settingsRoute } from "./api/settings";
 import { telegramRoute } from "./api/telegram";
 import { uploadRoute } from "./api/upload";
+import { transcribeRoute } from "./api/transcribe";
 import type { AppBindings } from "./api/types";
 import { createDb } from "./db/client";
 import { toolsRoute } from "./tools";
@@ -52,6 +53,7 @@ const routes = app
   .route("/", clientsRoute)
   .route("/", telegramRoute)
   .route("/", uploadRoute)
+  .route("/", transcribeRoute)
   .route("/", settingsRoute);
 
 export type AppType = typeof routes;

@@ -435,6 +435,27 @@ export const prepareChatCompletion = async ({
           return;
         }
 
+        const firstUserMessage = messages.find((message) => message.role === "user");
+        if (!chatSession.summary && typeof firstUserMessage?.content === "string") {
+          const content = firstUserMessage.content.trim();
+          let title = content.replace(/\s+/g, " ").slice(0, 50);
+
+          try {
+            const result = await generateText({
+              model: gateway(unified(modelId)),
+              instructions:
+                "Generate a concise conversation title in the user's language. Return only the title, without quotes, markdown, or punctuation at the end.",
+              messages: [{ role: "user", content: content.slice(0, 2000) }],
+              ...createOutputTokenLimitOptions(modelId, 32),
+            });
+            title = result.text.trim() || title;
+          } catch (error) {
+            console.error(error);
+          }
+
+          await session.store.setSessionTitleIfEmpty(chatSession.id, title).catch(console.error);
+        }
+
         const latestMessage = persistedMessages[persistedMessages.length - 1];
 
         if (historyMessageLimit <= 0 || !latestMessage) {

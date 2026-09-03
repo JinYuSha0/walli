@@ -33,6 +33,7 @@ export default defineConfig({
     },
   ],
   resolve: {
+    dedupe: ["react", "react-dom"],
     alias: [
       {
         find: /^@wallilabs\/chat\/theme\.css$/,

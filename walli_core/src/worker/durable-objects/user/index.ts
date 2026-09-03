@@ -27,6 +27,7 @@ export type ScheduledTaskStatusFilter = ScheduledTaskStatus | "all";
 export type ChatSession = {
   id: string;
   client: string;
+  title: string;
   summary: string;
   createdAt: number;
 };
@@ -175,6 +176,7 @@ const getNextStartOfDayAt = (timestamp: number, timeZone: string) => {
 const toChatSession = (row: ChatSessionRow): ChatSession => ({
   id: row.id,
   client: row.client,
+  title: row.summary,
   summary: row.summary,
   createdAt: row.createdAt,
 });
@@ -377,6 +379,11 @@ export class UserDO extends DurableObject<Env> {
     return this.createSession(input);
   }
 
+  async getSession(sessionId: string): Promise<ChatSession | undefined> {
+    const row = this.db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1).get();
+    return row ? toChatSession(row) : undefined;
+  }
+
   async listSessions(limit?: number): Promise<ChatSession[]> {
     const orderedQuery = this.db
       .select()
@@ -386,6 +393,20 @@ export class UserDO extends DurableObject<Env> {
     const limitedQuery = limit === undefined ? orderedQuery : orderedQuery.limit(limit);
 
     return limitedQuery.all().map(toChatSession);
+  }
+
+  async setSessionTitleIfEmpty(sessionId: string, title: string): Promise<ChatSession | undefined> {
+    const normalizedTitle = title.trim().slice(0, 80);
+    if (!normalizedTitle) return undefined;
+
+    const row = this.db
+      .update(sessions)
+      .set({ summary: normalizedTitle })
+      .where(and(eq(sessions.id, sessionId), eq(sessions.summary, "")))
+      .returning()
+      .get();
+
+    return row ? toChatSession(row) : undefined;
   }
 
   async addMessages(inputs: CreateChatMessageInput[]): Promise<ChatMessage[]> {
@@ -592,6 +613,60 @@ export class UserDO extends DurableObject<Env> {
       .all()
       .map(toChatMessage)
       .reverse();
+  }
+
+  async listMessagesBefore(
+    sessionId: string,
+    beforeSeq: number | undefined,
+    limit: number,
+  ): Promise<ChatMessage[]> {
+    const messageLimit = Math.max(0, Math.trunc(limit));
+
+    if (messageLimit === 0) {
+      return [];
+    }
+
+    return this.db
+      .select()
+      .from(messages)
+      .where(
+        and(
+          eq(messages.sessionId, sessionId),
+          beforeSeq === undefined ? undefined : lt(messages.seq, Math.trunc(beforeSeq)),
+        ),
+      )
+      .orderBy(desc(messages.seq))
+      .limit(messageLimit)
+      .all()
+      .map(toChatMessage)
+      .reverse();
+  }
+
+  async deleteSession(sessionId: string): Promise<{
+    deletedMessageCount: number;
+    deletedSessionCount: number;
+  }> {
+    return this.db.transaction((tx) => {
+      const deletedMessageCount = tx
+        .select({ id: messages.id })
+        .from(messages)
+        .where(eq(messages.sessionId, sessionId))
+        .all().length;
+      const deletedSessionCount = tx
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(eq(sessions.id, sessionId))
+        .all().length;
+
+      tx.delete(messagesFts).where(eq(messagesFts.sessionId, sessionId)).run();
+      tx.delete(messages).where(eq(messages.sessionId, sessionId)).run();
+      tx.delete(sessions).where(eq(sessions.id, sessionId)).run();
+
+      return {
+        deletedMessageCount,
+        deletedSessionCount,
+      };
+    });
   }
 
   async getTokenUsageSince(startAt: number, endAt = Date.now()): Promise<TokenUsage> {
