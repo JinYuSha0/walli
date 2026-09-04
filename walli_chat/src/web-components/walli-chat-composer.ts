@@ -126,6 +126,17 @@ export class WalliChatComposerElement extends LitElement {
 
   private readonly handleDocumentPointerDown = (event: PointerEvent): void => {
     if (this.menuOpen && !event.composedPath().includes(this)) this.menuOpen = false;
+
+    const textarea = this.textareaElement;
+    if (
+      !textarea ||
+      !textarea.matches(":focus") ||
+      event.composedPath().includes(this) ||
+      isScrollbarPointerDown(event)
+    ) {
+      return;
+    }
+    textarea.blur();
   };
 
   private readonly handleDocumentKeyDown = (event: KeyboardEvent): void => {
@@ -270,6 +281,14 @@ export class WalliChatComposerElement extends LitElement {
     requestAnimationFrame(() => textarea.blur());
   }
 
+  private restoreFocusAfterSubmit(): void {
+    if (window.matchMedia("(hover: none) and (pointer: coarse)").matches) {
+      this.dismissKeyboard();
+    } else {
+      this.textareaElement?.focus({ preventScroll: true });
+    }
+  }
+
   private async submit(): Promise<void> {
     if (this.disabled || this.running || !this.canSubmit) return;
     this.menuOpen = false;
@@ -288,8 +307,8 @@ export class WalliChatComposerElement extends LitElement {
     );
     const text = this.value.trim();
     const markdown = await createSubmitMarkdown(text, assets);
-    this.dismissKeyboard();
     this.running = true;
+    this.restoreFocusAfterSubmit();
     this.clearAttachments();
     void this.updateComplete.then(() => this.resizeTextarea());
     try {
@@ -310,8 +329,8 @@ export class WalliChatComposerElement extends LitElement {
       return false;
     }
     this.menuOpen = false;
-    this.dismissKeyboard();
     this.running = true;
+    this.restoreFocusAfterSubmit();
     try {
       await this.onSubmit(normalizedText, normalizedText, []);
       return true;
@@ -328,14 +347,17 @@ export class WalliChatComposerElement extends LitElement {
     );
   }
 
-  private handlePrimaryAction(event: MouseEvent): void {
+  private handlePrimaryAction(): void {
     this.menuOpen = false;
     if (this.running) {
       this.onCancel?.();
       return;
     }
-    (event.currentTarget as HTMLButtonElement).focus({ preventScroll: true });
     void this.submit();
+  }
+
+  private handlePrimaryActionPointerDown(event: PointerEvent): void {
+    event.preventDefault();
   }
 
   private handleVoice(): void {
@@ -798,6 +820,7 @@ export class WalliChatComposerElement extends LitElement {
             type="button"
             aria-label=${this.running ? "Stop generating" : "Send message"}
             ?disabled=${this.disabled || (!this.running && !this.canSubmit)}
+            @pointerdown=${this.handlePrimaryActionPointerDown}
             @click=${this.handlePrimaryAction}
           >
             ${
@@ -815,6 +838,16 @@ export class WalliChatComposerElement extends LitElement {
       </div>
     </div>`;
   }
+}
+
+function isScrollbarPointerDown(event: PointerEvent): boolean {
+  const target = event.composedPath()[0];
+  if (!(target instanceof HTMLElement)) return false;
+  const rect = target.getBoundingClientRect();
+  return (
+    event.clientX >= rect.left + target.clientWidth ||
+    event.clientY >= rect.top + target.clientHeight
+  );
 }
 
 async function createSubmitMarkdown(text: string, assets: readonly SubmitAsset[]): Promise<string> {

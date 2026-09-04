@@ -274,6 +274,7 @@ export const SubmitWithEnter: Story = {
     await waitFor(() => expect(args.onSubmit).toHaveBeenCalledTimes(1));
     await expect(args.onSubmit).toHaveBeenCalledWith("Hello Walli", "Hello Walli", []);
     await expect(args.onValueChange).toHaveBeenCalledWith("Hello Walli");
+    await expect(composer.renderRoot.activeElement).toBe(textarea);
   },
 };
 
