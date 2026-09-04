@@ -1,9 +1,8 @@
 import { createChatRunnerTools } from "../lib/chat-runner";
-import { createGatewayFromEnv, normalizeGatewayModelId, unified } from "../lib/llm";
+import { createGateway, normalizeGatewayModelId, unified } from "../lib/llm";
 import { runToolWithContext } from "../lib/tool-runner";
 import { getSettings } from "../api/settings";
 import { adaptBuiltInToolModelOutput } from "@shared/tools";
-import { getChatAsyncContext } from "../lib/async-context";
 
 export type VoiceOutput = {
   type: "blob";
@@ -119,8 +118,7 @@ export const runBuiltInMediaTool = async <ToolName extends BuiltInMediaToolName>
   taskContext: BuiltInMediaToolContextMap[ToolName],
 ) => {
   try {
-    const { env } = getChatAsyncContext();
-    const settings = await getSettings(env.APP_KV);
+    const settings = await getSettings();
     const toolConfig = [...settings.builtInTools, ...settings.tools].find(
       (configuredTool) => configuredTool.name === toolName,
     );
@@ -130,7 +128,7 @@ export const runBuiltInMediaTool = async <ToolName extends BuiltInMediaToolName>
       throw new Error(`${toolName} is not available`);
     }
 
-    const gateway = createGatewayFromEnv(env);
+    const gateway = createGateway();
     const output = await runToolWithContext({
       model: gateway(unified(normalizeGatewayModelId(settings.toolPlannerModel))),
       toolName,

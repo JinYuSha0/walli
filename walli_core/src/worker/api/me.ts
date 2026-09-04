@@ -45,7 +45,7 @@ export const meRoute = new Hono<AppBindings>().get(
       parseResponse(meResponseSchema, {
         user,
         session,
-        isAdmin: hasAdminRole(user, c.env),
+        isAdmin: hasAdminRole(user),
       }),
     );
   },

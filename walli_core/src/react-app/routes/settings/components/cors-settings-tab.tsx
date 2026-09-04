@@ -167,7 +167,7 @@ export function CorsSettingsTab({ settings, onSave }: CorsSettingsTabProps) {
 
       <div className="flex justify-end gap-2 border-t border-border pt-8">
         <Button type="submit" disabled={saveMutation.isPending}>
-          {t("corsSettingsSave")}
+          {t("saveSettings")}
         </Button>
       </div>
     </form>

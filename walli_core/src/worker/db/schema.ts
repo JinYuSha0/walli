@@ -59,6 +59,17 @@ export const verification = sqliteTable("verification", {
   updatedAt: integer("updatedAt", { mode: "timestamp" }),
 });
 
+export const client = sqliteTable("client", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  platform: text("platform", {
+    enum: ["telegram", "web", "react-native", "flutter"],
+  }).notNull(),
+  createdAt: integer("createdAt").notNull(),
+  updatedAt: integer("updatedAt").notNull(),
+});
+
 export const telegramWhitelistUser = sqliteTable("telegram_whitelist_user", {
   type: text("type", { enum: ["private", "group"] }).notNull(),
   id: text("id").notNull(),

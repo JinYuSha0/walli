@@ -2,7 +2,7 @@ import { generateText, Output, type ModelMessage } from "ai";
 import type { Settings } from "@shared/const";
 import { z } from "zod";
 import { createOutputTokenLimitOptions } from "../utils/common";
-import { createGatewayFromEnv, normalizeGatewayModelId, unified } from "./llm";
+import { createGateway, normalizeGatewayModelId, unified } from "./llm";
 
 export type ChatMemoryContext = {
   user: string;
@@ -59,13 +59,12 @@ const formatMemorySummaryMessages = (messages: ModelMessage[]) =>
     .join("\n");
 
 export const summarizeChatMemory = async (input: {
-  env: Env;
   settings: Settings;
   previousMemory: ChatMemoryContext;
   messages: ModelMessage[];
 }): Promise<ChatMemoryContext> => {
   const modelId = normalizeGatewayModelId(input.settings.toolPlannerModel);
-  const gateway = createGatewayFromEnv(input.env);
+  const gateway = createGateway();
   const result = await generateText({
     model: gateway(unified(modelId)),
     instructions: [

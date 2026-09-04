@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireUser } from "./helper/middleware";
 import { errorResponseSchema, parseResponse } from "./helper/validation";
 import type { AppBindings } from "./types";
+import { getAsyncContext } from "@worker/lib/async-context";
 import { hasValidTemporaryAssetUrl } from "../utils/llm";
 
 const MB = 1024 * 1024;
@@ -49,7 +50,7 @@ export const uploadRoute = new Hono<AppBindings>()
   .get("/api/assets/:userId/:kind/:id", async (c) => {
     const ownerId = c.req.param("userId");
     const hasTemporaryAccess = await hasValidTemporaryAssetUrl(
-      c.env.API_TOKEN,
+      getAsyncContext().env.API_TOKEN,
       c.req.path,
       c.req.query("expires"),
       c.req.query("signature"),
@@ -67,7 +68,7 @@ export const uploadRoute = new Hono<AppBindings>()
       return c.json(parseResponse(errorResponseSchema, { error: "File not found" }), 404);
     }
 
-    const object = await c.env.R2.get(createObjectKey(ownerId, kind, c.req.param("id")));
+    const object = await getAsyncContext().env.R2.get(createObjectKey(ownerId, kind, c.req.param("id")));
     if (!object || object.customMetadata?.userId !== ownerId) {
       return c.json(parseResponse(errorResponseSchema, { error: "File not found" }), 404);
     }
@@ -118,7 +119,7 @@ async function upload(c: Context<AppBindings>, kind: AssetKind) {
 
   const id = crypto.randomUUID();
   const key = createObjectKey(user.id, kind, id);
-  await c.env.R2.put(key, file.stream(), {
+  await getAsyncContext().env.R2.put(key, file.stream(), {
     customMetadata: { kind, name: file.name, userId: user.id },
     httpMetadata: { contentType },
   });

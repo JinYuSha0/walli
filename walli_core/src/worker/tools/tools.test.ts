@@ -77,6 +77,16 @@ const fakeRuntime = {
   },
 } as unknown as { AI: Ai };
 
+const requestTools = (
+  input: string | Request,
+  requestInit: RequestInit | undefined,
+  requestEnv: Env,
+) =>
+  runWithChatAsyncContext(
+    { env: requestEnv, origin: "https://example.com" },
+    () => toolsRoute.request(input, requestInit, requestEnv),
+  );
+
 aroundEach((runTest) =>
   runWithChatAsyncContext(
     {
@@ -299,7 +309,8 @@ describe("chat tools", () => {
         "Be concise.",
         createChatUserInfo({
           userId: "123",
-          clientPlatform: "telegram",
+          clientId: "telegram-client-1",
+          notificationChannel: { type: "telegram", userId: "123", clientId: "telegram-client-1" },
         }),
         {
           timeZone: "Asia/Shanghai",
@@ -313,40 +324,46 @@ describe("chat tools", () => {
     expect(
       createChatUserInfo({
         userId: "123",
-        clientPlatform: "telegram",
+        clientId: "telegram-client-1",
+        notificationChannel: { type: "telegram", userId: "123", clientId: "telegram-client-1" },
       }),
     ).toEqual({
       userId: "123",
-      clientPlatform: "telegram",
+      clientId: "telegram-client-1",
       notificationChannel: {
         type: "telegram",
         userId: "123",
+        clientId: "telegram-client-1",
       },
     });
     expect(
       createChatUserInfo({
         userId: "web-user",
-        clientPlatform: "web",
+        clientId: "web-client-1",
+        notificationChannel: { type: "web", userId: "web-user", clientId: "web-client-1" },
       }),
     ).toEqual({
       userId: "web-user",
-      clientPlatform: "web",
+      clientId: "web-client-1",
       notificationChannel: {
         type: "web",
         userId: "web-user",
+        clientId: "web-client-1",
       },
     });
     expect(
       createChatUserInfo({
         userId: "flutter-user",
-        clientPlatform: "flutter",
+        clientId: "flutter-client-1",
+        notificationChannel: { type: "flutter", userId: "flutter-user", clientId: "flutter-client-1" },
       }),
     ).toEqual({
       userId: "flutter-user",
-      clientPlatform: "flutter",
+      clientId: "flutter-client-1",
       notificationChannel: {
         type: "flutter",
         userId: "flutter-user",
+        clientId: "flutter-client-1",
       },
     });
   });
@@ -361,16 +378,18 @@ describe("chat tools", () => {
           role: "admin",
         },
         userId: "fallback-user",
-        clientPlatform: "web",
+        clientId: "web-client-1",
+        notificationChannel: { type: "web", userId: "fallback-user", clientId: "web-client-1" },
       }),
     ).toEqual({
       userId: "auth-user",
       name: "Ada",
       email: "ada@example.com",
-      clientPlatform: "web",
+      clientId: "web-client-1",
       notificationChannel: {
         type: "web",
-        userId: "auth-user",
+        userId: "fallback-user",
+        clientId: "web-client-1",
       },
       attributes: {
         role: "admin",
@@ -383,7 +402,8 @@ describe("chat tools", () => {
       {
         userInfo: createChatUserInfo({
           userId: "web-user",
-          clientPlatform: "web",
+          clientId: "web-client-1",
+          notificationChannel: { type: "web", userId: "web-user", clientId: "web-client-1" },
         }),
       },
       () => createNotificationTools(),
@@ -419,7 +439,8 @@ describe("chat tools", () => {
         origin: "https://chat.test",
         userInfo: createChatUserInfo({
           userId: "123",
-          clientPlatform: "telegram",
+          clientId: "telegram-client-1",
+          notificationChannel: { type: "telegram", userId: "123", clientId: "telegram-client-1" },
         }),
       },
       () => createNotificationTools(),
@@ -448,6 +469,10 @@ describe("chat tools", () => {
           body: expect.any(FormData),
         }),
       );
+      expect(appKv.get).toHaveBeenCalledWith(
+        "client:telegram-client-1:telegram-settings",
+        "json",
+      );
     } finally {
       fetchMock.mockRestore();
     }
@@ -474,7 +499,8 @@ describe("chat tools", () => {
         } as Env,
         userInfo: createChatUserInfo({
           userId: "123",
-          clientPlatform: "telegram",
+          clientId: "telegram-client-1",
+          notificationChannel: { type: "telegram", userId: "123", clientId: "telegram-client-1" },
         }),
       },
       () => createNotificationTools(),
@@ -503,6 +529,10 @@ describe("chat tools", () => {
         expect.objectContaining({
           method: "POST",
         }),
+      );
+      expect(appKv.get).toHaveBeenCalledWith(
+        "client:telegram-client-1:telegram-settings",
+        "json",
       );
       expect(JSON.parse(init?.body as string)).toEqual({
         chat_id: "123",
@@ -1330,7 +1360,7 @@ describe("tools route", () => {
   });
 
   it("returns the current timestamp with the requested time zone", async () => {
-    const response = await toolsRoute.request(
+    const response = await requestTools(
       "/api/tools/timestamp?timeZone=Asia%2FShanghai",
       {
         headers: {
@@ -1395,7 +1425,7 @@ describe("tools route", () => {
       },
     } as unknown as Env;
 
-    const response = await toolsRoute.request(
+    const response = await requestTools(
       "/api/tools/scheduled-tasks",
       {
         method: "POST",
@@ -1406,6 +1436,7 @@ describe("tools route", () => {
         body: JSON.stringify({
           action: "create",
           userId: "user-1",
+          clientId: "telegram-client-1",
           clientPlatform: "telegram",
           type: "reminder",
           description: "Send the weekly report reminder.",
@@ -1424,7 +1455,7 @@ describe("tools route", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(getByName).toHaveBeenCalledWith("telegram:user-1");
+    expect(getByName).toHaveBeenCalledWith("telegram-client-1:telegram:user-1");
     expect(createTask).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "user-1",
@@ -1467,7 +1498,7 @@ describe("tools route", () => {
     } as unknown as Env;
 
     try {
-      const response = await toolsRoute.request(
+      const response = await requestTools(
         "/api/tools/scheduled-tasks",
         {
           method: "POST",
@@ -1478,6 +1509,7 @@ describe("tools route", () => {
           body: JSON.stringify({
             action: "create",
             userId: "user-1",
+            clientId: "telegram-client-1",
             clientPlatform: "telegram",
             description: "Send a reminder in 30 seconds.",
             delayMs: 30_000,
@@ -1519,7 +1551,7 @@ describe("tools route", () => {
       },
     } as unknown as Env;
 
-    const response = await toolsRoute.request(
+    const response = await requestTools(
       "/api/tools/memory/search",
       {
         method: "POST",
@@ -1530,6 +1562,7 @@ describe("tools route", () => {
         body: JSON.stringify({
           query: "concise replies",
           userId: "user-1",
+          clientId: "telegram-client-1",
           clientPlatform: "telegram",
           sessionId: "session-1",
           limit: 3,
@@ -1551,7 +1584,7 @@ describe("tools route", () => {
       ],
     });
     expect(response.status).toBe(200);
-    expect(getByName).toHaveBeenCalledWith("telegram:user-1");
+    expect(getByName).toHaveBeenCalledWith("telegram-client-1:telegram:user-1");
     expect(searchMemory).toHaveBeenCalledWith({
       query: "concise replies",
       sessionId: "session-1",
@@ -1588,7 +1621,7 @@ describe("tools route", () => {
       },
     } as unknown as Env;
 
-    const response = await toolsRoute.request(
+    const response = await requestTools(
       "/api/tools/memory/summary",
       {
         method: "POST",
@@ -1598,6 +1631,7 @@ describe("tools route", () => {
         },
         body: JSON.stringify({
           userId: "user-1",
+          clientId: "telegram-client-1",
           clientPlatform: "telegram",
           startMessageId: "message-1",
           endMessageId: "message-20",
@@ -1629,7 +1663,7 @@ describe("tools route", () => {
       ],
     });
     expect(response.status).toBe(201);
-    expect(getByName).toHaveBeenCalledWith("telegram:user-1");
+    expect(getByName).toHaveBeenCalledWith("telegram-client-1:telegram:user-1");
     expect(recordMemorySummary).toHaveBeenCalledWith({
       startMessageId: "message-1",
       endMessageId: "message-20",
@@ -1659,7 +1693,7 @@ describe("tools route", () => {
       },
     } as unknown as Env;
 
-    const response = await toolsRoute.request(
+    const response = await requestTools(
       "/api/tools/memory/summary",
       {
         method: "POST",
@@ -1669,6 +1703,7 @@ describe("tools route", () => {
         },
         body: JSON.stringify({
           userId: "user-1",
+          clientId: "telegram-client-1",
           clientPlatform: "telegram",
           startMessageId: "message-1",
           endMessageId: "message-20",
@@ -1731,6 +1766,7 @@ describe("tools route", () => {
         },
         body: JSON.stringify({
           userId: "user-1",
+          clientId: "telegram-client-1",
           clientPlatform: "telegram",
           startMessageId: "message-1",
           endMessageId: "message-20",
@@ -1779,6 +1815,7 @@ describe("tools route", () => {
             body: JSON.stringify({
               action: "create",
               userId: "user-1",
+              clientId: "telegram-client-1",
               clientPlatform: "telegram",
               description: "Send a reminder.",
               scheduledAt,
@@ -1808,7 +1845,7 @@ describe("tools route", () => {
       },
     } as unknown as Env;
 
-    const response = await toolsRoute.request(
+    const response = await requestTools(
       "/api/tools/scheduled-tasks",
       {
         method: "POST",
@@ -1819,6 +1856,7 @@ describe("tools route", () => {
         body: JSON.stringify({
           action: "list",
           userId: "user-1",
+          clientId: "telegram-client-1",
           clientPlatform: "telegram",
         }),
       },
@@ -1826,7 +1864,7 @@ describe("tools route", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(getByName).toHaveBeenCalledWith("telegram:user-1");
+    expect(getByName).toHaveBeenCalledWith("telegram-client-1:telegram:user-1");
     expect(listTasks).toHaveBeenCalledWith("pending", undefined);
   });
 
@@ -1842,7 +1880,7 @@ describe("tools route", () => {
       },
     } as unknown as Env;
 
-    const response = await toolsRoute.request(
+    const response = await requestTools(
       "/api/tools/scheduled-tasks",
       {
         method: "POST",
@@ -1853,6 +1891,7 @@ describe("tools route", () => {
         body: JSON.stringify({
           action: "list",
           userId: "user-1",
+          clientId: "telegram-client-1",
           clientPlatform: "telegram",
           status: "all",
         }),
@@ -1861,7 +1900,7 @@ describe("tools route", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(getByName).toHaveBeenCalledWith("telegram:user-1");
+    expect(getByName).toHaveBeenCalledWith("telegram-client-1:telegram:user-1");
     expect(listTasks).toHaveBeenCalledWith("all", 20);
   });
 
@@ -1877,7 +1916,7 @@ describe("tools route", () => {
       },
     } as unknown as Env;
 
-    const response = await toolsRoute.request(
+    const response = await requestTools(
       "/api/tools/scheduled-tasks",
       {
         method: "POST",
@@ -1888,6 +1927,7 @@ describe("tools route", () => {
         body: JSON.stringify({
           action: "list",
           userId: "user-1",
+          clientId: "telegram-client-1",
           clientPlatform: "telegram",
           status: "completed",
         }),
@@ -1896,7 +1936,7 @@ describe("tools route", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(getByName).toHaveBeenCalledWith("telegram:user-1");
+    expect(getByName).toHaveBeenCalledWith("telegram-client-1:telegram:user-1");
     expect(listTasks).toHaveBeenCalledWith("completed", 20);
   });
 
@@ -1912,6 +1952,7 @@ describe("tools route", () => {
         body: JSON.stringify({
           action: "create",
           userId: "user-1",
+          clientId: "telegram-client-1",
           clientPlatform: "telegram",
           description: "Send the weekly report reminder.",
           scheduledAt: 1000,

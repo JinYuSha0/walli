@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { clientPlatformSchema } from "@shared/client";
 import type { AppBindings } from "../api/types";
+import { getAsyncContext } from "../lib/async-context";
+import { resolveToolRequestIdentity } from "./request-context";
 import { createUserDoName, type UserDoClientPlatform } from "../durable-objects/user/types";
 import { parseCronSchedule } from "../utils/cron";
 
@@ -25,6 +27,7 @@ const isValidTimeZone = (timeZone: string) => {
 const scheduledTaskActionSchema = z
   .object({
     action: z.enum(["create", "list", "cancel"]),
+    clientId: z.string().trim().min(1),
     userId: z.string().trim().min(1),
     clientPlatform: clientPlatformSchema,
     taskId: z.string().trim().optional(),
@@ -105,8 +108,8 @@ const scheduledTaskActionSchema = z
     }
   });
 
-const normalizeUserDoName = (platform: UserDoClientPlatform, userId: string) =>
-  userId.startsWith(`${platform}:`) ? userId : createUserDoName(platform, userId);
+const normalizeUserDoName = (clientId: string, platform: UserDoClientPlatform, userId: string) =>
+  createUserDoName(clientId, platform, userId);
 
 const getListTasksLimit = (status: z.output<typeof scheduledTaskActionSchema>["status"]) =>
   status === "pending" ? undefined : 20;
@@ -131,6 +134,7 @@ const resolveScheduledAt = (task: z.output<typeof scheduledTaskActionSchema>, no
 
 const createTaskInput = (task: z.output<typeof scheduledTaskActionSchema>) => ({
   action: task.action,
+  clientId: task.clientId,
   userId: task.userId,
   clientPlatform: task.clientPlatform,
   taskId: task.taskId,
@@ -158,7 +162,9 @@ const serializeError = (error: unknown) => {
 export const scheduledTaskToolRoute = new Hono<AppBindings>().post(
   "/api/tools/scheduled-tasks",
   async (c) => {
-    const result = scheduledTaskActionSchema.safeParse(await c.req.json().catch(() => null));
+    const result = scheduledTaskActionSchema.safeParse(
+      resolveToolRequestIdentity(await c.req.json().catch(() => null)),
+    );
 
     if (!result.success) {
       return c.json(
@@ -173,19 +179,20 @@ export const scheduledTaskToolRoute = new Hono<AppBindings>().post(
     try {
       if (result.data.action === "create") {
         const scheduledAt = resolveScheduledAt(result.data, Date.now());
-        const userDO = c.env.USER_DO.getByName(
-          normalizeUserDoName(result.data.clientPlatform, result.data.userId),
+        const userDO = getAsyncContext().env.USER_DO.getByName(
+          normalizeUserDoName(result.data.clientId, result.data.clientPlatform, result.data.userId),
         );
         const task = await userDO.createTask({
           ...createTaskInput(result.data),
+          sessionId: result.data.sessionId ?? getAsyncContext().sessionId,
           scheduledAt,
         });
 
         return c.json({ task }, 201);
       }
 
-      const userDO = c.env.USER_DO.getByName(
-        normalizeUserDoName(result.data.clientPlatform, result.data.userId),
+      const userDO = getAsyncContext().env.USER_DO.getByName(
+        normalizeUserDoName(result.data.clientId, result.data.clientPlatform, result.data.userId),
       );
 
       if (result.data.action === "list") {

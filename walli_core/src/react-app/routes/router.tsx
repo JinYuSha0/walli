@@ -78,14 +78,7 @@ const legacyKeysRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: "/keys",
   component: () => (
-    <Navigate
-      to="/clients/$platform/$tab"
-      params={{
-        platform: "telegram",
-        tab: "basic",
-      }}
-      replace
-    />
+    <Navigate to="/clients" replace />
   ),
 });
 

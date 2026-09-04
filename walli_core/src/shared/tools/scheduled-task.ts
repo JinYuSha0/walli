@@ -22,6 +22,13 @@ export const scheduledTaskTool = {
         defaultValue: "",
       },
       {
+        name: "clientId",
+        type: "string",
+        description: "Unique client ID for the Durable Object namespace.",
+        required: true,
+        defaultValue: "",
+      },
+      {
         name: "userId",
         type: "string",
         description:

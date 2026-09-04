@@ -1,11 +1,13 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import { asc, eq } from "drizzle-orm";
 import type { Database } from "@worker/db/client";
-import { telegramWhitelistUser } from "@worker/db/schema";
+import { createDb } from "@worker/db/client";
+import { client as clientTable, telegramWhitelistUser } from "@worker/db/schema";
 import type { AppBindings } from "./types";
 import { requireAdmin } from "./helper/middleware";
 import {
-  CLIENT_PLATFORMS,
+  clientCreateSchema,
   clientAuthSettingsPatchSchema,
   clientAuthSettingsSchema,
   clientBasicSettingsPatchSchema,
@@ -15,7 +17,6 @@ import {
   clientDialogSettingsPatchSchema,
   clientDialogSettingsSchema,
   clientConfigResponseSchema,
-  clientPlatformSchema,
   clientUsageLimitPatchSchema,
   clientUsageLimitSchema,
   telegramSettingsPatchSchema,
@@ -24,50 +25,74 @@ import {
   type ClientBasicSettings,
   type ClientCorsSettings,
   type ClientDialogSettings,
-  type ClientPlatform,
+  type Client,
   type ClientUsageLimit,
   type TelegramSettings,
   type TelegramSettingsPatch,
 } from "@shared/client";
 import { getSettings } from "./settings";
 import { errorResponseSchema, parseResponse } from "./helper/validation";
+import { getAsyncContext } from "@worker/lib/async-context";
 
-const clientConfigKey = (platform: ClientPlatform) => `client:${platform}:client-id`;
+const clientSettingsPrefix = (clientId: string) => `client:${clientId}`;
 
-const clientBasicSettingsKey = (platform: ClientPlatform) => `client:${platform}:basic-settings`;
+const clientBasicSettingsKey = (clientId: string) => `${clientSettingsPrefix(clientId)}:basic-settings`;
 
-const clientDialogSettingsKey = (platform: ClientPlatform) => `client:${platform}:dialog-settings`;
+const clientDialogSettingsKey = (clientId: string) => `${clientSettingsPrefix(clientId)}:dialog-settings`;
 
-const clientUsageLimitKey = (platform: ClientPlatform) => `client:${platform}:usage-limit`;
+const clientUsageLimitKey = (clientId: string) => `${clientSettingsPrefix(clientId)}:usage-limit`;
 
-const clientAuthSettingsKey = (platform: ClientPlatform) => `client:${platform}:auth-settings`;
+const clientAuthSettingsKey = (clientId: string) => `${clientSettingsPrefix(clientId)}:auth-settings`;
 
-const webCorsSettingsKey = "client:web:cors-settings";
+const webCorsSettingsKey = (clientId: string) => `${clientSettingsPrefix(clientId)}:cors-settings`;
 
-const telegramSettingsKey = "client:telegram:settings";
+const telegramSettingsKey = (clientId: string) => `${clientSettingsPrefix(clientId)}:telegram-settings`;
 
-const createClientId = (platform: ClientPlatform) =>
-  `${platform}_${crypto.randomUUID().replace(/-/g, "")}`;
-
-export const getOrCreateClientId = async (appKv: KVNamespace, platform: ClientPlatform) => {
-  const key = clientConfigKey(platform);
-  const savedClientId = await appKv.get(key);
-  const clientId = savedClientId ?? createClientId(platform);
-
-  if (!savedClientId) {
-    await appKv.put(key, clientId);
-  }
-
-  return clientId;
+export const getClients = async (): Promise<Client[]> => {
+  return createDb()
+    .select({
+      id: clientTable.id,
+      name: clientTable.name,
+      slug: clientTable.slug,
+      platform: clientTable.platform,
+    })
+    .from(clientTable)
+    .orderBy(asc(clientTable.createdAt), asc(clientTable.id))
+    .all();
 };
+
+export const getClientById = async (id: string) =>
+  createDb()
+    .select({
+      id: clientTable.id,
+      name: clientTable.name,
+      slug: clientTable.slug,
+      platform: clientTable.platform,
+    })
+    .from(clientTable)
+    .where(eq(clientTable.id, id))
+    .get();
+
+export const getClientBySlug = async (slug: string) =>
+  createDb()
+    .select({
+      id: clientTable.id,
+      name: clientTable.name,
+      slug: clientTable.slug,
+      platform: clientTable.platform,
+    })
+    .from(clientTable)
+    .where(eq(clientTable.slug, slug))
+    .get();
 
 const defaultBasicSettings = {
   enabled: false,
   additionalSystemPrompt: "",
 } satisfies ClientBasicSettings;
 
-export const getClientBasicSettings = async (appKv: KVNamespace, platform: ClientPlatform) => {
-  const savedSettings = await appKv.get(clientBasicSettingsKey(platform), "json");
+export const getClientBasicSettings = async (clientId: string) => {
+  const appKv = getAsyncContext().env.APP_KV;
+  const savedSettings = await appKv.get(clientBasicSettingsKey(clientId), "json");
   const result = clientBasicSettingsSchema.partial().safeParse(savedSettings);
 
   if (!result.success) {
@@ -80,8 +105,8 @@ export const getClientBasicSettings = async (appKv: KVNamespace, platform: Clien
   };
 };
 
-const getDefaultDialogSettings = async (appKv: KVNamespace): Promise<ClientDialogSettings> => {
-  const settings = await getSettings(appKv);
+const getDefaultDialogSettings = async (): Promise<ClientDialogSettings> => {
+  const settings = await getSettings();
 
   return {
     dialogSystemPrompt: settings.dialogSystemPrompt,
@@ -93,9 +118,10 @@ const getDefaultDialogSettings = async (appKv: KVNamespace): Promise<ClientDialo
   };
 };
 
-const getClientDialogSettings = async (appKv: KVNamespace, platform: ClientPlatform) => {
-  const defaultDialogSettings = await getDefaultDialogSettings(appKv);
-  const savedSettings = await appKv.get(clientDialogSettingsKey(platform), "json");
+const getClientDialogSettings = async (clientId: string) => {
+  const appKv = getAsyncContext().env.APP_KV;
+  const defaultDialogSettings = await getDefaultDialogSettings();
+  const savedSettings = await appKv.get(clientDialogSettingsKey(clientId), "json");
   const result = clientDialogSettingsSchema.partial().safeParse(savedSettings);
 
   if (!result.success) {
@@ -117,8 +143,9 @@ const defaultUsageLimit = {
   autoDeletePeriod: "week",
 } satisfies ClientUsageLimit;
 
-export const getClientUsageLimit = async (appKv: KVNamespace, platform: ClientPlatform) => {
-  const savedUsageLimit = await appKv.get(clientUsageLimitKey(platform), "json");
+export const getClientUsageLimit = async (clientId: string) => {
+  const appKv = getAsyncContext().env.APP_KV;
+  const savedUsageLimit = await appKv.get(clientUsageLimitKey(clientId), "json");
   const result = clientUsageLimitSchema.partial().safeParse(savedUsageLimit);
 
   if (!result.success) {
@@ -131,8 +158,8 @@ export const getClientUsageLimit = async (appKv: KVNamespace, platform: ClientPl
   };
 };
 
-const getDefaultAuthSettings = async (appKv: KVNamespace): Promise<ClientAuthSettings> => {
-  const settings = await getSettings(appKv);
+const getDefaultAuthSettings = async (): Promise<ClientAuthSettings> => {
+  const settings = await getSettings();
 
   return {
     authEnabled: settings.authEnabled,
@@ -140,9 +167,10 @@ const getDefaultAuthSettings = async (appKv: KVNamespace): Promise<ClientAuthSet
   };
 };
 
-export const getClientAuthSettings = async (appKv: KVNamespace, platform: ClientPlatform) => {
-  const defaultAuthSettings = await getDefaultAuthSettings(appKv);
-  const savedSettings = await appKv.get(clientAuthSettingsKey(platform), "json");
+export const getClientAuthSettings = async (clientId: string) => {
+  const appKv = getAsyncContext().env.APP_KV;
+  const defaultAuthSettings = await getDefaultAuthSettings();
+  const savedSettings = await appKv.get(clientAuthSettingsKey(clientId), "json");
   const result = clientAuthSettingsSchema.partial().safeParse(savedSettings);
 
   if (!result.success) {
@@ -155,17 +183,18 @@ export const getClientAuthSettings = async (appKv: KVNamespace, platform: Client
   };
 };
 
-const getDefaultCorsSettings = async (appKv: KVNamespace): Promise<ClientCorsSettings> => {
-  const settings = await getSettings(appKv);
+const getDefaultCorsSettings = async (): Promise<ClientCorsSettings> => {
+  const settings = await getSettings();
 
   return {
     corsAllowedOrigins: settings.corsAllowedOrigins,
   };
 };
 
-export const getWebCorsSettings = async (appKv: KVNamespace) => {
-  const defaultCorsSettings = await getDefaultCorsSettings(appKv);
-  const savedSettings = await appKv.get(webCorsSettingsKey, "json");
+export const getWebCorsSettings = async (clientId: string): Promise<ClientCorsSettings> => {
+  const appKv = getAsyncContext().env.APP_KV;
+  const defaultCorsSettings = await getDefaultCorsSettings();
+  const savedSettings = await appKv.get(webCorsSettingsKey(clientId), "json");
   const result = clientCorsSettingsSchema.partial().safeParse(savedSettings);
 
   if (!result.success) {
@@ -178,14 +207,8 @@ export const getWebCorsSettings = async (appKv: KVNamespace) => {
   };
 };
 
-export const getClientPlatformFromClientId = (clientId: string | undefined) => {
-  const value = clientId?.trim() ?? "";
-  const platform = CLIENT_PLATFORMS.find((clientPlatform) =>
-    value.startsWith(`${clientPlatform}_`),
-  );
-
-  return platform;
-};
+export const getClientFromClientId = async (clientId: string | undefined) =>
+  clientId ? getClientById(clientId.trim()) : undefined;
 
 export const maskSecret = (secret: string | undefined) => {
   const value = secret?.trim() ?? "";
@@ -206,8 +229,9 @@ const defaultTelegramSettings = {
   accessPolicy: "public",
 } satisfies TelegramSettings;
 
-export const getTelegramSettings = async (appKv: KVNamespace) => {
-  const savedSettings = await appKv.get(telegramSettingsKey, "json");
+export const getTelegramSettings = async (clientId: string) => {
+  const appKv = getAsyncContext().env.APP_KV;
+  const savedSettings = await appKv.get(telegramSettingsKey(clientId), "json");
   const result = telegramSettingsSchema.partial().safeParse(savedSettings);
 
   if (!result.success) {
@@ -220,14 +244,17 @@ export const getTelegramSettings = async (appKv: KVNamespace) => {
   };
 };
 
-export const getTelegramBotToken = async (appKv: KVNamespace, env: Env) => {
-  const settings = await getTelegramSettings(appKv);
+export const getTelegramBotToken = async (clientId?: string) => {
+  const env = getAsyncContext().env;
+  const resolvedClientId = clientId ?? (await getClients()).find(({ platform }) => platform === "telegram")?.id;
+  const settings = resolvedClientId ? await getTelegramSettings(resolvedClientId) : defaultTelegramSettings;
 
   return settings.botToken.trim() || env.TELEGRAM_BOT_TOKEN?.trim() || "";
 };
 
-const saveTelegramSettings = async (appKv: KVNamespace, patch: TelegramSettingsPatch) => {
-  const currentSettings = await getTelegramSettings(appKv);
+const saveTelegramSettings = async (clientId: string, patch: TelegramSettingsPatch) => {
+  const appKv = getAsyncContext().env.APP_KV;
+  const currentSettings = await getTelegramSettings(clientId);
   const settingsPatch = {
     ...(patch.botToken === undefined ? {} : { botToken: patch.botToken }),
     ...(patch.accessPolicy === undefined ? {} : { accessPolicy: patch.accessPolicy }),
@@ -237,7 +264,7 @@ const saveTelegramSettings = async (appKv: KVNamespace, patch: TelegramSettingsP
     ...settingsPatch,
   };
 
-  await appKv.put(telegramSettingsKey, JSON.stringify(settings));
+  await appKv.put(telegramSettingsKey(clientId), JSON.stringify(settings));
 
   return settings;
 };
@@ -251,19 +278,20 @@ const createTelegramSettingsResponse = (settings: TelegramSettings) => ({
   accessPolicy: settings.accessPolicy,
 });
 
-const getClientConfigResponse = async (env: Env, platform: ClientPlatform) => {
-  const appKv = env.APP_KV;
-  const clientId = await getOrCreateClientId(appKv, platform);
-  const basicSettings = await getClientBasicSettings(appKv, platform);
-  const authSettings = await getClientAuthSettings(appKv, platform);
-  const usageLimit = await getClientUsageLimit(appKv, platform);
+const getClientConfigResponse = async (client: Client) => {
+  const { platform } = client;
+  const basicSettings = await getClientBasicSettings(client.id);
+  const authSettings = await getClientAuthSettings(client.id);
+  const usageLimit = await getClientUsageLimit(client.id);
 
   if (platform === "telegram") {
-    const telegramSettings = await getTelegramSettings(appKv);
+    const telegramSettings = await getTelegramSettings(client.id);
 
     return parseResponse(clientConfigResponseSchema, {
-      platform,
-      clientId,
+      id: client.id,
+      name: client.name,
+      slug: client.slug,
+      platform: "telegram",
       basicSettings,
       authSettings,
       usageLimit,
@@ -271,14 +299,16 @@ const getClientConfigResponse = async (env: Env, platform: ClientPlatform) => {
     });
   }
 
-  const dialogSettings = await getClientDialogSettings(appKv, platform);
+  const dialogSettings = await getClientDialogSettings(client.id);
 
   if (platform === "web") {
-    const corsSettings = await getWebCorsSettings(appKv);
+    const corsSettings = await getWebCorsSettings(client.id);
 
     return parseResponse(clientConfigResponseSchema, {
-      platform,
-      clientId,
+      id: client.id,
+      name: client.name,
+      slug: client.slug,
+      platform: "web",
       basicSettings,
       authSettings,
       dialogSettings,
@@ -288,8 +318,10 @@ const getClientConfigResponse = async (env: Env, platform: ClientPlatform) => {
   }
 
   return parseResponse(clientConfigResponseSchema, {
+    id: client.id,
+    name: client.name,
+    slug: client.slug,
     platform,
-    clientId,
     basicSettings,
     authSettings,
     dialogSettings,
@@ -297,21 +329,23 @@ const getClientConfigResponse = async (env: Env, platform: ClientPlatform) => {
   });
 };
 
-const resetClientSettings = async (appKv: KVNamespace, platform: ClientPlatform) => {
+const resetClientSettings = async (client: Client) => {
+  const appKv = getAsyncContext().env.APP_KV;
+  const { id, platform } = client;
   const keys = [
-    clientBasicSettingsKey(platform),
-    clientAuthSettingsKey(platform),
-    clientUsageLimitKey(platform),
+    clientBasicSettingsKey(id),
+    clientAuthSettingsKey(id),
+    clientUsageLimitKey(id),
   ];
 
   if (platform === "telegram") {
-    keys.push(telegramSettingsKey);
+    keys.push(telegramSettingsKey(id));
   } else {
-    keys.push(clientDialogSettingsKey(platform));
+    keys.push(clientDialogSettingsKey(id));
   }
 
   if (platform === "web") {
-    keys.push(webCorsSettingsKey);
+    keys.push(webCorsSettingsKey(id));
   }
 
   await Promise.all(keys.map((key) => appKv.delete(key)));
@@ -319,56 +353,50 @@ const resetClientSettings = async (appKv: KVNamespace, platform: ClientPlatform)
 
 export const clientsRoute = new Hono<AppBindings>()
   .use("/api/admin/clients/*", requireAdmin)
-  .get("/api/admin/clients/:platform", async (c) => {
-    const platformResult = clientPlatformSchema.safeParse(c.req.param("platform"));
-
-    if (!platformResult.success) {
-      return c.json(
-        {
-          error: "Invalid platform",
-          issues: z.treeifyError(platformResult.error),
-        },
-        400,
-      );
+  .get("/api/admin/clients", async (c) => c.json(await getClients()))
+  .post("/api/admin/clients", async (c) => {
+    const result = clientCreateSchema.safeParse(await c.req.json().catch(() => null));
+    if (!result.success) return c.json({ error: "Invalid body", issues: z.treeifyError(result.error) }, 400);
+    if (await getClientBySlug(result.data.slug)) {
+      return c.json({ error: "Slug already exists" }, 409);
     }
-
-    return c.json(await getClientConfigResponse(c.env, platformResult.data));
+    const client = { id: crypto.randomUUID(), ...result.data } satisfies Client;
+    const now = Date.now();
+    await createDb().insert(clientTable).values({
+      ...client,
+      createdAt: now,
+      updatedAt: now,
+    }).run();
+    return c.json(await getClientConfigResponse(client), 201);
   })
-  .post("/api/admin/clients/:platform/reset-settings", async (c) => {
-    const platformResult = clientPlatformSchema.safeParse(c.req.param("platform"));
+  .get("/api/admin/clients/:clientId", async (c) => {
+    const client = await getClientById(c.req.param("clientId"));
+    if (!client) return c.json({ error: "Client not found" }, 404);
+    return c.json(await getClientConfigResponse(client));
+  })
+  .delete("/api/admin/clients/:clientId", async (c) => {
+    const client = await getClientById(c.req.param("clientId"));
+    if (!client) return c.json({ error: "Client not found" }, 404);
 
-    if (!platformResult.success) {
-      return c.json(
-        {
-          error: "Invalid platform",
-          issues: z.treeifyError(platformResult.error),
-        },
-        400,
-      );
-    }
+    await createDb().delete(clientTable).where(eq(clientTable.id, client.id)).run();
+    await resetClientSettings(client);
 
-    const platform = platformResult.data;
-    await resetClientSettings(c.env.APP_KV, platform);
-    if (platform === "telegram") {
+    return c.body(null, 204);
+  })
+  .post("/api/admin/clients/:clientId/reset-settings", async (c) => {
+    const client = await getClientById(c.req.param("clientId"));
+    if (!client) return c.json({ error: "Client not found" }, 404);
+    await resetClientSettings(client);
+    if (client.platform === "telegram") {
       await deleteTelegramWhitelistEntries(c.get("db"));
     }
-
-    return c.json(await getClientConfigResponse(c.env, platform));
+    return c.json(await getClientConfigResponse(client));
   })
-  .patch("/api/admin/clients/:platform", async (c) => {
-    const platformResult = clientPlatformSchema.safeParse(c.req.param("platform"));
-
-    if (!platformResult.success) {
-      return c.json(
-        {
-          error: "Invalid platform",
-          issues: z.treeifyError(platformResult.error),
-        },
-        400,
-      );
-    }
-
-    const platform = platformResult.data;
+  .patch("/api/admin/clients/:clientId", async (c) => {
+    const client = await getClientById(c.req.param("clientId"));
+    if (!client) return c.json({ error: "Client not found" }, 404);
+    const platform = client.platform;
+    const clientId = client.id;
     const body = await c.req.json().catch(() => null);
     const basicSettingsResult = clientBasicSettingsPatchSchema.safeParse(body);
     const authSettingsResult = clientAuthSettingsPatchSchema.safeParse(body);
@@ -419,11 +447,11 @@ export const clientsRoute = new Hono<AppBindings>()
       );
     }
 
-    const currentUsageLimit = await getClientUsageLimit(c.env.APP_KV, platform);
-    const currentBasicSettings = await getClientBasicSettings(c.env.APP_KV, platform);
-    const currentAuthSettings = await getClientAuthSettings(c.env.APP_KV, platform);
+    const currentUsageLimit = await getClientUsageLimit(clientId);
+    const currentBasicSettings = await getClientBasicSettings(clientId);
+    const currentAuthSettings = await getClientAuthSettings(clientId);
     const currentCorsSettings =
-      platform === "web" ? await getWebCorsSettings(c.env.APP_KV) : undefined;
+      platform === "web" ? await getWebCorsSettings(clientId) : undefined;
     const canPatchDialogSettings = platform !== "telegram" && isDialogSettingsPatch;
     const canPatchTelegramSettings = platform === "telegram" && isTelegramSettingsPatch;
     const basicSettingsPatch = isBasicSettingsPatch
@@ -464,7 +492,7 @@ export const clientsRoute = new Hono<AppBindings>()
 
     let dialogSettings: ClientDialogSettings | undefined;
     if (platform !== "telegram") {
-      const currentDialogSettings = await getClientDialogSettings(c.env.APP_KV, platform);
+      const currentDialogSettings = await getClientDialogSettings(clientId);
       dialogSettings = isDialogSettingsPatch
         ? {
             ...currentDialogSettings,
@@ -475,34 +503,34 @@ export const clientsRoute = new Hono<AppBindings>()
 
     await Promise.all([
       isBasicSettingsPatch
-        ? c.env.APP_KV.put(clientBasicSettingsKey(platform), JSON.stringify(basicSettings))
+        ? getAsyncContext().env.APP_KV.put(clientBasicSettingsKey(clientId), JSON.stringify(basicSettings))
         : Promise.resolve(),
       isAuthSettingsPatch
-        ? c.env.APP_KV.put(clientAuthSettingsKey(platform), JSON.stringify(authSettings))
+        ? getAsyncContext().env.APP_KV.put(clientAuthSettingsKey(clientId), JSON.stringify(authSettings))
         : Promise.resolve(),
       isCorsSettingsPatch && corsSettings
-        ? c.env.APP_KV.put(webCorsSettingsKey, JSON.stringify(corsSettings))
+        ? getAsyncContext().env.APP_KV.put(webCorsSettingsKey(clientId), JSON.stringify(corsSettings))
         : Promise.resolve(),
       canPatchDialogSettings
-        ? c.env.APP_KV.put(clientDialogSettingsKey(platform), JSON.stringify(dialogSettings))
+        ? getAsyncContext().env.APP_KV.put(clientDialogSettingsKey(clientId), JSON.stringify(dialogSettings))
         : Promise.resolve(),
       isUsageLimitPatch
-        ? c.env.APP_KV.put(clientUsageLimitKey(platform), JSON.stringify(usageLimit))
+        ? getAsyncContext().env.APP_KV.put(clientUsageLimitKey(clientId), JSON.stringify(usageLimit))
         : Promise.resolve(),
       canPatchTelegramSettings
-        ? saveTelegramSettings(c.env.APP_KV, telegramSettingsResult.data)
+        ? saveTelegramSettings(clientId, telegramSettingsResult.data)
         : Promise.resolve(),
     ]);
 
-    const clientId = await getOrCreateClientId(c.env.APP_KV, platform);
-
     if (platform === "telegram") {
-      const telegramSettings = await getTelegramSettings(c.env.APP_KV);
+      const telegramSettings = await getTelegramSettings(clientId);
 
       return c.json(
         parseResponse(clientConfigResponseSchema, {
-          platform,
-          clientId,
+          id: client.id,
+          name: client.name,
+          slug: client.slug,
+          platform: "telegram",
           basicSettings,
           authSettings,
           usageLimit,
@@ -528,8 +556,10 @@ export const clientsRoute = new Hono<AppBindings>()
 
       return c.json(
         parseResponse(clientConfigResponseSchema, {
-          platform,
-          clientId,
+          id: client.id,
+          name: client.name,
+          slug: client.slug,
+          platform: "web",
           basicSettings,
           authSettings,
           dialogSettings,
@@ -541,8 +571,10 @@ export const clientsRoute = new Hono<AppBindings>()
 
     return c.json(
       parseResponse(clientConfigResponseSchema, {
+        id: client.id,
+        name: client.name,
+        slug: client.slug,
         platform,
-        clientId,
         basicSettings,
         authSettings,
         dialogSettings,

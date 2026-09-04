@@ -150,6 +150,28 @@ select {
   width: 100%;
 }
 
+.client-tabs-scrollbar {
+  scrollbar-color: color-mix(in oklch, var(--muted-foreground) 35%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.client-tabs-scrollbar::-webkit-scrollbar {
+  height: 6px;
+}
+
+.client-tabs-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.client-tabs-scrollbar::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--muted-foreground) 28%, transparent);
+  border-radius: 999px;
+}
+
+.client-tabs-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--muted-foreground) 48%, transparent);
+}
+
 .app-shell {
   margin: 0 auto;
   max-width: 1080px;

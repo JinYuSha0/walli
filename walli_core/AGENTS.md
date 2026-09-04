@@ -35,6 +35,17 @@ API response `message` fields must be written in English, including error and gu
 
 https://developers.cloudflare.com/workers/runtime-apis/nodejs/
 
+## Coding Preferences: Async Context
+
+- Use `AsyncLocalStorage` (`node:async_hooks`) for request-scoped dependencies. The accessor is `getAsyncContext()`; do not introduce `getWorkerEnv()` or restore `getChatAsyncContext()`.
+- Initialize context once at the Worker request boundary using `c.env` and the execution context. Shared services read bindings through `getAsyncContext().env`; do not pass `env`, `APP_KV`, or other context-available dependencies down the call chain. Prefer `getSettings()` over `getSettings(getAsyncContext().env.APP_KV)`.
+- Durable Object internals use `this.env` and `this.ctx` directly. Apply `WithAsyncContext(UserDO)` once at class level so shared services called from DO methods have context; do not reintroduce repeated `runWithChatAsyncContext` or `withSharedContext` wrappers at individual call sites.
+- Keep wrapped DO entrypoints on the prototype, not as arrow-function fields. Constructor work that requires context must enter through a wrapped initialization method. Preserve context for nested calls on the same instance and isolate different instances and concurrent invocations.
+- Extend task-local `userInfo`/`sessionId` with `extendChatAsyncContext`; do not store request/task context on an instance or in mutable global state. Bind deferred callbacks when they may execute outside their creation context.
+- Generic tool executors must not identify tools by name to inject runtime context. Tools that need context read it in their own handlers. Preserve explicitly supported direct-API input when no chat context exists.
+- Keep business arguments distinct from ambient dependencies: `clientId` must not fall back to a platform string. Use `clientId` consistently in types and parameters, and `client_id` for its SQL column. `platform` is a separate `streamChat` argument, not a field on `userInfo` or an argument to `createChatUserInfo`.
+- Do not silently fabricate context when it is missing; retain the accessor's fail-fast error. After changing context boundaries, verify nested calls, concurrent isolation, initialization, RPC, and alarms. Use `tsc -b` for the referenced TypeScript projects and `pnpm test:do-context` for the actual Workers runtime checks; root `tsc --noEmit` alone is insufficient.
+
 ## Errors
 
 - **Error 1102** (CPU/Memory exceeded): Retrieve limits from `/workers/platform/limits/`

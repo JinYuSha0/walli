@@ -8,7 +8,7 @@ import {
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { BrandMark } from "@/components/brand-mark";
-import { NavMain } from "@/components/nav-main";
+import { NavMain, type NavMainItem } from "@/components/nav-main";
 import { NavSecondary } from "@/components/nav-secondary";
 import { NavUser } from "@/components/nav-user";
 import {
@@ -34,7 +34,7 @@ export function AppSidebar({
   onSignOut: () => Promise<void> | void;
 }) {
   const { t } = useTranslation();
-  const data = {
+  const data: { navMain: NavMainItem[]; navSecondary: never[] } = {
     navMain: [
       {
         activePrefix: "/",
@@ -54,11 +54,7 @@ export function AppSidebar({
       {
         activePrefix: "/clients",
         title: t("navKeys"),
-        to: "/clients/$platform/$tab",
-        params: {
-          platform: "telegram",
-          tab: "basic",
-        },
+        to: "/clients",
         icon: IconKey,
       },
       {

@@ -58,7 +58,7 @@ CREATE TABLE `scheduled_tasks` (
 CREATE INDEX `idx_scheduled_tasks_due` ON `scheduled_tasks` (`status`,`scheduled_at`);--> statement-breakpoint
 CREATE TABLE `sessions` (
 	`id` text PRIMARY KEY NOT NULL,
-	`client` text NOT NULL,
+	`client_id` text NOT NULL,
 	`summary` text NOT NULL,
 	`created_at` integer NOT NULL
 );

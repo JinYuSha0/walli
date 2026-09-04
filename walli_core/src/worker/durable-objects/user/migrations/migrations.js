@@ -1,5 +1,5 @@
-import journal from './meta/_journal.json';
-import m0000 from './0000_sturdy_caretaker.sql';
+import journal from "./meta/_journal.json";
+import m0000 from "./0000_initial.sql";
 
 export default {
   journal,

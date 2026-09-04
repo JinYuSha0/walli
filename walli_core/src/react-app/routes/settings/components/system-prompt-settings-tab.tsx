@@ -204,7 +204,7 @@ export function SystemPromptSettingsTab({ settings }: SystemPromptSettingsTabPro
           </div>
         ) : null}
         <Button type="submit" disabled={pending}>
-          {t("promptSave")}
+          {t("saveSettings")}
         </Button>
       </div>
     </form>

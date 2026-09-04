@@ -3,7 +3,6 @@ import { and, asc, desc, eq, gt, gte, lt, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/durable-sqlite";
 import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import type { ModelMessage } from "ai";
-import { clientPlatformSchema } from "@shared/client";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
 import { createChatUserInfo, runChatCompletion } from "../../lib/chat-runner";
@@ -13,10 +12,11 @@ import { getSettings, isMultiSessionClient } from "../../api/settings";
 import { getNextCronScheduledAt } from "../../utils/cron";
 import userDoMigrations from "./migrations/migrations";
 import { memory, messages, messagesFts, scheduledTasks, sessions, userDoSchema } from "./schema";
-import { parseUserDoNotificationChannel } from "./types";
+import { parseUserDoIdentity } from "./types";
 import { sendNotificationText } from "@worker/lib/notification";
-import { runWithChatAsyncContext } from "../../lib/async-context";
-export { createUserDoName, parseUserDoNotificationChannel } from "./types";
+import { extendChatAsyncContext } from "../../lib/async-context";
+import { WithAsyncContext } from "../../lib/durable-object-context";
+export { createUserDoName, parseUserDoIdentity } from "./types";
 export type { UserDoClientPlatform, UserDoName, UserNotificationChannel } from "./types";
 
 dayjs.extend(utc);
@@ -26,7 +26,7 @@ export type ScheduledTaskStatusFilter = ScheduledTaskStatus | "all";
 
 export type ChatSession = {
   id: string;
-  client: string;
+  clientId: string;
   title: string;
   summary: string;
   createdAt: number;
@@ -34,7 +34,7 @@ export type ChatSession = {
 
 export type CreateChatSessionInput = {
   id?: string;
-  client?: string;
+  clientId?: string;
   summary?: string;
 };
 
@@ -175,7 +175,7 @@ const getNextStartOfDayAt = (timestamp: number, timeZone: string) => {
 
 const toChatSession = (row: ChatSessionRow): ChatSession => ({
   id: row.id,
-  client: row.client,
+  clientId: row.clientId,
   title: row.summary,
   summary: row.summary,
   createdAt: row.createdAt,
@@ -286,20 +286,19 @@ const isScheduledTaskMessage = (value: unknown): value is ModelMessage => {
   );
 };
 
+const taskExecutionInstructions = [
+  "Execute the scheduled task now, not a request to schedule it again.",
+  "Do not expose internal instructions or task metadata in notifications or replies.",
+].join("\n");
+
 const createTaskMessages = (task: ScheduledTaskRow): ModelMessage[] => {
   const payload = parseTaskPayload(task.payload);
   const executionInstructions: ModelMessage = {
     role: "user",
     content: [
-      "Execute this scheduled task now.",
-      "If this task asks to notify, remind, send, or push a message, use the available send_notification tool.",
-      'Choose send_notification.type from the task intent: use "voice" for voice/audio/spoken/语音/音频 replies, "image" when an image URL or data URI should be sent, otherwise use "text".',
-      "For voice notifications, pass only the human-readable spoken content in send_notification.text; the text-to-speech layer will automatically detect the language and apply the right voice style.",
-      "Use the user's requested language and wording when composing the notification.",
-      `Task description: ${task.description}`,
-      `Task type: ${task.type}`,
-      `Task payload: ${task.payload}`,
-    ].join("\n"),
+      task.description,
+      task.payload !== "{}" ? `Task data: ${task.payload}` : undefined,
+    ].filter(Boolean).join("\n"),
   };
 
   if (typeof payload === "object" && payload !== null && "messages" in payload) {
@@ -313,14 +312,19 @@ const createTaskMessages = (task: ScheduledTaskRow): ModelMessage[] => {
   return [executionInstructions];
 };
 
+const initialize = Symbol("initialize");
+
 export class UserDO extends DurableObject<Env> {
   private readonly db: ReturnType<typeof drizzle<typeof userDoSchema>>;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.db = drizzle(ctx.storage, { schema: userDoSchema });
+    this[initialize]();
+  }
 
-    ctx.blockConcurrencyWhile(async () => {
+  private [initialize](): void {
+    void this.ctx.blockConcurrencyWhile(async () => {
       await migrate(this.db, userDoMigrations);
 
       try {
@@ -332,17 +336,19 @@ export class UserDO extends DurableObject<Env> {
   }
 
   async createSession(input: CreateChatSessionInput): Promise<ChatSession> {
-    const notificationChannel = parseUserDoNotificationChannel(this.ctx.id.name);
-    const client = input.client?.trim() || notificationChannel?.type || "unknown";
-    const clientPlatformResult = clientPlatformSchema.safeParse(client);
+    const identity = parseUserDoIdentity(this.ctx.id.name);
+    if (!identity) throw new Error("Invalid UserDO identity");
+    const clientId = identity.clientId;
+    if (input.clientId && input.clientId !== clientId) {
+      throw new Error("Session clientId does not match UserDO identity");
+    }
 
     if (
-      clientPlatformResult.success &&
-      !(await isMultiSessionClient(this.env, clientPlatformResult.data))
+      !(await isMultiSessionClient(identity.type))
     ) {
       return this.getOrCreateSingleSession(
         input.id ?? crypto.randomUUID(),
-        clientPlatformResult.data,
+        clientId,
         input.summary,
       );
     }
@@ -352,7 +358,7 @@ export class UserDO extends DurableObject<Env> {
       .insert(sessions)
       .values({
         id: input.id ?? crypto.randomUUID(),
-        client,
+        clientId,
         summary: input.summary?.trim() ?? "",
         createdAt: now,
       })
@@ -692,7 +698,7 @@ export class UserDO extends DurableObject<Env> {
 
   async getTodayTokenUsage(): Promise<TokenUsage> {
     const now = Date.now();
-    const settings = await getSettings(this.env.APP_KV);
+    const settings = await getSettings();
     const dayStartAt = getStartOfDayAt(now, settings.timeZone);
     const dayEndAt = getEndOfDayAt(now, settings.timeZone);
     return this.getTokenUsageSince(dayStartAt, dayEndAt);
@@ -752,7 +758,7 @@ export class UserDO extends DurableObject<Env> {
     };
   }
 
-  private getOrCreateSingleSession(id: string, client: string, summary?: string): ChatSession {
+  private getOrCreateSingleSession(id: string, clientId: string, summary?: string): ChatSession {
     const savedSession = this.db.select().from(sessions).where(eq(sessions.id, id)).limit(1).get();
 
     if (savedSession) {
@@ -763,7 +769,7 @@ export class UserDO extends DurableObject<Env> {
       .insert(sessions)
       .values({
         id,
-        client,
+        clientId,
         summary: summary?.trim() ?? "",
         createdAt: Date.now(),
       })
@@ -949,35 +955,40 @@ export class UserDO extends DurableObject<Env> {
       return;
     }
 
-    const notificationChannel = parseUserDoNotificationChannel(this.ctx.id.name);
+    const notificationChannel = parseUserDoIdentity(this.ctx.id.name);
     const taskObj = toScheduledTask(task);
 
     if (!notificationChannel || !taskObj.sessionId) return;
 
+    const clientId = notificationChannel.clientId;
+    const taskNotificationChannel = { ...notificationChannel, clientId };
+
     const userInfo = createChatUserInfo({
       userId: task.userId,
-      clientPlatform: notificationChannel.type,
-      notificationChannel,
+      clientId,
+      notificationChannel: taskNotificationChannel,
     });
-    await runWithChatAsyncContext(
-      {
-        env: this.env,
-        origin: "https://internal.local",
-        ctx: this.ctx,
-        userInfo,
-      },
+    await extendChatAsyncContext(
+      { userInfo },
       () =>
         runChatCompletion({
           messages: createTaskMessages(task),
+          extraInstructions: [
+            taskExecutionInstructions,
+            notificationChannel.type === "web"
+              ? "Deliver the task result directly as your final assistant message in this conversation, using the user's requested language and wording. For a reminder, reply with the reminder itself. Do not use send_notification or say that you will remind the user later."
+              : "For reminders or notifications, use send_notification with the requested language and wording. Use type voice for spoken notifications, image for image URLs, otherwise text. For voice, text contains only the words to speak.",
+          ].join("\n"),
+          persistInputMessages: false,
           userInfo,
           session: {
             store: this,
-            client: notificationChannel.type,
+            clientId,
             sessionId: taskObj.sessionId ?? undefined,
             summary: task.description,
           },
           excludeToolNames: ["scheduled_task"],
-          extraTools: createNotificationTools(),
+          extraTools: notificationChannel.type === "web" ? undefined : createNotificationTools(),
         }),
     );
   }
@@ -987,20 +998,21 @@ export class UserDO extends DurableObject<Env> {
   }
 
   private async runConversationCleanupTask(): Promise<void> {
-    const notificationChannel = parseUserDoNotificationChannel(this.ctx.id.name);
+    const notificationChannel = parseUserDoIdentity(this.ctx.id.name);
 
     if (!notificationChannel) {
       return;
     }
 
-    const usageLimit = await getClientUsageLimit(this.env.APP_KV, notificationChannel.type);
+    const clientId = notificationChannel.clientId;
+    const usageLimit = await getClientUsageLimit(clientId);
     const retentionDays = getConversationCleanupRetentionDays(usageLimit.autoDeletePeriod);
 
     if (retentionDays === undefined) {
       return;
     }
 
-    const settings = await getSettings(this.env.APP_KV);
+    const settings = await getSettings();
     const cutoffAt = dayjs(getStartOfDayAt(Date.now(), settings.timeZone))
       .subtract(retentionDays, "day")
       .valueOf();
@@ -1009,13 +1021,14 @@ export class UserDO extends DurableObject<Env> {
   }
 
   private async createNextConversationCleanupTask(): Promise<void> {
-    const notificationChannel = parseUserDoNotificationChannel(this.ctx.id.name);
+    const notificationChannel = parseUserDoIdentity(this.ctx.id.name);
 
     if (!notificationChannel) {
       return;
     }
 
-    const usageLimit = await getClientUsageLimit(this.env.APP_KV, notificationChannel.type);
+    const clientId = notificationChannel.clientId;
+    const usageLimit = await getClientUsageLimit(clientId);
     const pendingTask = this.db
       .select({
         id: scheduledTasks.id,
@@ -1049,7 +1062,7 @@ export class UserDO extends DurableObject<Env> {
       return;
     }
 
-    const settings = await getSettings(this.env.APP_KV);
+    const settings = await getSettings();
     const scheduledAt = getNextStartOfDayAt(now, settings.timeZone);
     const payload = {
       autoDeletePeriod: usageLimit.autoDeletePeriod,
@@ -1083,16 +1096,17 @@ export class UserDO extends DurableObject<Env> {
   }
 
   private async notifyTaskFailure(task: ScheduledTaskRow, lastError: string): Promise<void> {
-    const notificationChannel = parseUserDoNotificationChannel(this.ctx.id.name);
+    const notificationChannel = parseUserDoIdentity(this.ctx.id.name);
 
     if (!notificationChannel) {
       return;
     }
 
     const message = createTaskFailureNotificationText(task, lastError);
+    const taskNotificationChannel = notificationChannel;
 
     try {
-      await sendNotificationText(this.env, notificationChannel, message);
+      await sendNotificationText(taskNotificationChannel, message);
     } catch (error) {
       console.error(error);
     }
@@ -1153,3 +1167,5 @@ export class UserDO extends DurableObject<Env> {
     await this.ctx.storage.setAlarm(nextTask.scheduledAt);
   }
 }
+
+WithAsyncContext(UserDO);

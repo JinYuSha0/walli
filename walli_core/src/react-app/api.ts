@@ -6,7 +6,8 @@ import type {
   ClientConfigResponse,
   ClientCorsSettingsPatch,
   ClientDialogSettingsPatch,
-  ClientPlatform,
+  Client,
+  ClientCreate,
   ClientUsageLimitPatch,
   TelegramSettingsPatch,
   TelegramWhitelistCreate,
@@ -27,6 +28,8 @@ export type {
   ClientDialogSettings,
   ClientDialogSettingsPatch,
   ClientPlatform,
+  Client,
+  ClientCreate,
   ClientUsageLimit,
   ClientUsageLimitPatch,
   TelegramSettingsPatch,
@@ -219,22 +222,34 @@ export const updateSettings = async (json: SettingsPatch): Promise<SettingsRespo
 export const resetSettings = async (): Promise<SettingsResponse> =>
   parseResponse(apiClient.api.admin.settings.$delete());
 
-export const getClientConfig = async (
-  platform: ClientPlatform,
-): Promise<ClientConfigResponse> =>
-  parseResponse(apiClient.api.admin.clients[":platform"].$get({ param: { platform } }));
+export const getClients = async (): Promise<Client[]> =>
+  parseResponse(apiClient.api.admin.clients.$get());
 
-export const resetClientSettings = async (
-  platform: ClientPlatform,
-): Promise<ClientConfigResponse> =>
-  parseResponse(
-    apiClient.api.admin.clients[":platform"]["reset-settings"].$post({
-      param: { platform },
-    }),
-  );
+export const createClient = async (json: ClientCreate): Promise<ClientConfigResponse> => {
+  const response = await apiClient.api.admin.clients.$post({ json });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(
+      body && typeof body === "object" && "error" in body && typeof body.error === "string"
+        ? body.error
+        : "Failed to create client",
+    );
+  }
+  return parseResponse(Promise.resolve(response));
+};
+
+export const getClientConfig = async (clientId: string): Promise<ClientConfigResponse> =>
+  parseResponse(apiClient.api.admin.clients[":clientId"].$get({ param: { clientId } }));
+
+export const deleteClient = async (clientId: string): Promise<void> => {
+  const response = await apiClient.api.admin.clients[":clientId"].$delete({
+    param: { clientId },
+  });
+  if (!response.ok) throw new Error("Failed to delete client");
+};
 
 const patchClientConfig = async (
-  platform: ClientPlatform,
+  clientId: string,
   json:
     | ClientAuthSettingsPatch
     | ClientBasicSettingsPatch
@@ -243,54 +258,56 @@ const patchClientConfig = async (
     | ClientUsageLimitPatch
     | TelegramSettingsPatch,
 ): Promise<ClientConfigResponse> => {
-  const patchClient = apiClient.api.admin.clients[":platform"].$patch as (
+  const patchClient = apiClient.api.admin.clients[":clientId"].$patch as (
     args: {
-      param: { platform: ClientPlatform };
+      param: { clientId: string };
       json: typeof json;
     },
-  ) => ReturnType<typeof apiClient.api.admin.clients[":platform"]["$patch"]>;
+  ) => ReturnType<typeof apiClient.api.admin.clients[":clientId"]["$patch"]>;
 
   return parseResponse(
     patchClient({
-      param: { platform },
+      param: { clientId },
       json,
     }),
   );
 };
 
 export const updateClientBasicSettings = async (
-  platform: ClientPlatform,
+  clientId: string,
   json: ClientBasicSettingsPatch,
 ): Promise<ClientConfigResponse> =>
-  patchClientConfig(platform, json);
+  patchClientConfig(clientId, json);
 
 export const updateClientDialogSettings = async (
-  platform: ClientPlatform,
+  clientId: string,
   json: ClientDialogSettingsPatch,
 ): Promise<ClientConfigResponse> =>
-  patchClientConfig(platform, json);
+  patchClientConfig(clientId, json);
 
 export const updateClientAuthSettings = async (
-  platform: ClientPlatform,
+  clientId: string,
   json: ClientAuthSettingsPatch,
 ): Promise<ClientConfigResponse> =>
-  patchClientConfig(platform, json);
+  patchClientConfig(clientId, json);
 
 export const updateClientCorsSettings = async (
+  clientId: string,
   json: ClientCorsSettingsPatch,
 ): Promise<ClientConfigResponse> =>
-  patchClientConfig("web", json);
+  patchClientConfig(clientId, json);
 
 export const updateClientUsageLimit = async (
-  platform: ClientPlatform,
+  clientId: string,
   json: ClientUsageLimitPatch,
 ): Promise<ClientConfigResponse> =>
-  patchClientConfig(platform, json);
+  patchClientConfig(clientId, json);
 
 export const updateTelegramSettings = async (
+  clientId: string,
   json: TelegramSettingsPatch,
 ): Promise<ClientConfigResponse> =>
-  patchClientConfig("telegram", json);
+  patchClientConfig(clientId, json);
 
 export const getTelegramWhitelistEntries = async ({
   page,

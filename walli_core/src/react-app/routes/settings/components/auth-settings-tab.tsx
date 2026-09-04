@@ -187,7 +187,7 @@ export function AuthSettingsTab({ settings, onSave }: AuthSettingsTabProps) {
 
       <div className="flex justify-end gap-2 border-t border-border pt-8">
         <Button type="submit" disabled={saveMutation.isPending}>
-          {t("authSettingsSave")}
+          {t("saveSettings")}
         </Button>
       </div>
     </form>

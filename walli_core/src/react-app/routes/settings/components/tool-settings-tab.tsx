@@ -1182,7 +1182,7 @@ export function ToolSettingsTab({ builtInTools, models, tools }: ToolSettingsTab
           </div>
         ) : null}
         <Button type="submit" disabled={pending}>
-          {t("toolSettingsSave")}
+          {t("saveSettings")}
         </Button>
       </div>
     </form>

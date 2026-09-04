@@ -1,22 +1,18 @@
 import { generateText, isStepCount, type LanguageModel, type ToolSet, Output } from "ai";
 import type { ModelMessage } from "ai";
 import type { DurableObject } from "cloudflare:workers";
-import type { ClientPlatform } from "@shared/client";
 import { BUILT_IN_TOOLS, type Settings, type ToolConfig } from "@shared/const";
 import { getClientUsageLimit } from "../api/clients";
 import { getSettings } from "../api/settings";
-import { createGatewayFromEnv, normalizeGatewayModelId, unified } from "./llm";
+import { createGateway, normalizeGatewayModelId, unified } from "./llm";
 import { buildChatTools } from "./tool-runner";
-import { extendChatAsyncContext, getChatAsyncContext } from "./async-context";
+import { extendChatAsyncContext, getAsyncContext } from "./async-context";
 import {
   createMemoryContextInstructions,
   EMPTY_MEMORY_CONTEXT,
   summarizeChatMemory,
 } from "./chat-summary";
-import {
-  createUserNotificationChannel,
-  type UserNotificationChannel,
-} from "../durable-objects/user/types";
+import type { UserNotificationChannel } from "../durable-objects/user/types";
 import type { UserDO } from "../durable-objects/user";
 import {
   createImageAttachmentInstructions,
@@ -35,14 +31,14 @@ export type ChatUserInfo = {
   userId: string;
   name?: string;
   email?: string;
-  clientPlatform: ClientPlatform;
-  notificationChannel: UserNotificationChannel;
+  clientId: string;
+  notificationChannel?: UserNotificationChannel;
   attributes?: Record<string, unknown>;
 };
 
 export type CreateChatUserInfoInput = {
   userId: string;
-  clientPlatform: ClientPlatform;
+  clientId: string;
   authUserInfo?: unknown;
   name?: string;
   email?: string;
@@ -52,6 +48,8 @@ export type CreateChatUserInfoInput = {
 
 export type RunChatOptions = {
   messages: ModelMessage[];
+  /** Background task inputs are model context, not new conversation messages. */
+  persistInputMessages?: boolean;
   userInfo?: ChatUserInfo;
   excludeToolNames?: string[];
   settings?: Settings;
@@ -63,13 +61,18 @@ export type RunChatOptions = {
   session: RunChatSessionOptions;
 };
 
-type ChatSessionStore = PickFunctions<Omit<UserDO, keyof DurableObject>>;
+type UserDoMethods = Omit<UserDO, keyof DurableObject>;
+type ChatSessionStore = Pick<UserDoMethods, {
+  [Key in keyof UserDoMethods]: UserDoMethods[Key] extends (...args: never[]) => unknown
+    ? Key
+    : never;
+}[keyof UserDoMethods]>;
 
 type StoredChatMessage = Awaited<ReturnType<ChatSessionStore["listRecentMessages"]>>[number];
 
 type RunChatSessionOptions = {
   store: ChatSessionStore;
-  client: ClientPlatform;
+  clientId: string;
   sessionId?: string;
   summary?: string;
 };
@@ -118,7 +121,7 @@ export const createChatUserInfo = (input: CreateChatUserInfoInput): ChatUserInfo
     ? Object.fromEntries(
         Object.entries(authUserInfo).filter(
           ([key]) =>
-            !["userId", "name", "email", "clientPlatform", "notificationChannel"].includes(key),
+            !["userId", "name", "email", "clientId", "clientPlatform", "notificationChannel"].includes(key),
         ),
       )
     : {};
@@ -133,9 +136,15 @@ export const createChatUserInfo = (input: CreateChatUserInfoInput): ChatUserInfo
     userId,
     ...(name ? { name } : {}),
     ...(email ? { email } : {}),
-    clientPlatform: input.clientPlatform,
-    notificationChannel:
-      input.notificationChannel ?? createUserNotificationChannel(input.clientPlatform, userId),
+    clientId: input.clientId,
+    ...(input.notificationChannel
+      ? {
+          notificationChannel: {
+            ...input.notificationChannel,
+            clientId: input.clientId,
+          },
+        }
+      : {}),
     ...(Object.keys(attributes).length > 0 ? { attributes } : {}),
   };
 };
@@ -202,7 +211,7 @@ const minDefinedTokenLimit = (...limits: Array<number | undefined>) => {
 };
 
 const createBuiltInTools = (settings: Settings): ToolConfig[] => {
-  const { env, origin } = getChatAsyncContext();
+  const { env, origin } = getAsyncContext();
   const configuredByName = new Map(settings.builtInTools.map((tool) => [tool.name, tool]));
 
   return BUILT_IN_TOOLS.map((tool) => {
@@ -249,6 +258,7 @@ export const createChatRunnerInstructions = createChatInstructions;
 
 export const prepareChatCompletion = async ({
   messages,
+  persistInputMessages = true,
   userInfo,
   excludeToolNames = [],
   settings,
@@ -258,18 +268,18 @@ export const prepareChatCompletion = async ({
   maxOutputTokens,
   session,
 }: Omit<RunChatOptions, "output">): Promise<PreparedChatCompletion> => {
-  const { env, origin, ctx } = getChatAsyncContext();
-  const resolvedSettings = settings ?? (await getSettings(env.APP_KV));
+  const { env, origin, ctx } = getAsyncContext();
+  const resolvedSettings = settings ?? (await getSettings());
   const usageLimitSettings = session
-    ? await getClientUsageLimit(env.APP_KV, session.client)
+    ? await getClientUsageLimit(session.clientId)
     : undefined;
   const chatSession = session?.sessionId
     ? await session.store.getOrCreateSession({
         id: session.sessionId,
-        client: session.client,
+        clientId: session.clientId,
         summary: session.summary,
       })
-    : await session.store.createSession({ client: session.client, summary: session.summary });
+    : await session.store.createSession({ clientId: session.clientId, summary: session.summary });
   const shouldCheckUserUsageLimit =
     usageLimitSettings !== undefined &&
     (usageLimitSettings.perUserDailyInputLimit > 0 ||
@@ -352,7 +362,7 @@ export const prepareChatCompletion = async ({
     dailyOutputRemaining,
   );
   const modelId = normalizeGatewayModelId(resolvedSettings.primaryModel);
-  const gateway = createGatewayFromEnv(env);
+  const gateway = createGateway();
   const primaryModelSupportsImages = modelSupportsCapability(
     resolvedSettings.models,
     resolvedSettings.primaryModel,
@@ -413,7 +423,7 @@ export const prepareChatCompletion = async ({
         const persistedMessages =
           (await session.store
             .addMessages([
-              ...messages.map((inputMessage, index) => ({
+              ...(persistInputMessages ? messages : []).map((inputMessage, index) => ({
                 sessionId: chatSession.id,
                 content: serializeChatMessage(inputMessage),
                 inputToken: index === messages.length - 1 ? inputTokens : 0,
@@ -422,7 +432,7 @@ export const prepareChatCompletion = async ({
               ...responseMessages.map((responseMessage, index) => ({
                 sessionId: chatSession.id,
                 content: serializeChatMessage(responseMessage),
-                inputToken: 0,
+                inputToken: !persistInputMessages && index === 0 ? inputTokens : 0,
                 outputToken: index === responseMessages.length - 1 ? outputTokens : 0,
               })),
             ])
@@ -435,7 +445,9 @@ export const prepareChatCompletion = async ({
           return;
         }
 
-        const firstUserMessage = messages.find((message) => message.role === "user");
+        const firstUserMessage = persistInputMessages
+          ? messages.find((message) => message.role === "user")
+          : undefined;
         if (!chatSession.summary && typeof firstUserMessage?.content === "string") {
           const content = firstUserMessage.content.trim();
           let title = content.replace(/\s+/g, " ").slice(0, 50);
@@ -488,7 +500,6 @@ export const prepareChatCompletion = async ({
         }
 
         const summary = await summarizeChatMemory({
-          env,
           settings: resolvedSettings,
           previousMemory: memoryContext,
           messages: summaryMessages,

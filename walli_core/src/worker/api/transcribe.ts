@@ -1,9 +1,10 @@
-import { Hono, type Context, type MiddlewareHandler } from "hono";
-import { getClientAuthSettings, getClientBasicSettings, getWebCorsSettings } from "./clients";
+import { Hono, type Context } from "hono";
+import { getClientAuthSettings, getClientBasicSettings } from "./clients";
+import { handleCors } from "./helper/cors";
 import { requireAdmin } from "./helper/middleware";
 import type { AppBindings } from "./types";
 import { verifyChatAuth } from "./chat";
-import { getClientPlatformFromClientId } from "./clients";
+import { getClientFromClientId } from "./clients";
 import { transcribeVoice } from "../tools/tool-media";
 
 const MAX_AUDIO_SIZE = 25 * 1024 * 1024;
@@ -18,22 +19,6 @@ const AUDIO_TYPES = new Set([
   "video/mp4",
 ]);
 
-const handleCors: MiddlewareHandler<AppBindings> = async (c, next) => {
-  const origin = c.req.header("origin");
-  if (!origin) return next();
-
-  const { corsAllowedOrigins } = await getWebCorsSettings(c.env.APP_KV);
-  const allowed = corsAllowedOrigins.includes(origin);
-  if (allowed) {
-    c.header("Access-Control-Allow-Origin", origin);
-    c.header("Access-Control-Allow-Headers", "content-type");
-    c.header("Access-Control-Allow-Methods", "POST, OPTIONS");
-    c.header("Access-Control-Allow-Credentials", "true");
-    c.header("Vary", "Origin");
-  }
-  if (c.req.method === "OPTIONS") return c.body(null, allowed ? 204 : 403);
-  return next();
-};
 
 const transcribe = async (c: Context<AppBindings>, form: FormData, exposeError = false) => {
   const audio = form.get("audio");
@@ -70,19 +55,22 @@ const transcribe = async (c: Context<AppBindings>, form: FormData, exposeError =
 };
 
 export const transcribeRoute = new Hono<AppBindings>()
-  .use("/api/transcribe", handleCors)
+  .use("/api/transcribe", handleCors({
+    methods: ["POST", "OPTIONS"],
+    headers: ["content-type", "x-client-id"],
+  }))
   .post("/api/transcribe", async (c) => {
     const form = await c.req.formData();
     const appId = form.get("appId");
     const userId = form.get("userId");
     const token = form.get("token");
-    const platform = getClientPlatformFromClientId(typeof appId === "string" ? appId : undefined);
-    if (!platform || typeof userId !== "string") return c.json({ error: "Invalid client" }, 403);
+    const client = await getClientFromClientId(typeof appId === "string" ? appId : undefined);
+    if (!client || typeof userId !== "string") return c.json({ error: "Invalid client" }, 403);
 
-    const basicSettings = await getClientBasicSettings(c.env.APP_KV, platform);
+    const basicSettings = await getClientBasicSettings(client.id);
     if (!basicSettings.enabled) return c.json({ error: "Client disabled" }, 403);
 
-    const authSettings = await getClientAuthSettings(c.env.APP_KV, platform);
+    const authSettings = await getClientAuthSettings(client.id);
     if (!authSettings.authEnabled) {
       return c.json({ error: "Auth disabled" }, 403);
     }

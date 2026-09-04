@@ -137,7 +137,7 @@ export function UsageSettingsTab({ settings }: UsageSettingsTabProps) {
 
       <div className="flex justify-end gap-2 border-t border-border pt-8">
         <Button type="submit" disabled={updateSettingsMutation.isPending}>
-          {t("usageSettingsSave")}
+          {t("saveSettings")}
         </Button>
       </div>
     </form>

@@ -10,7 +10,7 @@ export const requireAdmin: MiddlewareHandler<AppBindings> = async (c, next) => {
     return c.json(parseResponse(errorResponseSchema, { error: "Unauthorized" }), 401);
   }
 
-  if (!hasAdminRole(user, c.env)) {
+  if (!hasAdminRole(user)) {
     return c.json(
       parseResponse(errorResponseSchema, { error: "Forbidden", requiredRole: "admin" }),
       403,

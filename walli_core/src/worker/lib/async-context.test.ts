@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  bindChatAsyncContext,
-  getChatAsyncContext,
-  runWithChatAsyncContext,
-} from "./async-context";
+import { bindAsyncContext, getAsyncContext, runWithChatAsyncContext } from "./async-context";
 
 const createContext = (origin: string) => ({
   env: {} as Env,
@@ -15,7 +11,7 @@ describe("chat async context", () => {
     const readOrigin = (origin: string) =>
       runWithChatAsyncContext(createContext(origin), async () => {
         await Promise.resolve();
-        return getChatAsyncContext().origin;
+        return getAsyncContext().origin;
       });
 
     await expect(
@@ -25,10 +21,11 @@ describe("chat async context", () => {
 
   it("binds deferred tool execution to the context where the tool was created", async () => {
     const readOrigin = runWithChatAsyncContext(createContext("https://chat.test"), () =>
-      bindChatAsyncContext(async () => {
+      bindAsyncContext(async () => {
         await Promise.resolve();
-        return getChatAsyncContext().origin;
-      }));
+        return getAsyncContext().origin;
+      }),
+    );
 
     await expect(readOrigin()).resolves.toBe("https://chat.test");
   });

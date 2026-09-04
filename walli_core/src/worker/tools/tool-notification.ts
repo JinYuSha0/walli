@@ -7,12 +7,11 @@ import {
   sendNotificationVoice,
 } from "@worker/lib/notification";
 import { synthesizeVoice } from "./tool-media";
-import { bindChatAsyncContext, getChatAsyncContext } from "../lib/async-context";
+import { bindAsyncContext, getAsyncContext } from "../lib/async-context";
 
 export const createNotificationTools = (): ToolSet => {
-  const { userInfo } = getChatAsyncContext();
-  const notificationChannel: UserNotificationChannel | null =
-    userInfo?.notificationChannel ?? null;
+  const { userInfo } = getAsyncContext();
+  const notificationChannel: UserNotificationChannel | null = userInfo?.notificationChannel ?? null;
   if (!notificationChannel) {
     return {};
   }
@@ -61,7 +60,7 @@ export const createNotificationTools = (): ToolSet => {
       description:
         "Send a notification message to the user's configured notification channel. Use this when the scheduled task asks you to remind, notify, send, push a message, reply with voice, or reply with an image.",
       inputSchema,
-      execute: bindChatAsyncContext(async (input) => {
+      execute: bindAsyncContext(async (input) => {
         const notification = inputSchema.parse(input);
 
         switch (notification.type) {
@@ -74,7 +73,7 @@ export const createNotificationTools = (): ToolSet => {
 
             const voice = await synthesizeVoice(text);
 
-            await sendNotificationVoice(getChatAsyncContext().env, notificationChannel, voice);
+            await sendNotificationVoice(notificationChannel, voice);
             break;
           }
           case "image": {
@@ -84,7 +83,7 @@ export const createNotificationTools = (): ToolSet => {
               throw new Error("Image is required for image notifications");
             }
 
-            await sendNotificationImage(getChatAsyncContext().env, notificationChannel, {
+            await sendNotificationImage(notificationChannel, {
               photo: image,
               caption: notification.text,
             });
@@ -97,7 +96,7 @@ export const createNotificationTools = (): ToolSet => {
               throw new Error("Text is required for text notifications");
             }
 
-            await sendNotificationText(getChatAsyncContext().env, notificationChannel, text);
+            await sendNotificationText(notificationChannel, text);
             break;
           }
         }

@@ -8,12 +8,12 @@ import {
 } from "../utils/tg";
 import type { UserNotificationChannel } from "../durable-objects/user/types";
 
-const sendNotificationTelegramText = async (env: Env, chatId: string, text: string) => {
-  await sendTelegramText(await getTelegramToken(env), chatId, text);
+const sendNotificationTelegramText = async (chatId: string, text: string, clientId: string) => {
+  await sendTelegramText(await getTelegramToken(clientId), chatId, text);
 };
 
-const getTelegramToken = async (env: Env) => {
-  const token = await getTelegramBotToken(env.APP_KV, env);
+const getTelegramToken = async (clientId: string) => {
+  const token = await getTelegramBotToken(clientId);
 
   if (!token) {
     throw new Error("Telegram bot token is not configured");
@@ -23,29 +23,32 @@ const getTelegramToken = async (env: Env) => {
 };
 
 const sendNotificationTelegramVoice = async (
-  env: Env,
   chatId: string,
   voice: TelegramVoiceUpload,
+  clientId: string,
 ) => {
-  await sendTelegramVoice(await getTelegramToken(env), chatId, voice);
+  await sendTelegramVoice(await getTelegramToken(clientId), chatId, voice);
 };
 
 const sendNotificationTelegramImage = async (
-  env: Env,
   chatId: string,
   image: TelegramPhotoUpload,
+  clientId: string,
 ) => {
-  await sendTelegramPhoto(await getTelegramToken(env), chatId, image);
+  await sendTelegramPhoto(await getTelegramToken(clientId), chatId, image);
 };
 
 export const sendNotificationText = async (
-  env: Env,
   notificationChannel: UserNotificationChannel,
   text: string,
 ) => {
   switch (notificationChannel.type) {
     case "telegram":
-      await sendNotificationTelegramText(env, notificationChannel.userId, text);
+      await sendNotificationTelegramText(
+        notificationChannel.userId,
+        text,
+        notificationChannel.clientId,
+      );
       return;
     case "web":
       // TODO: Implement web push or in-app notification delivery.
@@ -60,13 +63,16 @@ export const sendNotificationText = async (
 };
 
 export const sendNotificationVoice = async (
-  env: Env,
   notificationChannel: UserNotificationChannel,
   voice: TelegramVoiceUpload,
 ) => {
   switch (notificationChannel.type) {
     case "telegram":
-      await sendNotificationTelegramVoice(env, notificationChannel.userId, voice);
+      await sendNotificationTelegramVoice(
+        notificationChannel.userId,
+        voice,
+        notificationChannel.clientId,
+      );
       return;
     case "web":
       throw new Error("TODO: Web notification delivery is not implemented");
@@ -78,13 +84,16 @@ export const sendNotificationVoice = async (
 };
 
 export const sendNotificationImage = async (
-  env: Env,
   notificationChannel: UserNotificationChannel,
   image: TelegramPhotoUpload,
 ) => {
   switch (notificationChannel.type) {
     case "telegram":
-      await sendNotificationTelegramImage(env, notificationChannel.userId, image);
+      await sendNotificationTelegramImage(
+        notificationChannel.userId,
+        image,
+        notificationChannel.clientId,
+      );
       return;
     case "web":
       throw new Error("TODO: Web notification delivery is not implemented");

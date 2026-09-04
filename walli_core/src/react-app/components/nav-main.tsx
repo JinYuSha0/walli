@@ -9,34 +9,21 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-export function NavMain({
-  items,
-}: {
-  items: Array<
+export type NavMainItem =
     {
       activePrefix: string;
       icon?: Icon;
       title: string;
     } & (
-      | {
-          params?: never;
-          to: "/" | "/chat-test";
-        }
-      | {
-          params: {
-            tab: string;
-          };
-          to: "/settings/$tab";
-        }
-      | {
-          params: {
-            platform: string;
-            tab: string;
-          };
-          to: "/clients/$platform/$tab";
-        }
-    )
-  >;
+      | { params?: never; to: "/" | "/chat-test" | "/clients" }
+      | { params: { tab: string }; to: "/settings/$tab" }
+      | { params: { platform: string; tab: string }; to: "/clients/$platform/$tab" }
+    );
+
+export function NavMain({
+  items,
+}: {
+  items: NavMainItem[];
 }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -45,7 +32,7 @@ export function NavMain({
       ? location.pathname === "/"
       : location.pathname.startsWith(activePrefix);
   const getHref = (item: (typeof items)[number]) => {
-    if (item.to === "/" || item.to === "/chat-test") {
+    if (item.to === "/" || item.to === "/chat-test" || item.to === "/clients") {
       return item.to;
     }
 
@@ -53,7 +40,10 @@ export function NavMain({
       return `/settings/${item.params.tab}`;
     }
 
-    return `/clients/${item.params.platform}/${item.params.tab}`;
+    if (item.to === "/clients/$platform/$tab") {
+      return `/clients/${item.params.platform}/${item.params.tab}`;
+    }
+    return "/";
   };
   const handleNavigate = (
     event: MouseEvent<HTMLAnchorElement>,
@@ -71,15 +61,16 @@ export function NavMain({
 
     event.preventDefault();
 
-    if (item.to === "/" || item.to === "/chat-test") {
+    if (item.to === "/" || item.to === "/chat-test" || item.to === "/clients") {
       void navigate({ to: item.to });
       return;
     }
 
-    void navigate({
-      to: item.to,
-      params: item.params,
-    });
+    if (item.to === "/settings/$tab") {
+      void navigate({ to: item.to, params: item.params! });
+    } else {
+      void navigate({ to: item.to, params: item.params! });
+    }
   };
 
   return (

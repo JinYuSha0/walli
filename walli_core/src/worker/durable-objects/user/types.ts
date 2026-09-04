@@ -1,56 +1,75 @@
 import { CLIENT_PLATFORMS, type ClientPlatform } from "../../../shared/client";
 
 export type UserDoClientPlatform = ClientPlatform;
-export type UserDoName = `${UserDoClientPlatform}:${string}`;
+export type UserDoName = `${string}:${UserDoClientPlatform}:${string}`;
 export type UserNotificationChannel =
   | {
       type: "telegram";
       userId: string;
+      clientId: string;
     }
   | {
       type: "web";
       userId: string;
+      clientId: string;
     }
   | {
       type: "react-native";
       userId: string;
+      clientId: string;
     }
   | {
       type: "flutter";
       userId: string;
+      clientId: string;
     };
 
-export const createUserDoName = (platform: UserDoClientPlatform, userId: string): UserDoName =>
-  `${platform}:${userId}`;
+export type UserDoIdentity = {
+  clientId: string;
+  type: UserDoClientPlatform;
+  userId: string;
+};
+
+export const createUserDoName = (
+  clientId: string,
+  platform: UserDoClientPlatform,
+  userId: string,
+): UserDoName => `${clientId}:${platform}:${userId}`;
 
 export const createUserNotificationChannel = (
   platform: UserDoClientPlatform,
   userId: string,
+  clientId: string,
 ): UserNotificationChannel => {
   return {
     type: platform,
     userId,
+    clientId,
   };
 };
 
 const isUserDoClientPlatform = (platform: string): platform is UserDoClientPlatform =>
   CLIENT_PLATFORMS.includes(platform as UserDoClientPlatform);
 
-export const parseUserDoNotificationChannel = (
-  name: string | undefined,
-): UserNotificationChannel | null => {
+export const parseUserDoIdentity = (name: string | undefined): UserDoIdentity | null => {
   if (!name) {
     return null;
   }
 
-  const separatorIndex = name.indexOf(":");
+  const clientSeparatorIndex = name.indexOf(":");
+  const platformSeparatorIndex = name.indexOf(":", clientSeparatorIndex + 1);
 
-  if (separatorIndex <= 0 || separatorIndex === name.length - 1) {
+  if (
+    clientSeparatorIndex <= 0 ||
+    platformSeparatorIndex <= clientSeparatorIndex + 1 ||
+    platformSeparatorIndex === name.length - 1
+  ) {
     return null;
   }
 
-  const platform = name.slice(0, separatorIndex);
-  const id = name.slice(separatorIndex + 1);
+  const clientId = name.slice(0, clientSeparatorIndex);
+  const platform = name.slice(clientSeparatorIndex + 1, platformSeparatorIndex);
+  const userId = name.slice(platformSeparatorIndex + 1);
 
-  return isUserDoClientPlatform(platform) ? createUserNotificationChannel(platform, id) : null;
+  return isUserDoClientPlatform(platform) ? { clientId, type: platform, userId } : null;
 };

@@ -24,14 +24,14 @@ app.use("*", async (c, next) => {
       ctx: c.executionCtx,
     },
     async () => {
-      c.set("db", createDb(c.env.DB));
+      c.set("db", createDb());
 
       if (c.req.path.startsWith("/api/auth/")) {
         await next();
         return;
       }
 
-      const auth = createAuth(c.env);
+      const auth = createAuth();
       const session = await auth.api.getSession({
         headers: c.req.raw.headers,
       });
@@ -43,7 +43,7 @@ app.use("*", async (c, next) => {
   );
 });
 
-app.on(["GET", "POST"], "/api/auth/*", (c) => createAuth(c.env).handler(c.req.raw));
+app.on(["GET", "POST"], "/api/auth/*", (c) => createAuth().handler(c.req.raw));
 
 const routes = app
   .route("/", rootRoute)

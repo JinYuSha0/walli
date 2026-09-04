@@ -234,7 +234,7 @@ export function DialogSettingsTab({ settings, onSave }: DialogSettingsTabProps) 
 
       <div className="flex justify-end gap-2 border-t border-border pt-8">
         <Button type="submit" disabled={updateSettingsMutation.isPending}>
-          {t("promptSave")}
+          {t("saveSettings")}
         </Button>
       </div>
     </form>

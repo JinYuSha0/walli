@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { ClientPlatform } from "@shared/client";
 import type { AppBindings } from "./types";
+import { getAsyncContext } from "@worker/lib/async-context";
 import { requireAdmin } from "./helper/middleware";
 import { emptyQuerySchema, parseResponse, validateQuery } from "./helper/validation";
 import {
@@ -119,7 +120,8 @@ const getLegacyTimeZone = (settings: Partial<Settings> | unknown) => {
   return result.success ? result.data : DEFAULT_SETTINGS.timeZone;
 };
 
-const getLegacySettings = async (appKv: KVNamespace) => {
+const getLegacySettings = async () => {
+  const appKv = getAsyncContext().env.APP_KV;
   const savedSettings = await appKv.get<unknown>(SETTINGS_KV_KEY, "json");
   const result = legacySettingsSchema.safeParse(savedSettings);
 
@@ -140,7 +142,8 @@ const getLegacySettings = async (appKv: KVNamespace) => {
   };
 };
 
-const getFullStoredSettings = async (appKv: KVNamespace) => {
+const getFullStoredSettings = async () => {
+  const appKv = getAsyncContext().env.APP_KV;
   const savedSettings = await appKv.get<unknown>(SETTINGS_KV_KEY, "json");
   const settingsWithMigratedTimeZone =
     typeof savedSettings === "object" &&
@@ -174,7 +177,8 @@ const parseStoredSetting = (value: string | null) => {
 const getDefaultSettingValue = <Key extends SettingsKey>(settingKey: Key): Settings[Key] =>
   DEFAULT_SETTINGS[settingKey];
 
-const deleteSettingsKeys = async (appKv: KVNamespace) => {
+const deleteSettingsKeys = async () => {
+  const appKv = getAsyncContext().env.APP_KV;
   await Promise.all(
     [
       SETTINGS_KV_KEY,
@@ -185,14 +189,15 @@ const deleteSettingsKeys = async (appKv: KVNamespace) => {
   );
 };
 
-export const getSettings = async (appKv: KVNamespace) => {
-  const fullStoredSettings = await getFullStoredSettings(appKv);
+export const getSettings = async () => {
+  const appKv = getAsyncContext().env.APP_KV;
+  const fullStoredSettings = await getFullStoredSettings();
 
   if (fullStoredSettings) {
     return fullStoredSettings;
   }
 
-  const legacySettings = await getLegacySettings(appKv);
+  const legacySettings = await getLegacySettings();
   const entries = await Promise.all(
     settingKeys.map(async (settingKey) => {
       const storedValue = await appKv.get(SETTINGS_KEY_MAP[settingKey]);
@@ -229,8 +234,8 @@ export const getSettings = async (appKv: KVNamespace) => {
   return settings;
 };
 
-export const isMultiSessionClient = async (env: Env, platform: ClientPlatform) => {
-  const settings = await getSettings(env.APP_KV);
+export const isMultiSessionClient = async (platform: ClientPlatform) => {
+  const settings = await getSettings();
 
   return settings.clientSessionMode[platform];
 };
@@ -249,17 +254,17 @@ const maskApiToken = (token: string | undefined) => {
   return `${value.slice(0, 4)}${"*".repeat(Math.max(value.length - 8, 4))}${value.slice(-4)}`;
 };
 
-const createSettingsResponse = (settings: Settings, env: Env) =>
+const createSettingsResponse = (settings: Settings) =>
   parseResponse(settingsResponseSchema, {
     ...settings,
-    apiTokenMask: maskApiToken(env.API_TOKEN),
+    apiTokenMask: maskApiToken(getAsyncContext().env.API_TOKEN),
   });
 
 export const settingsRoute = new Hono<AppBindings>()
   .get("/api/settings", validateQuery(emptyQuerySchema), async (c) => {
-    const settings = await getSettings(c.env.APP_KV);
+    const settings = await getSettings();
 
-    return c.json(createSettingsResponse(settings, c.env));
+    return c.json(createSettingsResponse(settings));
   })
   .use("/api/admin/settings", requireAdmin)
   .patch("/api/admin/settings", async (c) => {
@@ -276,16 +281,16 @@ export const settingsRoute = new Hono<AppBindings>()
     }
 
     const settings = normalizeSettings({
-      ...(await getSettings(c.env.APP_KV)),
+      ...(await getSettings()),
       ...result.data,
     });
 
-    await c.env.APP_KV.put(SETTINGS_KV_KEY, JSON.stringify(settings));
+    await getAsyncContext().env.APP_KV.put(SETTINGS_KV_KEY, JSON.stringify(settings));
 
-    return c.json(createSettingsResponse(settings, c.env));
+    return c.json(createSettingsResponse(settings));
   })
   .delete("/api/admin/settings", async (c) => {
-    await deleteSettingsKeys(c.env.APP_KV);
+    await deleteSettingsKeys();
 
-    return c.json(createSettingsResponse(normalizeSettings(DEFAULT_SETTINGS), c.env));
+    return c.json(createSettingsResponse(normalizeSettings(DEFAULT_SETTINGS)));
   });

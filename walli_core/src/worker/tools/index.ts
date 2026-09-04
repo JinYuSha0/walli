@@ -4,9 +4,10 @@ import type { AppBindings } from "../api/types";
 import { memoryToolRoute } from "./tool-memory";
 import { scheduledTaskToolRoute } from "./tool-scheduled-task";
 import { timestampToolRoute } from "./tool-timestamp";
+import { getAsyncContext } from "../lib/async-context";
 
-const hasValidApiToken = (request: Request, env: Env) => {
-  const token = env.API_TOKEN?.trim();
+const hasValidApiToken = (request: Request) => {
+  const token = getAsyncContext().env.API_TOKEN?.trim();
 
   if (!token) {
     return false;
@@ -16,7 +17,7 @@ const hasValidApiToken = (request: Request, env: Env) => {
 };
 
 const requireApiToken: MiddlewareHandler<AppBindings> = async (c, next) => {
-  if (!hasValidApiToken(c.req.raw, c.env)) {
+  if (!hasValidApiToken(c.req.raw)) {
     return c.json({ error: "Forbidden" }, 403);
   }
 

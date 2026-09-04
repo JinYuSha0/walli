@@ -572,7 +572,7 @@ export function ModelSettingsTab({ settings }: ModelSettingsTabProps) {
           </div>
         ) : null}
         <Button type="submit" disabled={pending}>
-          {t("modelSettingsSave")}
+          {t("saveSettings")}
         </Button>
       </div>
     </form>

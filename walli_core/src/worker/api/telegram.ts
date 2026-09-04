@@ -23,7 +23,7 @@ import {
 } from "@worker/utils/tg";
 import {
   getClientBasicSettings,
-  getOrCreateClientId,
+  getClientBySlug,
   getTelegramBotToken,
   getTelegramSettings,
 } from "./clients";
@@ -37,6 +37,7 @@ import {
   type TelegramWhitelistType,
 } from "@shared/client";
 import { parseResponse } from "./helper/validation";
+import { getAsyncContext } from "@worker/lib/async-context";
 import {
   BUILT_IN_MEDIA_TOOL_NAMES,
   synthesizeVoice,
@@ -205,12 +206,11 @@ const hasValidTelegramFileSignature = async (
 
 const createTelegramFileProxyUrl = async (
   origin: string,
-  env: Env,
   fileId: string,
   filePath: string,
 ) => {
   const expires = String(Date.now() + 10 * 60 * 1000);
-  const signature = await createTelegramFileSignature(env.API_TOKEN, fileId, expires, filePath);
+  const signature = await createTelegramFileSignature(getAsyncContext().env.API_TOKEN, fileId, expires, filePath);
   const url = new URL(`/api/telegram/file/${filePath}`, origin);
 
   url.searchParams.set("fileId", fileId);
@@ -241,10 +241,11 @@ const getTelegramFilePath = async (token: string, fileId: string) => {
 };
 
 const createTelegramDeps = async (
-  env: Env,
   origin: string,
+  clientId: string,
 ): Promise<TelegramWebhookDeps> => {
-  const token = await getTelegramBotToken(env.APP_KV, env);
+  const env = getAsyncContext().env;
+  const token = await getTelegramBotToken(clientId);
 
   if (!token) {
     throw new Error("Telegram bot token is not configured");
@@ -266,7 +267,7 @@ const createTelegramDeps = async (
       });
     },
     getFileUrl: async (fileId) =>
-      createTelegramFileProxyUrl(origin, env, fileId, await getTelegramFilePath(token, fileId)),
+      createTelegramFileProxyUrl(origin, fileId, await getTelegramFilePath(token, fileId)),
     storeImage: async (fileId, userId) => {
       const imageId = await createTelegramImageId(fileId);
       const objectKey = `uploads/${userId}/images/${imageId}`;
@@ -309,11 +310,11 @@ const createTelegramDeps = async (
     synthesizeVoice,
     runLlm: async (message, messages): Promise<TelegramReply> => {
       const { userId, chatId, userName } = getTelegramMessageIdentity(message);
-      const userDO = env.USER_DO.getByName(createUserDoName("telegram", chatId));
+      const userDO = env.USER_DO.getByName(createUserDoName(clientId, "telegram", chatId));
 
       const settingsResult = await allSettledValues([
-        getSettings(env.APP_KV),
-        getClientBasicSettings(env.APP_KV, "telegram"),
+        getSettings(),
+        getClientBasicSettings(clientId),
       ] as const);
 
       if (!hasNoPromiseSettledError(settingsResult)) {
@@ -330,18 +331,19 @@ const createTelegramDeps = async (
           userInfo: createChatUserInfo({
             userId,
             name: userName || message.from?.username || userId,
-            clientPlatform: "telegram",
+            clientId,
             notificationChannel: {
               type: "telegram",
               userId: chatId,
+              clientId,
             },
           }),
           messages,
           settings,
           session: {
             store: userDO,
-            client: "telegram",
-            sessionId: "telegram",
+            clientId,
+            sessionId: `telegram:${clientId}`,
           },
           excludeToolNames: BUILT_IN_MEDIA_TOOL_NAMES.filter(
             (toolName) => toolName !== "image_to_text",
@@ -620,12 +622,12 @@ export const telegramRoute = new Hono<AppBindings>()
     }
 
     if (
-      !(await hasValidTelegramFileSignature(c.env.API_TOKEN, fileId, expires, filePath, signature))
+      !(await hasValidTelegramFileSignature(getAsyncContext().env.API_TOKEN, fileId, expires, filePath, signature))
     ) {
       return c.text("Forbidden", 403);
     }
 
-    const token = await getTelegramBotToken(c.env.APP_KV, c.env);
+    const token = await getTelegramBotToken();
 
     if (!token) {
       return c.text("Telegram bot token is not configured", 500);
@@ -654,14 +656,16 @@ export const telegramRoute = new Hono<AppBindings>()
       headers,
     });
   })
-  .post("/api/telegram/webhook", async (c) => {
-    const webhookSecret = await getOrCreateClientId(c.env.APP_KV, "telegram");
+  .post("/api/telegram/webhook/:slug", async (c) => {
+    const client = await getClientBySlug(c.req.param("slug"));
+    if (!client || client.platform !== "telegram") return c.json({ error: "Not found" }, 404);
+    const webhookSecret = client.id;
 
     if (!hasValidTelegramWebhookSecret(c.req.raw, webhookSecret)) {
       return c.json({ error: "Forbidden" }, 403);
     }
 
-    const token = await getTelegramBotToken(c.env.APP_KV, c.env);
+    const token = await getTelegramBotToken(client.id);
 
     if (!token) {
       return c.json(
@@ -673,7 +677,7 @@ export const telegramRoute = new Hono<AppBindings>()
     }
 
     const update = await c.req.json().catch(() => null);
-    const basicSettings = await getClientBasicSettings(c.env.APP_KV, "telegram");
+    const basicSettings = await getClientBasicSettings(client.id);
 
     if (!basicSettings.enabled) {
       await replyTelegramText(token, update, "Not enabled");
@@ -683,7 +687,7 @@ export const telegramRoute = new Hono<AppBindings>()
 
     const accessContext = getTelegramMessageAccessContext(update);
 
-    const telegramSettings = await getTelegramSettings(c.env.APP_KV);
+    const telegramSettings = await getTelegramSettings(client.id);
 
     if (telegramSettings.accessPolicy === "whitelist") {
       const whitelistType = accessContext?.whitelistType;
@@ -707,7 +711,7 @@ export const telegramRoute = new Hono<AppBindings>()
     const origin = new URL(c.req.url).origin;
 
     c.executionCtx.waitUntil(
-      createTelegramDeps(c.env, origin)
+      createTelegramDeps(origin, client.id)
         .then((deps) => handleTelegramWebhookUpdate(update, deps))
         .catch(() => undefined),
     );

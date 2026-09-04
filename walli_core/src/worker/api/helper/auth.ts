@@ -3,6 +3,7 @@ import { betterAuth } from "better-auth";
 import { admin } from "better-auth/plugins/admin";
 import { createDb } from "@worker/db/client";
 import * as schema from "@worker/db/schema";
+import { getAsyncContext } from "@worker/lib/async-context";
 
 export type AppUser = {
   id: string;
@@ -33,16 +34,17 @@ const splitList = (value?: string, options?: { lowercase?: boolean }) =>
     })
     .filter(Boolean);
 
-export const isAdminEmail = (email: string | undefined, env: Env) =>
-  !!email && splitList(env.ADMIN_EMAILS).includes(email.toLowerCase());
+export const isAdminEmail = (email: string | undefined) =>
+  !!email && splitList(getAsyncContext().env.ADMIN_EMAILS).includes(email.toLowerCase());
 
 const isConfiguredSecret = (value: string | undefined, placeholder: string) =>
   !!value && value.trim() !== "" && value !== placeholder;
 
-const getTrustedOrigins = (env: Env) =>
-  splitList(env.BETTER_AUTH_TRUSTED_ORIGINS, { lowercase: false });
+const getTrustedOrigins = () =>
+  splitList(getAsyncContext().env.BETTER_AUTH_TRUSTED_ORIGINS, { lowercase: false });
 
-const getGoogleProvider = (env: Env) => {
+const getGoogleProvider = () => {
+  const env = getAsyncContext().env;
   const clientId = env.GOOGLE_CLIENT_ID?.trim();
   const clientSecret = env.GOOGLE_CLIENT_SECRET?.trim();
 
@@ -62,7 +64,7 @@ const getGoogleProvider = (env: Env) => {
   };
 };
 
-export const hasAdminRole = (user: AppUser | null, env: Env) => {
+export const hasAdminRole = (user: AppUser | null) => {
   if (!user) return false;
   const roles = Array.isArray(user.role)
     ? user.role
@@ -70,16 +72,17 @@ export const hasAdminRole = (user: AppUser | null, env: Env) => {
         .split(",")
         .map((role) => role.trim());
 
-  return roles.includes("admin") || isAdminEmail(user.email, env);
+  return roles.includes("admin") || isAdminEmail(user.email);
 };
 
-export const createAuth = (env: Env) => {
-  const db = createDb(env.DB);
+export const createAuth = () => {
+  const env = getAsyncContext().env;
+  const db = createDb();
 
   return betterAuth({
     baseURL: env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
-    trustedOrigins: getTrustedOrigins(env),
+    trustedOrigins: getTrustedOrigins(),
     database: drizzleAdapter(db, {
       provider: "sqlite",
       schema,
@@ -92,13 +95,13 @@ export const createAuth = (env: Env) => {
           before: async (user) => ({
             data: {
               ...user,
-              role: isAdminEmail(user.email, env) ? "admin" : "user",
+              role: isAdminEmail(user.email) ? "admin" : "user",
             },
           }),
         },
       },
     },
-    socialProviders: getGoogleProvider(env),
+    socialProviders: getGoogleProvider(),
     plugins: [
       admin({
         defaultRole: "user",

@@ -20,9 +20,9 @@ export const runWithChatAsyncContext = <Result>(
 export const extendChatAsyncContext = <Result>(
   context: Partial<ChatAsyncContext>,
   callback: () => Result,
-): Result => runWithChatAsyncContext({ ...getChatAsyncContext(), ...context }, callback);
+): Result => runWithChatAsyncContext({ ...getAsyncContext(), ...context }, callback);
 
-export const getChatAsyncContext = (): ChatAsyncContext => {
+export const getAsyncContext = (): ChatAsyncContext => {
   const context = chatAsyncContext.getStore();
 
   if (!context) {
@@ -32,6 +32,6 @@ export const getChatAsyncContext = (): ChatAsyncContext => {
   return context;
 };
 
-export const bindChatAsyncContext = <Args extends unknown[], Result>(
+export const bindAsyncContext = <Args extends unknown[], Result>(
   callback: (...args: Args) => Result,
 ) => AsyncLocalStorage.bind(callback);

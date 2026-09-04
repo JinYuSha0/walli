@@ -1,13 +1,15 @@
 import { Hono } from "hono";
-import type { Context } from "hono";
 import { z } from "zod";
 import { clientPlatformSchema } from "@shared/client";
 import type { AppBindings } from "../api/types";
+import { getAsyncContext } from "../lib/async-context";
+import { resolveToolRequestIdentity } from "./request-context";
 import { createUserDoName, type UserDoClientPlatform } from "../durable-objects/user/types";
 
 const memorySearchSchema = z
   .object({
     query: z.string().trim().min(1),
+    clientId: z.string().trim().min(1),
     userId: z.string().trim().min(1),
     clientPlatform: clientPlatformSchema,
     sessionId: z.string().trim().min(1).optional(),
@@ -17,6 +19,7 @@ const memorySearchSchema = z
 
 const memorySummarySchema = z
   .object({
+    clientId: z.string().trim().min(1),
     userId: z.string().trim().min(1),
     clientPlatform: clientPlatformSchema,
     startMessageId: z.string().trim().min(1),
@@ -30,17 +33,20 @@ const memorySummarySchema = z
     path: ["memory"],
   });
 
-const normalizeUserDoName = (platform: UserDoClientPlatform, userId: string) =>
-  userId.startsWith(`${platform}:`) ? userId : createUserDoName(platform, userId);
-
-const getUserDO = (c: Context<AppBindings>, input: {
+const getUserDO = (input: {
+  clientId: string;
   clientPlatform: UserDoClientPlatform;
   userId: string;
-}) => c.env.USER_DO.getByName(normalizeUserDoName(input.clientPlatform, input.userId));
+}) =>
+  getAsyncContext().env.USER_DO.getByName(
+    createUserDoName(input.clientId, input.clientPlatform, input.userId),
+  );
 
 export const memoryToolRoute = new Hono<AppBindings>()
   .post("/api/tools/memory/search", async (c) => {
-    const result = memorySearchSchema.safeParse(await c.req.json().catch(() => null));
+    const result = memorySearchSchema.safeParse(
+      resolveToolRequestIdentity(await c.req.json().catch(() => null)),
+    );
 
     if (!result.success) {
       return c.json(
@@ -52,7 +58,7 @@ export const memoryToolRoute = new Hono<AppBindings>()
       );
     }
 
-    const userDO = getUserDO(c, result.data);
+    const userDO = getUserDO(result.data);
     const memories = await userDO.searchMemory({
       query: result.data.query,
       sessionId: result.data.sessionId,
@@ -62,7 +68,9 @@ export const memoryToolRoute = new Hono<AppBindings>()
     return c.json({ memories });
   })
   .post("/api/tools/memory/summary", async (c) => {
-    const result = memorySummarySchema.safeParse(await c.req.json().catch(() => null));
+    const result = memorySummarySchema.safeParse(
+      resolveToolRequestIdentity(await c.req.json().catch(() => null)),
+    );
 
     if (!result.success) {
       return c.json(
@@ -74,7 +82,7 @@ export const memoryToolRoute = new Hono<AppBindings>()
       );
     }
 
-    const userDO = getUserDO(c, result.data);
+    const userDO = getUserDO(result.data);
     const memories = await userDO.recordMemorySummary({
       startMessageId: result.data.startMessageId,
       endMessageId: result.data.endMessageId,

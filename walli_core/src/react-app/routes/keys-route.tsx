@@ -7,17 +7,19 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { RefreshCcw } from "lucide-react";
+import { Plus, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
   createTelegramWhitelistEntry,
+  createClient,
+  deleteClient,
   deleteTelegramWhitelistEntry,
   getClientConfig,
+  getClients,
   getTelegramWhitelistEntries,
-  resetClientSettings,
   updateClientAuthSettings,
   updateClientBasicSettings,
   updateClientCorsSettings,
@@ -28,6 +30,7 @@ import {
   type ClientBasicSettings,
   type ClientBasicSettingsPatch,
   type ClientConfigResponse,
+  type ClientCreate,
   type ClientCorsSettings,
   type ClientDialogSettings,
   type ClientPlatform,
@@ -129,11 +132,22 @@ const getClientTabs = (platform: ClientPlatform): ClientTab[] =>
       ? [...clientTabs]
       : ["basic", "dialog-settings", "auth", "usage"];
 
-const isClientPlatform = (value: string): value is ClientPlatform =>
-  CLIENT_PLATFORMS.includes(value as ClientPlatform);
-
 const isClientTab = (value: string): value is ClientTab =>
   clientTabs.includes(value as ClientTab);
+
+const fuzzyMatch = (value: string, query: string) => {
+  const normalizedValue = value.toLocaleLowerCase();
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  if (!normalizedQuery) return true;
+  if (normalizedValue.includes(normalizedQuery)) return true;
+
+  let queryIndex = 0;
+  for (const character of normalizedValue) {
+    if (character === normalizedQuery[queryIndex]) queryIndex += 1;
+    if (queryIndex === normalizedQuery.length) return true;
+  }
+  return false;
+};
 
 const toLimitValue = (value: number | undefined) => String(value ?? 0);
 
@@ -154,9 +168,9 @@ const parseLimit = (value: string) => {
   return Number.isFinite(parsedValue) ? Math.max(0, Math.trunc(parsedValue)) : 0;
 };
 
-const createTelegramWebhookCurl = (clientId: string, botToken: string) => {
+const createTelegramWebhookCurl = (clientId: string, slug: string, botToken: string) => {
   const origin = typeof window === "undefined" ? "https://your-domain.com" : window.location.origin;
-  const webhookUrl = `${origin}/api/telegram/webhook`;
+  const webhookUrl = `${origin}/api/telegram/webhook/${slug}`;
   const token = botToken.trim() || "<BOT_TOKEN>";
 
   return [
@@ -166,23 +180,23 @@ const createTelegramWebhookCurl = (clientId: string, botToken: string) => {
   ].join("\n");
 };
 
-function ResetClientSettingsButton({
+function DeleteClientButton({
   disabled,
-  onResetSettings,
+  onDelete,
 }: {
   disabled?: boolean;
-  onResetSettings: () => Promise<ClientConfigResponse>;
+  onDelete: () => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const resetMutation = useMutation({
-    mutationFn: onResetSettings,
+  const deleteMutation = useMutation({
+    mutationFn: onDelete,
     onSuccess: () => {
       setOpen(false);
-      toast.success(t("clientsResetSettingsSuccess"));
+      toast.success(t("clientsDeleteSuccess"));
     },
   });
-  const pending = disabled || resetMutation.isPending;
+  const pending = disabled || deleteMutation.isPending;
 
   return (
     <>
@@ -192,8 +206,8 @@ function ResetClientSettingsButton({
         disabled={pending}
         onClick={() => setOpen(true)}
       >
-        <RefreshCcw />
-        {t("clientsResetSettings")}
+        <Trash2 />
+        {t("clientsDelete")}
       </Button>
       {open ? (
         <div
@@ -206,9 +220,9 @@ function ResetClientSettingsButton({
             role="dialog"
           >
             <div className="grid gap-2">
-              <h2 className="text-lg font-semibold">{t("clientsResetSettingsTitle")}</h2>
+              <h2 className="text-lg font-semibold">{t("clientsDeleteTitle")}</h2>
               <p className="text-sm text-muted-foreground">
-                {t("clientsResetSettingsConfirmDescription")}
+                {t("clientsDeleteConfirmDescription")}
               </p>
             </div>
             <div className="flex justify-end gap-2">
@@ -224,10 +238,10 @@ function ResetClientSettingsButton({
                 type="button"
                 variant="destructive"
                 disabled={pending}
-                onClick={() => resetMutation.mutate()}
+                onClick={() => deleteMutation.mutate()}
               >
-                <RefreshCcw />
-                {t("clientsResetSettingsConfirm")}
+                <Trash2 />
+                {t("clientsDeleteConfirm")}
               </Button>
             </div>
           </div>
@@ -246,7 +260,7 @@ function ClientBasicSettingsTab({
   skipUnsavedPrompt = false,
   onDraftChange,
   onSaveBasicSettings,
-  onResetSettings,
+  onDelete,
 }: {
   platform: ClientPlatform;
   basicSettings: ClientBasicSettings;
@@ -256,7 +270,7 @@ function ClientBasicSettingsTab({
   skipUnsavedPrompt?: boolean;
   onDraftChange?: (values: ClientBasicSettingsForm) => void;
   onSaveBasicSettings: (values: ClientBasicSettingsPatch) => Promise<ClientBasicSettings>;
-  onResetSettings: () => Promise<ClientConfigResponse>;
+  onDelete: () => Promise<void>;
 }) {
   const { t } = useTranslation();
   const form = useForm<ClientBasicSettingsForm>({
@@ -386,9 +400,9 @@ function ClientBasicSettingsTab({
 
       {showSaveButton ? (
         <div className="flex justify-end gap-2 border-t border-border pt-8">
-          <ResetClientSettingsButton
+          <DeleteClientButton
             disabled={pending}
-            onResetSettings={onResetSettings}
+            onDelete={onDelete}
           />
           <Button
             type="button"
@@ -397,7 +411,7 @@ function ClientBasicSettingsTab({
               void submitBasicSettings();
             }}
           >
-            {t("clientsBasicSettingsSave")}
+            {t("saveSettings")}
           </Button>
         </div>
       ) : null}
@@ -409,12 +423,12 @@ function TelegramBasicSettingsTab({
   config,
   onSave,
   onSaveBasicSettings,
-  onResetSettings,
+  onDelete,
 }: {
   config: Extract<ClientConfigResponse, { platform: "telegram" }>;
   onSave: (values: TelegramSettingsForm) => Promise<ClientConfigResponse>;
   onSaveBasicSettings: (values: ClientBasicSettingsPatch) => Promise<ClientBasicSettings>;
-  onResetSettings: () => Promise<ClientConfigResponse>;
+  onDelete: () => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [basicSettingsDraft, setBasicSettingsDraft] = useState<ClientBasicSettingsForm>({
@@ -467,7 +481,7 @@ function TelegramBasicSettingsTab({
     control: form.control,
     name: "botToken",
   }) ?? "";
-  const curl = createTelegramWebhookCurl(config.clientId, watchedBotToken);
+  const curl = createTelegramWebhookCurl(config.id, config.slug, watchedBotToken);
 
   useEffect(() => {
     form.reset({
@@ -494,13 +508,13 @@ function TelegramBasicSettingsTab({
       <ClientBasicSettingsTab
         platform="telegram"
         basicSettings={config.basicSettings}
-        clientId={config.clientId}
+        clientId={config.id}
         disabled={saveMutation.isPending}
         showSaveButton={false}
         skipUnsavedPrompt
         onDraftChange={handleBasicSettingsDraftChange}
         onSaveBasicSettings={onSaveBasicSettings}
-        onResetSettings={onResetSettings}
+        onDelete={onDelete}
       />
 
       <section className="grid gap-4 border-t border-border pt-8">
@@ -539,12 +553,12 @@ function TelegramBasicSettingsTab({
       </section>
 
       <div className="flex justify-end gap-2 border-t border-border pt-8">
-        <ResetClientSettingsButton
+        <DeleteClientButton
           disabled={saveMutation.isPending}
-          onResetSettings={onResetSettings}
+          onDelete={onDelete}
         />
         <Button type="submit" disabled={saveMutation.isPending}>
-          {t("clientsBasicSettingsSave")}
+          {t("saveSettings")}
         </Button>
       </div>
     </form>
@@ -679,7 +693,7 @@ function TelegramAuthSettingsTab({
         />
         <div className="flex justify-end">
           <Button type="submit" disabled={saveMutation.isPending}>
-            {t("telegramAuthSettingsSave")}
+            {t("saveSettings")}
           </Button>
         </div>
       </form>
@@ -1153,7 +1167,7 @@ function ClientUsageSettingsTab({
 
       <div className="flex justify-end gap-2 border-t border-border pt-8">
         <Button type="submit" disabled={saveMutation.isPending}>
-          {t("usageSettingsSave")}
+          {t("saveSettings")}
         </Button>
       </div>
     </form>
@@ -1167,77 +1181,245 @@ export function ClientsRoute() {
   const queryClient = useQueryClient();
   const [, , currentPlatform = "", currentTab = ""] =
     location.pathname.split("/");
-  const platform = isClientPlatform(currentPlatform) ? currentPlatform : "telegram";
+  const clientsQuery = useQuery({ queryKey: ["clients"], queryFn: getClients });
+  const selectedClient = clientsQuery.data?.find(({ id }) => id === currentPlatform);
+  const platform = selectedClient?.platform ?? "telegram";
   const availableTabs = getClientTabs(platform);
   const activeTab = isClientTab(currentTab) && availableTabs.includes(currentTab) ? currentTab : "basic";
   const clientConfigQuery = useQuery({
-    queryKey: ["client-config", platform],
-    queryFn: () => getClientConfig(platform),
+    queryKey: ["client-config", selectedClient?.id],
+    queryFn: () => getClientConfig(selectedClient!.id),
+    enabled: Boolean(selectedClient),
   });
 
   useEffect(() => {
-    if (currentTab && activeTab !== currentTab) {
+    if (selectedClient && currentTab && activeTab !== currentTab) {
       void navigate({
         to: "/clients/$platform/$tab",
         params: {
-          platform,
+          platform: selectedClient.id,
           tab: activeTab,
         },
         replace: true,
       });
     }
-  }, [activeTab, currentTab, navigate, platform]);
+  }, [activeTab, currentTab, navigate, selectedClient]);
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createValues, setCreateValues] = useState<ClientCreate>({
+    name: "",
+    slug: "",
+    platform: "web",
+  });
+  const createMutation = useMutation({
+    mutationFn: createClient,
+    onSuccess: async (config) => {
+      await queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.setQueryData(["client-config", config.id], config);
+      setCreateOpen(false);
+      setCreateValues({ name: "", slug: "", platform: "web" });
+      void navigate({
+        to: "/clients/$platform/$tab",
+        params: { platform: config.id, tab: "basic" },
+      });
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : t("clientsCreateFailed"));
+    },
+  });
+  const handleDeleteClient = async () => {
+    if (!selectedClient) return;
+    await deleteClient(selectedClient.id);
+    queryClient.removeQueries({ queryKey: ["client-config", selectedClient.id] });
+    await queryClient.invalidateQueries({ queryKey: ["clients"] });
+    await navigate({ to: "/clients" });
+  };
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const filteredClients = useMemo(
+    () => (clientsQuery.data ?? []).filter((client) =>
+      fuzzyMatch(`${client.name} ${client.slug} ${client.platform}`, searchQuery),
+    ),
+    [clientsQuery.data, searchQuery],
+  );
+  const selectClient = (clientId: string) => {
+    setSearchOpen(false);
+    setSearchQuery("");
+    void navigate({
+      to: "/clients/$platform/$tab",
+      params: { platform: clientId, tab: "basic" },
+    });
+  };
 
   return (
     <div className="flex justify-center p-4 lg:p-6">
       <Card className="w-full max-w-5xl">
         <CardHeader>
-          <CardTitle>{t("clientsTitle")}</CardTitle>
+          <div className="flex items-center justify-between gap-4">
+            <CardTitle>{t("clientsTitle")}</CardTitle>
+            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+              <DialogTrigger asChild>
+                <Button type="button"><Plus />{t("clientsCreate")}</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{t("clientsCreate")}</DialogTitle>
+                  <DialogDescription>{t("clientsCreateDescription")}</DialogDescription>
+                </DialogHeader>
+                <form
+                  className="grid gap-5"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    createMutation.mutate(createValues);
+                  }}
+                >
+                  <div className="grid gap-2">
+                    <Label htmlFor="client-name">{t("clientsName")}</Label>
+                    <Input
+                      id="client-name"
+                      required
+                      value={createValues.name}
+                      onChange={(event) => setCreateValues((value) => ({ ...value, name: event.target.value }))}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="client-slug">Slug</Label>
+                    <Input
+                      id="client-slug"
+                      required
+                      pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                      value={createValues.slug}
+                      onChange={(event) => setCreateValues((value) => ({ ...value, slug: event.target.value.toLowerCase() }))}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="client-type">{t("clientsType")}</Label>
+                    <Select
+                      id="client-type"
+                      value={createValues.platform}
+                      onChange={(event) => setCreateValues((value) => ({ ...value, platform: event.target.value as ClientPlatform }))}
+                    >
+                      {CLIENT_PLATFORMS.map((value) => (
+                        <option key={value} value={value}>{t(platformMetaMap[value].labelKey)}</option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
+                      {t("clientsResetSettingsCancel")}
+                    </Button>
+                    <Button type="submit" disabled={createMutation.isPending}>
+                      {t("clientsCreate")}
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
           <CardDescription>{t("clientsDescription")}</CardDescription>
           <p className="text-sm text-muted-foreground">
             {t("clientsKvDelayNote")}
           </p>
         </CardHeader>
         <CardContent>
+          {!clientsQuery.isPending && clientsQuery.data?.length === 0 && (
+            <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">{t("clientsEmpty")}</div>
+          )}
+          {(clientsQuery.data?.length ?? 0) > 0 && (
           <Tabs
             activationMode="manual"
-            value={platform}
+            value={selectedClient?.id ?? ""}
             onValueChange={(value) => {
-              if (!isClientPlatform(value)) {
-                return;
-              }
+              const client = clientsQuery.data?.find(({ id }) => id === value);
+              if (!client) return;
 
               void navigate({
                 to: "/clients/$platform/$tab",
                 params: {
-                  platform: value,
-                  tab: activeTab,
+                  platform: client.id,
+                  tab: "basic",
                 },
               });
             }}
           >
-            <TabsList className="h-auto w-full flex-wrap justify-start gap-2 bg-transparent p-0 sm:w-fit">
-              {CLIENT_PLATFORMS.map((currentPlatform) => {
-                const PlatformIcon = platformMetaMap[currentPlatform].icon;
+            <div className="flex min-w-0 items-center gap-2">
+            <div className="relative min-w-0 flex-1">
+            <TabsList className="client-tabs-scrollbar h-auto w-full min-w-0 flex-nowrap justify-start gap-2 rounded-none bg-transparent p-0 pb-2 pr-6">
+              {clientsQuery.data?.map((client) => {
+                const PlatformIcon = platformMetaMap[client.platform].icon;
 
                 return (
                   <TabsTrigger
-                    key={currentPlatform}
-                    value={currentPlatform}
-                    className="h-11 gap-2 rounded-lg border border-border bg-background px-4 text-muted-foreground shadow-sm data-[state=active]:border-primary/50 data-[state=active]:bg-primary/10 data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                    key={client.id}
+                    value={client.id}
+                    className="h-11 max-w-52 gap-2 rounded-lg border border-border bg-background px-4 font-medium tracking-tight text-muted-foreground shadow-sm data-[state=active]:border-primary/50 data-[state=active]:bg-primary/10 data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-sm"
                   >
                     <PlatformIcon className="size-4 shrink-0" />
-                    <span>{t(platformMetaMap[currentPlatform].labelKey)}</span>
+                    <span className="truncate">{client.name}</span>
                   </TabsTrigger>
                 );
               })}
             </TabsList>
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 right-0 bottom-2 w-6 bg-linear-to-r from-transparent via-white/60 to-white"
+            />
+            </div>
+            <div className="flex self-stretch items-center">
+            <Dialog open={searchOpen} onOpenChange={(open) => {
+              setSearchOpen(open);
+              if (!open) setSearchQuery("");
+            }}>
+              <DialogTrigger asChild>
+                <Button type="button" variant="outline" size="icon" className="h-11 w-11 shrink-0" aria-label={t("clientsSearch")}>
+                  <Search />
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{t("clientsSearch")}</DialogTitle>
+                  <DialogDescription>{t("clientsSearchDescription")}</DialogDescription>
+                </DialogHeader>
+                <Input
+                  autoFocus
+                  value={searchQuery}
+                  placeholder={t("clientsSearchPlaceholder")}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                />
+                <div className="grid max-h-80 gap-1 overflow-y-auto">
+                  {filteredClients.map((client) => {
+                    const PlatformIcon = platformMetaMap[client.platform].icon;
+                    return (
+                      <button
+                        key={client.id}
+                        type="button"
+                        className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        onClick={() => selectClient(client.id)}
+                      >
+                        <PlatformIcon className="size-5 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate font-medium">{client.name}</span>
+                      </button>
+                    );
+                  })}
+                  {filteredClients.length === 0 && (
+                    <div className="py-8 text-center text-sm text-muted-foreground">{t("clientsSearchEmpty")}</div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+            </div>
+            </div>
 
-            {CLIENT_PLATFORMS.map((tabPlatform) => (
-              <TabsContent key={tabPlatform} value={tabPlatform}>
+            {selectedClient && (
+              <TabsContent key={selectedClient.id} value={selectedClient.id}>
                 {clientConfigQuery.isPending ? (
                   <RouteLoading />
                 ) : clientConfigQuery.data ? (
+                  <div className="grid gap-4">
+                  <div className="rounded-lg border border-border p-4">
+                    <div className="font-medium">{clientConfigQuery.data.name}</div>
+                    <div className="mt-1 text-sm text-muted-foreground">slug: {clientConfigQuery.data.slug}</div>
+                  </div>
                   <Tabs
                     activationMode="manual"
                     value={activeTab}
@@ -1249,7 +1431,7 @@ export function ClientsRoute() {
                       void navigate({
                         to: "/clients/$platform/$tab",
                         params: {
-                          platform,
+                          platform: selectedClient.id,
                           tab: value,
                         },
                       });
@@ -1282,9 +1464,9 @@ export function ClientsRoute() {
                         <TelegramBasicSettingsTab
                           config={clientConfigQuery.data}
                           onSave={async (values: TelegramSettingsForm) => {
-                            const updatedClientConfig = await updateTelegramSettings(values);
+                            const updatedClientConfig = await updateTelegramSettings(selectedClient.id, values);
                             const cachedClientConfig = queryClient.getQueryData<ClientConfigResponse>(
-                              ["client-config", tabPlatform],
+                              ["client-config", selectedClient.id],
                             );
                             const mergedClientConfig =
                               updatedClientConfig.platform === "telegram" &&
@@ -1296,7 +1478,7 @@ export function ClientsRoute() {
                                 : updatedClientConfig;
 
                             queryClient.setQueryData(
-                              ["client-config", tabPlatform],
+                              ["client-config", selectedClient.id],
                               mergedClientConfig,
                             );
 
@@ -1304,60 +1486,38 @@ export function ClientsRoute() {
                           }}
                           onSaveBasicSettings={async (values: ClientBasicSettingsPatch) => {
                             const updatedClientConfig = await updateClientBasicSettings(
-                              clientConfigQuery.data.platform,
+                              selectedClient.id,
                               values,
                             );
 
                             queryClient.setQueryData(
-                              ["client-config", tabPlatform],
+                              ["client-config", selectedClient.id],
                               updatedClientConfig,
                             );
 
                             return updatedClientConfig.basicSettings;
                           }}
-                          onResetSettings={async () => {
-                            const updatedClientConfig = await resetClientSettings(
-                              clientConfigQuery.data.platform,
-                            );
-
-                            queryClient.setQueryData(
-                              ["client-config", tabPlatform],
-                              updatedClientConfig,
-                            );
-
-                            return updatedClientConfig;
-                          }}
+                          onDelete={handleDeleteClient}
                         />
                       ) : (
                         <ClientBasicSettingsTab
-                          platform={tabPlatform}
+                          platform={platform}
                           basicSettings={clientConfigQuery.data.basicSettings}
-                          clientId={clientConfigQuery.data.clientId}
+                          clientId={clientConfigQuery.data.id}
                           onSaveBasicSettings={async (values: ClientBasicSettingsPatch) => {
                             const updatedClientConfig = await updateClientBasicSettings(
-                              clientConfigQuery.data.platform,
+                              selectedClient.id,
                               values,
                             );
 
                             queryClient.setQueryData(
-                              ["client-config", tabPlatform],
+                              ["client-config", selectedClient.id],
                               updatedClientConfig,
                             );
 
                             return updatedClientConfig.basicSettings;
                           }}
-                          onResetSettings={async () => {
-                            const updatedClientConfig = await resetClientSettings(
-                              clientConfigQuery.data.platform,
-                            );
-
-                            queryClient.setQueryData(
-                              ["client-config", tabPlatform],
-                              updatedClientConfig,
-                            );
-
-                            return updatedClientConfig;
-                          }}
+                          onDelete={handleDeleteClient}
                         />
                       )}
                     </TabsContent>
@@ -1370,12 +1530,12 @@ export function ClientsRoute() {
                             onSave={async (values: ClientDialogSettings) => {
                               const updatedClientConfig =
                                 await updateClientDialogSettings(
-                                  tabPlatform,
+                                  selectedClient.id,
                                   values,
                                 );
 
                               queryClient.setQueryData(
-                                ["client-config", tabPlatform],
+                                ["client-config", selectedClient.id],
                                 updatedClientConfig,
                               );
 
@@ -1395,10 +1555,10 @@ export function ClientsRoute() {
                         <TelegramAuthSettingsTab
                           settings={clientConfigQuery.data.telegramSettings}
                           onSave={async (values) => {
-                            const updatedClientConfig = await updateTelegramSettings(values);
+                            const updatedClientConfig = await updateTelegramSettings(selectedClient.id, values);
 
                             queryClient.setQueryData(
-                              ["client-config", tabPlatform],
+                              ["client-config", selectedClient.id],
                               updatedClientConfig,
                             );
 
@@ -1414,12 +1574,12 @@ export function ClientsRoute() {
                           settings={clientConfigQuery.data.authSettings}
                           onSave={async (values: ClientAuthSettings) => {
                             const updatedClientConfig = await updateClientAuthSettings(
-                              tabPlatform,
+                              selectedClient.id,
                               values,
                             );
 
                             queryClient.setQueryData(
-                              ["client-config", tabPlatform],
+                              ["client-config", selectedClient.id],
                               updatedClientConfig,
                             );
 
@@ -1436,10 +1596,10 @@ export function ClientsRoute() {
                             settings={clientConfigQuery.data.corsSettings}
                             onSave={async (values: ClientCorsSettings) => {
                               const updatedClientConfig =
-                                await updateClientCorsSettings(values);
+                                await updateClientCorsSettings(selectedClient.id, values);
 
                               queryClient.setQueryData(
-                                ["client-config", tabPlatform],
+                                ["client-config", selectedClient.id],
                                 updatedClientConfig,
                               );
 
@@ -1456,16 +1616,16 @@ export function ClientsRoute() {
 
                     <TabsContent value="usage">
                       <ClientUsageSettingsTab
-                        platform={tabPlatform}
+                        platform={platform}
                         usageLimit={clientConfigQuery.data.usageLimit}
                         onSave={async (values: ClientUsageLimit) => {
                           const updatedClientConfig = await updateClientUsageLimit(
-                            tabPlatform,
+                            selectedClient.id,
                             values,
                           );
 
                           queryClient.setQueryData(
-                            ["client-config", tabPlatform],
+                            ["client-config", selectedClient.id],
                             updatedClientConfig,
                           );
 
@@ -1474,14 +1634,16 @@ export function ClientsRoute() {
                       />
                     </TabsContent>
                   </Tabs>
+                  </div>
                 ) : (
                   <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
                     {t("clientsLoadFailed")}
                   </div>
                 )}
               </TabsContent>
-            ))}
+            )}
           </Tabs>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -22,6 +22,13 @@ export const memorySearchTool = {
         defaultValue: "",
       },
       {
+        name: "clientId",
+        type: "string",
+        description: "Unique client ID for the Durable Object namespace.",
+        required: true,
+        defaultValue: "",
+      },
+      {
         name: "userId",
         type: "string",
         description: "The user ID whose long-term memory should be searched.",
@@ -68,6 +75,13 @@ export const memorySummaryTool = {
   },
   schema: {
     fields: [
+      {
+        name: "clientId",
+        type: "string",
+        description: "Unique client ID for the Durable Object namespace.",
+        required: true,
+        defaultValue: "",
+      },
       {
         name: "userId",
         type: "string",

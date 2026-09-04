@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "2518de5e-c2eb-4c9d-8952-2a22dbfc64d8",
+  "id": "89334f43-7644-49fc-b44f-f58b90db369e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "memory": {
@@ -124,20 +124,18 @@
         }
       },
       "indexes": {
+        "idx_messages_id_unique": {
+          "name": "idx_messages_id_unique",
+          "columns": [
+            "id"
+          ],
+          "isUnique": true
+        },
         "idx_messages_session_created_at": {
           "name": "idx_messages_session_created_at",
           "columns": [
             "session_id",
             "created_at"
-          ],
-          "isUnique": false
-        },
-        "idx_messages_token_usage": {
-          "name": "idx_messages_token_usage",
-          "columns": [
-            "created_at",
-            "input_token",
-            "output_token"
           ],
           "isUnique": false
         },
@@ -149,12 +147,14 @@
           ],
           "isUnique": false
         },
-        "idx_messages_id_unique": {
-          "name": "idx_messages_id_unique",
+        "idx_messages_token_usage": {
+          "name": "idx_messages_token_usage",
           "columns": [
-            "id"
+            "created_at",
+            "input_token",
+            "output_token"
           ],
-          "isUnique": true
+          "isUnique": false
         }
       },
       "foreignKeys": {},
@@ -377,8 +377,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "client": {
-          "name": "client",
+        "client_id": {
+          "name": "client_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,

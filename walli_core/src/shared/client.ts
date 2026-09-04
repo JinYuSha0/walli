@@ -6,6 +6,28 @@ export type ClientPlatform = (typeof CLIENT_PLATFORMS)[number];
 
 export const clientPlatformSchema = z.enum(CLIENT_PLATFORMS);
 
+export const clientSlugSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+
+export const clientSchema = z.object({
+  id: z.uuid(),
+  name: z.string().trim().min(1).max(100),
+  slug: clientSlugSchema,
+  platform: clientPlatformSchema,
+}).strict();
+
+export const clientCreateSchema = clientSchema.pick({
+  name: true,
+  slug: true,
+  platform: true,
+});
+
+export const clientsResponseSchema = z.array(clientSchema);
+
 export const clientBasicSettingsSchema = z
   .object({
     enabled: z.boolean(),
@@ -176,8 +198,10 @@ export const telegramSettingsResponseSchema = z
 
 const baseClientConfigResponseSchema = z
   .object({
+    id: z.uuid(),
+    name: z.string(),
+    slug: clientSlugSchema,
     platform: clientPlatformSchema,
-    clientId: z.string(),
     basicSettings: clientBasicSettingsSchema,
     authSettings: clientAuthSettingsSchema,
     usageLimit: clientUsageLimitSchema,
@@ -249,3 +273,5 @@ export type TelegramWhitelistListResponse = z.output<
 export type TelegramWhitelistCreate = z.output<typeof telegramWhitelistCreateSchema>;
 
 export type ClientConfigResponse = z.output<typeof clientConfigResponseSchema>;
+export type Client = z.output<typeof clientSchema>;
+export type ClientCreate = z.output<typeof clientCreateSchema>;
