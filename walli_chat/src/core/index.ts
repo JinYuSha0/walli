@@ -124,15 +124,21 @@ export function buildConversationFrame(
     return message;
   };
 
+  let previousUserMessage: PreparedChatMessage | undefined;
   for (let ordinal = 0; ordinal < preparedMessages.length; ordinal++) {
     const preparedMessage = preparedMessages[ordinal]!;
     const previousMessage = preparedMessages[ordinal - 1];
-    const systemMessage = createTimeSystemMessage(preparedMessage, previousMessage, timeOptions);
+    const systemMessage = createTimeSystemMessage(
+      preparedMessage,
+      previousUserMessage,
+      timeOptions,
+    );
     if (systemMessage !== undefined) {
       if (previousMessage?.role === "assistant") y -= getCommonStyle("messageGap");
       appendMessage(systemMessage);
     }
     sourceMessages[ordinal] = appendMessage(preparedMessage);
+    if (preparedMessage.role === "user") previousUserMessage = preparedMessage;
   }
 
   const lastMessage = preparedMessages[preparedMessages.length - 1];
@@ -215,7 +221,7 @@ function layoutMessageFrame(
 
 function createTimeSystemMessage(
   message: PreparedChatMessage,
-  previousMessage: PreparedChatMessage | undefined,
+  previousUserMessage: PreparedChatMessage | undefined,
   options: TimeSystemMessageOptions | undefined,
 ): PreparedChatMessage | undefined {
   if (message.role !== "user" || options === undefined) return undefined;
@@ -226,8 +232,8 @@ function createTimeSystemMessage(
   const { createdAt } = message;
   if (createdAt === undefined || !Number.isFinite(createdAt)) return undefined;
 
-  const previousCreatedAt = previousMessage?.createdAt;
-  if (previousMessage !== undefined && !Number.isFinite(previousCreatedAt)) return undefined;
+  const previousCreatedAt = previousUserMessage?.createdAt;
+  if (previousUserMessage !== undefined && !Number.isFinite(previousCreatedAt)) return undefined;
 
   const elapsedMilliseconds =
     previousCreatedAt === undefined ? Date.now() - createdAt : createdAt - previousCreatedAt;

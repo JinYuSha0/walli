@@ -95,7 +95,7 @@ export function createTimeMessages(): WalliChatMessage[] {
     {
       id: "time-user-2",
       role: "user",
-      markdown: "Eleven minutes after the previous reply",
+      markdown: "Twelve minutes after the previous user message",
       createdAt: start + 12 * 60_000,
     },
   ];
@@ -434,7 +434,7 @@ function createTimeMessagesSource(): string {
   chat.messages = [
     { id: "time-user-1", role: "user", markdown: "First message", createdAt: now - 20 * 60_000 },
     { id: "time-assistant-1", role: "assistant", markdown: "First reply", createdAt: now - 19 * 60_000 },
-    { id: "time-user-2", role: "user", markdown: "Eleven minutes after the previous reply", createdAt: now - 8 * 60_000 },
+    { id: "time-user-2", role: "user", markdown: "Twelve minutes after the previous user message", createdAt: now - 8 * 60_000 },
   ];
 </script>`;
 }
@@ -1249,6 +1249,28 @@ export const InsertMessages: Story = {
     await userEvent.click(canvasElement.querySelector<HTMLButtonElement>("button:first-of-type")!);
     await waitFor(() => expect(chat.messages[0]?.id).toContain("insert-top-1"));
     await expect(viewport.scrollTop).toBeGreaterThan(before);
+
+    const insertedAt = Date.now();
+    chat.insertMessagesAtBottom([
+      {
+        createdAt: insertedAt,
+        id: "insert-bottom-system",
+        role: "system",
+        markdown: "Conversation status changed.",
+      },
+    ]);
+    chat.insertMessagesAtBottom(
+      [{ id: "insert-bottom-time", role: "user", markdown: "A newly inserted message." }],
+      { stick: true },
+    );
+    await waitFor(() => expect(chat.messages.at(-1)?.createdAt).toBeGreaterThanOrEqual(insertedAt));
+    await waitFor(() =>
+      expect(
+        [...chat.renderRoot.querySelectorAll("walli-message")].some(
+          (element) => element.message?.prepared.id === "system-time:insert-bottom-time",
+        ),
+      ).toBe(true),
+    );
   },
 };
 
@@ -1620,7 +1642,9 @@ function renderInsertMessages() {
   let chat: WalliChatElement | undefined;
   let stickInput: HTMLInputElement | undefined;
   let batch = 0;
+  const start = Date.now() - 2 * 60 * 60_000;
   const messages = Array.from({ length: 20 }, (_, index): WalliChatMessage => ({
+    createdAt: start + index * 60_000,
     id: `insert-initial-${index}`,
     role: index % 2 === 0 ? "user" : "assistant",
     markdown:
@@ -1705,6 +1729,7 @@ function renderInsertMessages() {
             if (element?.localName === "walli-chat") chat = element as WalliChatElement;
           })}
           style="display:block;height:100%;width:100%;border-radius:inherit"
+          .intervalSeconds=${10 * 60}
           .messages=${messages}
         ></walli-chat>
       </div>

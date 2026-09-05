@@ -202,10 +202,7 @@ export function ChatTestRoute() {
     );
   };
 
-  const handleTranscribe = async ({
-    finished,
-    signal,
-  }: WalliChatComposerTranscriptionContext) => {
+  const handleTranscribe = async ({ finished, signal }: WalliChatComposerTranscriptionContext) => {
     const { audio } = await finished;
     try {
       return await transcribeAudio(audio, signal);
@@ -225,6 +222,7 @@ export function ChatTestRoute() {
         messages={messages}
         onEndReached={handleLoadOlder}
         onEndReachedThreshold={0.2}
+        intervalSeconds={60 * 5}
         ref={chatRef}
       >
         <WalliChatComposer

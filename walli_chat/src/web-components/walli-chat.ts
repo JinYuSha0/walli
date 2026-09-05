@@ -268,7 +268,11 @@ export class WalliChatElement extends LitElement {
   ): WalliChatRemoveMessages {
     if (messages.length === 0) return () => undefined;
 
-    const insertedMessages = [...messages];
+    const insertedAt = Date.now();
+    const insertedMessages = messages.map((message) => ({
+      ...message,
+      createdAt: message.createdAt ?? insertedAt,
+    }));
     this.bottomInsertedMessageGroups.push(insertedMessages);
     if (options.stick) {
       this.isScrollingToBottom = true;

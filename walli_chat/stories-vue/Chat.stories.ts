@@ -556,7 +556,7 @@ const now = Date.now();
 const messages: WalliChatMessage[] = [
   { id: "time-user-1", role: "user", markdown: "First message", createdAt: now - 20 * 60_000 },
   { id: "time-assistant-1", role: "assistant", markdown: "First reply", createdAt: now - 19 * 60_000 },
-  { id: "time-user-2", role: "user", markdown: "Eleven minutes after the previous reply", createdAt: now - 8 * 60_000 },
+  { id: "time-user-2", role: "user", markdown: "Twelve minutes after the previous user message", createdAt: now - 8 * 60_000 },
 ];
 
 const formatTime = (createdAt: number) => new Date(createdAt).toLocaleString();
