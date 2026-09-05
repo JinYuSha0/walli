@@ -9,6 +9,7 @@ export {
   tableBlockDefinition,
   startBlockDefinition,
   toolCallBlockDefinition,
+  createSystemMessage,
 } from "./core/blocks";
 export {
   builtInBlocks,

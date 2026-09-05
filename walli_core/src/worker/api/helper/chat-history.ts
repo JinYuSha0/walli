@@ -1,5 +1,5 @@
 /** Convert stored model messages into visible chat history without exposing tool internals. */
-export const toWebHistoryMessage = (message: { id: string; content: string }) => {
+export const toWebHistoryMessage = (message: { id: string; content: string; createdAt: number }) => {
   try {
     const parsed: unknown = JSON.parse(message.content);
     if (typeof parsed !== "object" || parsed === null) return undefined;
@@ -18,7 +18,7 @@ export const toWebHistoryMessage = (message: { id: string; content: string }) =>
         : "";
 
     if (!markdown.trim()) return undefined;
-    return { id: message.id, role, markdown };
+    return { id: message.id, role, markdown, createdAt: message.createdAt };
   } catch {
     return undefined;
   }

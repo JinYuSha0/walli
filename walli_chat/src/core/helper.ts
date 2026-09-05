@@ -11,8 +11,15 @@ export type ImageDimensions = {
 const WIDTH_ATTRIBUTE_RE = /\bwidth=["']?(\d+(?:\.\d+)?)(?:px)?["']?/;
 const HEIGHT_ATTRIBUTE_RE = /\bheight=["']?(\d+(?:\.\d+)?)(?:px)?["']?/;
 
+export function formatTimeSystemMessage(createdAt: number): string {
+  const date = new Date(createdAt);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export function parseMarkdownHref(href: string | null | undefined): string | undefined {
   if (href === undefined || href === null) return;
+  if (href.startsWith("#")) return href;
   try {
     const url = new URL(href);
     return url.protocol === "http:" || url.protocol === "https:" ? url.href : undefined;

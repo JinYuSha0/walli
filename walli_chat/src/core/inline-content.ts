@@ -102,6 +102,8 @@ export function lineHeightForVariant(variant: InlineVariant): number {
       return getLineHeight("text-lg");
     case "body":
       return getLineHeight("text-base");
+    case "system":
+      return getLineHeight("text-xs");
   }
 }
 

@@ -33,6 +33,7 @@ import type {
   WalliChatStreamingHandle,
   WalliChatStreamingOptions,
   WalliChatTextStream,
+  WalliChatTimeFormatter,
 } from "../types";
 
 import type { WalliMessageElement } from "./walli-message";
@@ -86,6 +87,8 @@ export class WalliChatElement extends LitElement {
   @property({ attribute: false }) accessor onEndReachedThreshold = 0;
   @property({ attribute: false }) accessor onReply: WalliChatMessageCallback | undefined;
   @property({ attribute: false }) accessor onShare: WalliChatMessageCallback | undefined;
+  @property({ attribute: "interval-seconds", type: Number }) accessor intervalSeconds = 0;
+  @property({ attribute: false }) accessor timeFormatter: WalliChatTimeFormatter | undefined;
   @property({ attribute: false }) accessor bottomOcclusionHeight =
     getCommonStyle("bottomOcclusionHeight");
   private _messages: readonly WalliChatMessage[] = [];
@@ -296,6 +299,7 @@ export class WalliChatElement extends LitElement {
   private isSameMessage(left: WalliChatMessage | undefined, right: WalliChatMessage | undefined) {
     return (
       left?.id === right?.id &&
+      left?.createdAt === right?.createdAt &&
       left?.markdown === right?.markdown &&
       left?.role === right?.role &&
       left?.showActions === right?.showActions
@@ -358,6 +362,7 @@ export class WalliChatElement extends LitElement {
   ): WalliChatStreamingHandle {
     const abortController = new AbortController();
     const message: WalliChatMessage = {
+      createdAt: Date.now(),
       id: options.messageId,
       role: "assistant",
       markdown: STREAMING_START_MARKDOWN,
@@ -616,6 +621,7 @@ export class WalliChatElement extends LitElement {
     message.markdown = markdown;
     this.preparedMessages[index] = {
       blocks: parser.parse(markdown),
+      createdAt: message.createdAt,
       markdown,
       id: message.id,
       role: "assistant",
@@ -732,6 +738,9 @@ export class WalliChatElement extends LitElement {
     this.toggleAttribute("share-enabled", this.onShare !== undefined);
     if (changedProperties.has("bottomOcclusionHeight")) {
       this.handleBottomOcclusionChange();
+    }
+    if (changedProperties.has("intervalSeconds") || changedProperties.has("timeFormatter")) {
+      this.invalidateFrame({ keepMountedRows: true });
     }
     if (changedProperties.has("defaultScrollToBottom")) {
       this.endReachedContentWindow = null;
@@ -1159,6 +1168,10 @@ export class WalliChatElement extends LitElement {
       topOcclusionHeight,
       bottomOcclusionHeight,
       this.composerBottomInsetHeight,
+      {
+        formatter: this.timeFormatter,
+        intervalSeconds: this.intervalSeconds,
+      },
     );
     const preparedMessage = this.getStreamingBottomPaddingMessage();
     if (preparedMessage === undefined) return frame;
@@ -1211,6 +1224,12 @@ export class WalliChatElement extends LitElement {
     viewportHeight: number,
   ): number {
     if (frame.messages.length === 0) return 0;
+    const indexedMessage =
+      "index" in request
+        ? frame.sourceMessages[
+            Math.max(0, Math.min(frame.sourceMessages.length - 1, request.index))
+          ]
+        : undefined;
     const target =
       "target" in request
         ? request.target === "top"
@@ -1218,7 +1237,7 @@ export class WalliChatElement extends LitElement {
           : frame.totalHeight
         : "top" in request
           ? request.top
-          : frame.messages[Math.max(0, Math.min(frame.messages.length - 1, request.index))]!.top;
+          : (indexedMessage?.top ?? 0);
     return Math.max(0, Math.min(Math.max(0, frame.totalHeight - viewportHeight), target));
   }
 

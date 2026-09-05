@@ -1,4 +1,4 @@
-import { parseMarkdownBlocks } from "./md-parse";
+import { parseInlineMarkdownBlocks, parseMarkdownBlocks } from "./md-parse";
 import type {
   BlockFrame,
   BlockLayout,
@@ -14,17 +14,28 @@ import {
   measureMessageBlockFrame,
   resolveBuiltInBlockDefinition,
 } from "./block-registry";
-import type { WalliChatMessage } from "../types";
+import { createSystemMessage } from "./blocks/system-block";
+import { formatTimeSystemMessage } from "./helper";
+import type { WalliChatMessage, WalliChatTimeFormatter } from "../types";
+
+type TimeSystemMessageOptions = {
+  formatter?: WalliChatTimeFormatter;
+  intervalSeconds: number;
+};
 
 export function createPreparedChatMessages(
   messages: readonly WalliChatMessage[],
   options: { bottomPaddingHeight?: number; streaming?: boolean } = {},
 ): PreparedChatMessage[] {
   return messages.map((seed) => {
-    const blocks = parseMarkdownBlocks(seed.markdown, options.streaming);
+    const blocks =
+      seed.role === "system"
+        ? parseInlineMarkdownBlocks(seed.markdown, "system")
+        : parseMarkdownBlocks(seed.markdown, options.streaming);
     return {
       blocks: seed.role === "user" ? groupUserMessageAssets(blocks) : blocks,
       bottomPaddingHeight: options.bottomPaddingHeight,
+      createdAt: seed.createdAt,
       markdown: seed.markdown,
       id: seed.id,
       role: seed.role,
@@ -71,6 +82,7 @@ export function buildConversationFrame(
   topOcclusionHeight: number = getCommonStyle("topOcclusionHeight"),
   bottomOcclusionHeight: number = getCommonStyle("bottomOcclusionHeight"),
   composerBottomInsetHeight = 0,
+  timeOptions?: TimeSystemMessageOptions,
 ): ConversationFrame {
   const laneWidth = Math.max(120, chatWidth - getCommonStyle("messageSidePadding") * 2);
   const userFrameWidth = Math.min(
@@ -78,17 +90,16 @@ export function buildConversationFrame(
     Math.max(240, Math.floor(chatWidth * getCommonStyle("bubbleMaxRatio"))),
   );
   const assistantFrameWidth = laneWidth;
-  const messages: ChatMessageInstance[] = new Array(preparedMessages.length);
+  const messages: ChatMessageInstance[] = [];
+  const sourceMessages: ChatMessageInstance[] = new Array(preparedMessages.length);
   const chatTopPadding = topOcclusionHeight + getCommonStyle("chatTopPadding");
   const chatBottomPadding =
     bottomOcclusionHeight + composerBottomInsetHeight + getCommonStyle("chatBottomPadding");
 
   let y = chatTopPadding;
-  for (let ordinal = 0; ordinal < preparedMessages.length; ordinal++) {
-    const preparedMessage = preparedMessages[ordinal]!;
-    const contentInsetX =
-      preparedMessage.role === "assistant" ? 0 : getCommonStyle("bubblePaddingX");
-    const frameWidth = preparedMessage.role === "assistant" ? assistantFrameWidth : userFrameWidth;
+  const appendMessage = (preparedMessage: PreparedChatMessage): ChatMessageInstance => {
+    const contentInsetX = preparedMessage.role === "user" ? getCommonStyle("bubblePaddingX") : 0;
+    const frameWidth = preparedMessage.role === "user" ? userFrameWidth : assistantFrameWidth;
     const contentWidth = Math.max(120, frameWidth - contentInsetX * 2);
     const messageFrame = layoutMessageFrame(
       preparedMessage,
@@ -99,16 +110,29 @@ export function buildConversationFrame(
     const top = y;
     const bottom = top + messageFrame.totalHeight;
 
-    messages[ordinal] = {
+    const message = {
       bottom,
       frame: messageFrame,
       prepared: preparedMessage,
       top,
     };
+    messages.push(message);
     y = bottom;
     if (preparedMessage.role === "assistant") {
       y += getCommonStyle("messageGap");
     }
+    return message;
+  };
+
+  for (let ordinal = 0; ordinal < preparedMessages.length; ordinal++) {
+    const preparedMessage = preparedMessages[ordinal]!;
+    const previousMessage = preparedMessages[ordinal - 1];
+    const systemMessage = createTimeSystemMessage(preparedMessage, previousMessage, timeOptions);
+    if (systemMessage !== undefined) {
+      if (previousMessage?.role === "assistant") y -= getCommonStyle("messageGap");
+      appendMessage(systemMessage);
+    }
+    sourceMessages[ordinal] = appendMessage(preparedMessage);
   }
 
   const lastMessage = preparedMessages[preparedMessages.length - 1];
@@ -123,6 +147,7 @@ export function buildConversationFrame(
     chatWidth,
     composerBottomInsetHeight,
     messages,
+    sourceMessages,
     topOcclusionHeight,
     totalHeight,
   };
@@ -148,7 +173,9 @@ function layoutMessageFrame(
   maxContentWidth: number,
   contentInsetX: number,
 ): MessageFrame {
-  let y = getCommonStyle("bubblePaddingY");
+  const isSystem = preparedMessage.role === "system";
+  const bubblePaddingY = isSystem ? 16 : getCommonStyle("bubblePaddingY");
+  let y = bubblePaddingY;
   const blocks: BlockFrame[] = [];
   let usedContentWidth = 0;
 
@@ -161,18 +188,18 @@ function layoutMessageFrame(
     usedContentWidth = Math.max(usedContentWidth, getBlockUsedWidth(blockFrame));
   }
 
-  const bubbleHeight = y + getCommonStyle("bubblePaddingY");
+  const bubbleHeight = y + bubblePaddingY;
   const actionHeight =
-    preparedMessage.streaming || !preparedMessage.showActions
+    isSystem || preparedMessage.streaming || !preparedMessage.showActions
       ? 0
       : preparedMessage.role === "assistant"
         ? getCommonStyle("assistantMessageActionHeight")
         : getCommonStyle("userMessageActionHeight");
   const paddingTop = preparedMessage.role === "user" ? getCommonStyle("userMessagePaddingTop") : 0;
   const frameWidth =
-    preparedMessage.role === "assistant"
-      ? maxFrameWidth
-      : Math.min(maxFrameWidth, contentInsetX * 2 + Math.max(1, usedContentWidth));
+    preparedMessage.role === "user"
+      ? Math.min(maxFrameWidth, contentInsetX * 2 + Math.max(1, usedContentWidth))
+      : maxFrameWidth;
   return {
     actionHeight,
     blocks,
@@ -184,6 +211,32 @@ function layoutMessageFrame(
     totalHeight: bubbleHeight + paddingTop + actionHeight,
     paddingTop,
   };
+}
+
+function createTimeSystemMessage(
+  message: PreparedChatMessage,
+  previousMessage: PreparedChatMessage | undefined,
+  options: TimeSystemMessageOptions | undefined,
+): PreparedChatMessage | undefined {
+  if (message.role !== "user" || options === undefined) return undefined;
+
+  const intervalMilliseconds = options.intervalSeconds * 1_000;
+  if (!Number.isFinite(intervalMilliseconds) || intervalMilliseconds <= 0) return undefined;
+
+  const { createdAt } = message;
+  if (createdAt === undefined || !Number.isFinite(createdAt)) return undefined;
+
+  const previousCreatedAt = previousMessage?.createdAt;
+  if (previousMessage !== undefined && !Number.isFinite(previousCreatedAt)) return undefined;
+
+  const elapsedMilliseconds =
+    previousCreatedAt === undefined ? Date.now() - createdAt : createdAt - previousCreatedAt;
+  if (elapsedMilliseconds <= intervalMilliseconds) return undefined;
+
+  const text = options.formatter?.(createdAt) ?? formatTimeSystemMessage(createdAt);
+  return createPreparedChatMessages([
+    createSystemMessage(text, { createdAt, id: `system-time:${message.id}` }),
+  ])[0];
 }
 
 export function materializeMessageBlocks(message: ChatMessageInstance): {

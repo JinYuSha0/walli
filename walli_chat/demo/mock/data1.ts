@@ -1,5 +1,5 @@
 import readmeZhCn from "../../../README.zh-CN.md?raw";
-import type { WalliChatMessage } from "@wallilabs/chat";
+import { createSystemMessage, type WalliChatMessage } from "@wallilabs/chat";
 import {
   createConfirmationCardMarkdown,
   createNoticeMarkdown,
@@ -20,6 +20,7 @@ function message(role: "assistant" | "user", ...lines: string[]): MarkdownChatSe
 let BASE_MESSAGE_ID = 0;
 
 const TOTAL_MESSAGE_LENGTH = 10_000;
+const DEMO_TIME_RANGE = 14 * 24 * 60 * 60 * 1_000;
 
 export const demoConfirmationCardData: ConfirmationCardData = {
   title: "确认预约信息",
@@ -409,11 +410,11 @@ const BASE_MESSAGE_SPECS: MarkdownChatSeed[] = [
 ];
 
 export function getMessages() {
-  const message: MarkdownChatSeed[] = [];
+  const messages: MarkdownChatSeed[] = [];
   for (let i = 0; i < TOTAL_MESSAGE_LENGTH; i++) {
-    message.push(BASE_MESSAGE_SPECS[i % BASE_MESSAGE_SPECS.length]!);
+    messages.push(BASE_MESSAGE_SPECS[i % BASE_MESSAGE_SPECS.length]!);
   }
-  message.push(
+  messages.push(
     {
       id: "demo-notice-info",
       role: "assistant",
@@ -444,6 +445,15 @@ export function getMessages() {
       meta: demoConfirmationCardData,
       showActions: false,
     },
+    createSystemMessage("当前对话结束人工接入 [详情](#handoff)", {
+      id: "demo-system-handoff",
+    }),
   );
-  return message;
+  const endAt = Date.now();
+  const startAt = endAt - DEMO_TIME_RANGE;
+
+  return messages.map((item, index) => {
+    const progress = (index + Math.random()) / messages.length;
+    return { ...item, createdAt: Math.floor(startAt + progress * DEMO_TIME_RANGE) };
+  });
 }

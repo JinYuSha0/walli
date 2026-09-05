@@ -46,6 +46,7 @@ import type {
   WalliChatStreamingHandle,
   WalliChatStreamingOptions,
   WalliChatTextStream,
+  WalliChatTimeFormatter,
 } from "../types";
 
 const styleProp = Object as PropType<CSSProperties>;
@@ -153,6 +154,8 @@ export const WalliChat = defineComponent({
     onEndReached: Function as PropType<WalliChatEndReachedCallback>,
     onEndReachedThreshold: { default: 0, type: Number },
     style: styleProp,
+    timeFormatter: Function as PropType<WalliChatTimeFormatter>,
+    intervalSeconds: { default: 0, type: Number },
   },
   emits: {
     action: (_action: WalliChatBlockAction) => true,
@@ -169,6 +172,8 @@ export const WalliChat = defineComponent({
       chat.messages = props.messages;
       chat.defaultScrollToBottom = props.defaultScrollToBottom;
       chat.loading = props.loading;
+      chat.timeFormatter = props.timeFormatter;
+      chat.intervalSeconds = props.intervalSeconds;
       if (props.bottomOcclusionHeight !== undefined) {
         chat.bottomOcclusionHeight = props.bottomOcclusionHeight;
       }
@@ -291,6 +296,8 @@ export type {
   WalliChatStreamingHandle,
   WalliChatStreamingOptions,
   WalliChatTextStream,
+  WalliChatTimeFormatter,
 };
 
+export { createSystemMessage } from "../core/blocks/system-block";
 export { builtInBlocks, registerBlock };

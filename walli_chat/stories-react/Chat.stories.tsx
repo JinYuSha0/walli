@@ -13,6 +13,7 @@ import {
 import {
   assistantMessage,
   conversation,
+  createTimeMessages,
   customBlockMessage,
   imageMessage,
   markdownShowcase,
@@ -30,6 +31,7 @@ import { createReasoningStorySseStream, createStorySseStream } from "./story-str
 type Args = WalliChatProps;
 const chatStyle: CSSProperties = { display: "block", height: "100%", width: "100%" };
 const noMessages: WalliChatMessage[] = [];
+const timeFormatter = (createdAt: number) => new Date(createdAt).toLocaleString();
 const buttonStyle: CSSProperties = {
   cursor: "pointer",
   border: "1px solid var(--walli-border)",
@@ -40,12 +42,13 @@ const buttonStyle: CSSProperties = {
   font: "600 13px sans-serif",
 };
 
-function ChatSurface({ messages, compact = false }: Args & { compact?: boolean }) {
+function ChatSurface({ messages, compact = false, ...props }: Args & { compact?: boolean }) {
   return (
     <div
       style={{ height: compact ? 240 : 640, width: "100%", background: "var(--walli-background)" }}
     >
       <WalliChat
+        {...props}
         messages={messages}
         onFeedback={(id, _markdown, feedback) => console.info("Feedback", { id, feedback })}
         onReply={(id) => console.info("Reply", { id })}
@@ -71,6 +74,7 @@ const meta = {
     defaultScrollToBottom: { control: "boolean" },
     emptyContent: { control: false },
     loading: { control: "boolean" },
+    intervalSeconds: { control: { min: 0, step: 60, type: "number" } },
     messages: { control: "object" },
     onAction: { control: false },
     onEndReached: { control: false },
@@ -79,6 +83,7 @@ const meta = {
     onReply: { control: false },
     onShare: { control: false },
     style: { control: "object" },
+    timeFormatter: { control: false },
   },
   args: { messages: conversation },
   render: (args) => <ChatSurface {...args} />,
@@ -104,6 +109,14 @@ export const ReasoningStream: Story = {
   parameters: source(exampleSources.reasoningStream),
 };
 export const Conversation: Story = { parameters: source(exampleSources.conversation) };
+export const TimeMessages: Story = {
+  args: {
+    intervalSeconds: 10 * 60,
+    messages: createTimeMessages(),
+    timeFormatter,
+  },
+  parameters: source(exampleSources.timeMessages),
+};
 export const RichMarkdown: Story = {
   args: { messages: markdownShowcase },
   parameters: source(exampleSources.richMarkdown),

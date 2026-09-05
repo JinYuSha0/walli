@@ -55,6 +55,7 @@ import type {
   WalliChatStreamingHandle,
   WalliChatStreamingOptions,
   WalliChatTextStream,
+  WalliChatTimeFormatter,
 } from "../types";
 
 export { Trash2 as WalliChatTrashIcon } from "lucide";
@@ -195,6 +196,8 @@ export type WalliChatProps = {
   onReply?: WalliChatMessageCallback;
   onShare?: WalliChatMessageCallback;
   style?: CSSProperties;
+  timeFormatter?: WalliChatTimeFormatter;
+  intervalSeconds?: number;
 };
 
 export type WalliChatRef = {
@@ -240,6 +243,8 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
     onReply,
     onShare,
     style,
+    timeFormatter,
+    intervalSeconds = 0,
   },
   forwardedRef,
 ): ReactElement {
@@ -248,8 +253,10 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
   useEffect(() => {
     if (elementRef.current) {
       elementRef.current.messages = messages;
+      elementRef.current.timeFormatter = timeFormatter;
+      elementRef.current.intervalSeconds = intervalSeconds;
     }
-  }, [messages]);
+  }, [intervalSeconds, messages, timeFormatter]);
 
   useEffect(() => {
     if (elementRef.current) {
@@ -358,6 +365,8 @@ export type {
   WalliChatStreamingHandle,
   WalliChatStreamingOptions,
   WalliChatTextStream,
+  WalliChatTimeFormatter,
 };
 
+export { createSystemMessage } from "../core/blocks/system-block";
 export { builtInBlocks, registerBlock };

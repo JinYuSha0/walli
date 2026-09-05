@@ -1,13 +1,15 @@
 import type { IconNode } from "lucide";
 
 export type WalliChatMessage = {
+  createdAt?: number;
   id: string;
   meta?: unknown;
-  role: "assistant" | "user";
+  role: "assistant" | "system" | "user";
   markdown: string;
   showActions?: boolean;
 };
 export type WalliChatMessagePatch = Partial<Omit<WalliChatMessage, "id">>;
+export type WalliChatTimeFormatter = (createdAt: number) => string;
 
 export type WalliChatFeedback = "like" | "dislike";
 export type WalliChatFeedbackCallback = (

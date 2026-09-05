@@ -281,6 +281,7 @@ const streamChat = async (
         stopWhen: isStepCount(5),
         abortSignal: c.req.raw.signal,
       });
+      const createdAt = Date.now();
 
       const uiMessageStream = toUIMessageStream({
         stream: result.stream,
@@ -289,6 +290,7 @@ const streamChat = async (
         sendSources: true,
         generateMessageId: () => crypto.randomUUID(),
         messageMetadata: () => ({
+          createdAt,
           model: settings.primaryModel,
           sessionId: prepared.sessionId,
         }),

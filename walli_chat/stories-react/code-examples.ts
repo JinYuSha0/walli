@@ -22,6 +22,26 @@ export function Example() {
 
 export const exampleSources = {
   conversation: chat(conversation),
+  timeMessages: `import { WalliChat, type WalliChatMessage } from "@wallilabs/chat/react";
+import "@wallilabs/chat/theme.css";
+
+const now = Date.now();
+const messages: WalliChatMessage[] = [
+  { id: "time-user-1", role: "user", markdown: "First message", createdAt: now - 20 * 60_000 },
+  { id: "time-assistant-1", role: "assistant", markdown: "First reply", createdAt: now - 19 * 60_000 },
+  { id: "time-user-2", role: "user", markdown: "Eleven minutes after the previous reply", createdAt: now - 8 * 60_000 },
+];
+
+export function Example() {
+  return (
+    <WalliChat
+      intervalSeconds={10 * 60}
+      messages={messages}
+      timeFormatter={(createdAt) => new Date(createdAt).toLocaleString()}
+      style={{ height: 640 }}
+    />
+  );
+}`,
   reasoningStream: `import { useRef, useState } from "react";
 import { WalliChat, type WalliChatRef } from "@wallilabs/chat/react";
 import { createReasoningStorySseStream } from "./story-stream";

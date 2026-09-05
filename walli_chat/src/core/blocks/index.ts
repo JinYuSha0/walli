@@ -39,3 +39,4 @@ export { startBlockDefinition };
 export { reasoningBlockDefinition };
 export { errorBlockDefinition };
 export { toolCallBlockDefinition };
+export { createSystemMessage } from "./system-block";

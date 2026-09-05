@@ -50,6 +50,7 @@ export type {
   WalliChatStreamingHandle,
   WalliChatStreamingOptions,
   WalliChatTextStream,
+  WalliChatTimeFormatter,
 } from "../types";
 
 declare global {

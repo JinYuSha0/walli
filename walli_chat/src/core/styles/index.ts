@@ -44,13 +44,23 @@ export function getFont(
     .join(" ");
 }
 
-function processInlineTextClass(className: string, marks: MarkState) {
+function processInlineTextClass(
+  className: string,
+  marks: MarkState,
+  overrides: Partial<Record<keyof MarkState, string>> = {},
+) {
+  const defaultClassNames: Record<keyof MarkState, string> = {
+    bold: "font-bold",
+    href: "underline",
+    italic: "italic",
+    strike: "line-through decoration-1",
+  };
   return clsx(
     className,
-    marks.href ? "underline" : null,
-    marks.bold ? "font-bold" : null,
-    marks.italic ? "italic" : null,
-    marks.strike ? "line-through decoration-1" : null,
+    marks.href ? (overrides.href ?? defaultClassNames.href) : null,
+    marks.bold ? (overrides.bold ?? defaultClassNames.bold) : null,
+    marks.italic ? (overrides.italic ?? defaultClassNames.italic) : null,
+    marks.strike ? (overrides.strike ?? defaultClassNames.strike) : null,
   );
 }
 
@@ -88,6 +98,23 @@ function body(text: string, marks: MarkState): InlinePiece {
       marks,
     ),
     font: getFont("body", marks, "text-base", "font-sans"),
+    text,
+    href: marks.href,
+  };
+}
+
+function system(text: string, marks: MarkState): InlinePiece {
+  return {
+    breakMode: "normal",
+    className: processInlineTextClass(
+      clsx(
+        "inline-block whitespace-pre font-sans text-xs font-medium leading-none align-baseline",
+        marks.href ? "text-blue-500" : "text-muted-foreground",
+      ),
+      marks,
+      { href: "no-underline" },
+    ),
+    font: getFont("system", marks, "text-xs", "font-sans", marks.bold ? 700 : 500),
     text,
     href: marks.href,
   };
@@ -149,6 +176,7 @@ export const inlinePiece = {
   h1,
   h2,
   body,
+  system,
   code,
   image,
   mark,

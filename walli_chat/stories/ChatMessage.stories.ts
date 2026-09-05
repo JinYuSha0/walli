@@ -32,6 +32,8 @@ type Args = Pick<
   | "onFeedback"
   | "onReply"
   | "onShare"
+  | "timeFormatter"
+  | "intervalSeconds"
 >;
 
 export const conversation: WalliChatMessage[] = [
@@ -74,6 +76,30 @@ export const conversation: WalliChatMessage[] = [
     ].join("\n"),
   },
 ];
+
+export function createTimeMessages(): WalliChatMessage[] {
+  const start = Date.now() - 20 * 60_000;
+  return [
+    {
+      id: "time-user-1",
+      role: "user",
+      markdown: "First message",
+      createdAt: start,
+    },
+    {
+      id: "time-assistant-1",
+      role: "assistant",
+      markdown: "First reply",
+      createdAt: start + 60_000,
+    },
+    {
+      id: "time-user-2",
+      role: "user",
+      markdown: "Eleven minutes after the previous reply",
+      createdAt: start + 12 * 60_000,
+    },
+  ];
+}
 
 export const markdownShowcase: WalliChatMessage[] = [
   {
@@ -397,6 +423,22 @@ function createChatSource(messages: readonly WalliChatMessage[]): string {
 </script>`;
 }
 
+function createTimeMessagesSource(): string {
+  return `<div style="height:640px;width:100%;background:var(--walli-background)">
+  <walli-chat interval-seconds="600" style="display:block;height:100%;width:100%"></walli-chat>
+</div>
+
+<script type="module">
+  const now = Date.now();
+  const chat = document.querySelector("walli-chat");
+  chat.messages = [
+    { id: "time-user-1", role: "user", markdown: "First message", createdAt: now - 20 * 60_000 },
+    { id: "time-assistant-1", role: "assistant", markdown: "First reply", createdAt: now - 19 * 60_000 },
+    { id: "time-user-2", role: "user", markdown: "Eleven minutes after the previous reply", createdAt: now - 8 * 60_000 },
+  ];
+</script>`;
+}
+
 const meta: Meta<Args> = {
   title: "Components/Chat Message",
   excludeStories: /^[a-z]/,
@@ -416,6 +458,7 @@ const meta: Meta<Args> = {
     loading: false,
     messages: conversation,
     onEndReachedThreshold: 0,
+    intervalSeconds: 0,
   },
   argTypes: {
     bottomOcclusionHeight: {
@@ -473,6 +516,16 @@ const meta: Meta<Args> = {
       description: "Handles message share actions.",
       table: { type: { summary: "WalliChatMessageCallback" } },
     },
+    intervalSeconds: {
+      control: { min: 0, type: "number" },
+      description: "Seconds before inserting a system time message above a user message.",
+      table: { defaultValue: { summary: "0" }, type: { summary: "number" } },
+    },
+    timeFormatter: {
+      control: false,
+      description: "Formats the timestamp shown by generated system messages.",
+      table: { type: { summary: "(createdAt: number) => string" } },
+    },
   },
   render: (args) => html`
     <div style="height:640px;width:100%;background:var(--walli-background)">
@@ -489,6 +542,8 @@ const meta: Meta<Args> = {
         .onFeedback=${args.onFeedback}
         .onReply=${args.onReply}
         .onShare=${args.onShare}
+        .timeFormatter=${args.timeFormatter}
+        .intervalSeconds=${args.intervalSeconds}
       ></walli-chat>
     </div>
   `,
@@ -877,6 +932,76 @@ export const Conversation: Story = {
         code: createChatSource(conversation),
       },
     },
+  },
+};
+
+export const TimeMessages: Story = {
+  args: {
+    messages: createTimeMessages(),
+    intervalSeconds: 10 * 60,
+  },
+  parameters: {
+    docs: {
+      source: { code: createTimeMessagesSource() },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const chat = await getRenderedChat(canvasElement);
+    await waitFor(() =>
+      expect(
+        [...chat.renderRoot.querySelectorAll("walli-message")].filter(
+          (element) => element.message?.prepared.role === "system",
+        ),
+      ).toHaveLength(2),
+    );
+    const firstSystemMessage = [...chat.renderRoot.querySelectorAll("walli-message")].find(
+      (element) => element.message?.prepared.role === "system",
+    );
+    await expect(firstSystemMessage?.message?.prepared.markdown).toMatch(
+      /\d{4}-\d{2}-\d{2} \d{2}:\d{2}/,
+    );
+
+    chat.timeFormatter = () => "[Custom time](#details) **Bold** ~~Deleted~~";
+    await waitFor(() =>
+      expect(
+        [...chat.renderRoot.querySelectorAll("walli-message")].some((element) =>
+          element.message?.prepared.markdown.includes("Custom time"),
+        ),
+      ).toBe(true),
+    );
+    const systemMessage = [...chat.renderRoot.querySelectorAll("walli-message")].find((element) =>
+      element.message?.prepared.markdown.includes("Custom time"),
+    );
+    const link = systemMessage?.querySelector("a");
+    await expect(link?.getAttribute("href")).toBe("#details");
+    await expect(link?.classList).toContain("text-blue-500");
+    await expect(link?.classList).toContain("no-underline");
+    let receivedAction: Parameters<NonNullable<WalliChatElement["onAction"]>>[0] | undefined;
+    chat.onAction = (action) => {
+      receivedAction = action;
+    };
+    await userEvent.click(link!);
+    await expect(receivedAction).toEqual({
+      data: { href: "#details", text: "Custom time" },
+      messageId: expect.stringContaining("system-time:"),
+      name: "system-message-link",
+    });
+    const inlineSpans = [...(systemMessage?.querySelectorAll("span") ?? [])];
+    await expect(inlineSpans.find((span) => span.textContent === "Bold")?.classList).toContain(
+      "font-bold",
+    );
+    await expect(inlineSpans.find((span) => span.textContent === "Deleted")?.classList).toContain(
+      "line-through",
+    );
+
+    chat.intervalSeconds = 0;
+    await waitFor(() =>
+      expect(
+        [...chat.renderRoot.querySelectorAll("walli-message")].filter(
+          (element) => element.message?.prepared.role === "system",
+        ),
+      ).toHaveLength(0),
+    );
   },
 };
 

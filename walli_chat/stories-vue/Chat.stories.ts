@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import { FileSpreadsheet, ImagePlus, Search } from "lucide";
-import { defineComponent, h, nextTick, onMounted, ref } from "vue";
+import { defineComponent, h, nextTick, onMounted, ref, type PropType } from "vue";
 import {
   WalliChat,
   WalliChatComposer,
@@ -12,6 +12,7 @@ import {
 import {
   assistantMessage,
   conversation,
+  createTimeMessages,
   customBlockMessage,
   imageMessage,
   markdownShowcase,
@@ -27,6 +28,7 @@ import { chatSource, source } from "./source";
 
 type Args = InstanceType<typeof WalliChat>["$props"];
 const style = { display: "block", height: "100%", width: "100%" };
+const timeFormatter = (createdAt: number) => new Date(createdAt).toLocaleString();
 const buttonStyle = {
   cursor: "pointer",
   border: "1px solid var(--walli-border)",
@@ -73,12 +75,19 @@ const button = (label: string, onClick: () => void) =>
   h("button", { style: buttonStyle, onClick }, label);
 
 const ChatSurface = defineComponent({
-  props: { compact: Boolean, messages: { required: true, type: Array } },
+  props: {
+    compact: Boolean,
+    intervalSeconds: Number,
+    messages: { required: true, type: Array },
+    timeFormatter: Function as PropType<(createdAt: number) => string>,
+  },
   setup: (props) => () =>
     h("div", { style: { height: props.compact ? "240px" : "640px", width: "100%" } }, [
       h(WalliChat, {
+        intervalSeconds: props.intervalSeconds,
         messages: props.messages,
         style,
+        timeFormatter: props.timeFormatter,
         onFeedback: (id: string, _markdown: string, feedback: string) =>
           console.info("Feedback", { id, feedback }),
         onReply: (id: string) => console.info("Reply", { id }),
@@ -101,6 +110,7 @@ const meta = {
     class: { control: "text" },
     defaultScrollToBottom: { control: "boolean" },
     feedback: { control: false },
+    intervalSeconds: { control: { min: 0, step: 60, type: "number" } },
     loading: { control: "boolean" },
     messages: { control: "object" },
     onAction: { control: false },
@@ -109,6 +119,7 @@ const meta = {
     reply: { control: false },
     share: { control: false },
     style: { control: "object" },
+    timeFormatter: { control: false },
   },
   args: { messages: conversation },
   render: (args) => ({
@@ -537,6 +548,29 @@ async function start() {
   <WalliChat ref="chat" :messages="[]" style="height: 560px" />
 </template>`;
 
+const timeMessagesCode = `<script setup lang="ts">
+import { WalliChat, type WalliChatMessage } from "@wallilabs/chat/vue";
+import "@wallilabs/chat/theme.css";
+
+const now = Date.now();
+const messages: WalliChatMessage[] = [
+  { id: "time-user-1", role: "user", markdown: "First message", createdAt: now - 20 * 60_000 },
+  { id: "time-assistant-1", role: "assistant", markdown: "First reply", createdAt: now - 19 * 60_000 },
+  { id: "time-user-2", role: "user", markdown: "Eleven minutes after the previous reply", createdAt: now - 8 * 60_000 },
+];
+
+const formatTime = (createdAt: number) => new Date(createdAt).toLocaleString();
+</script>
+
+<template>
+  <WalliChat
+    :interval-seconds="10 * 60"
+    :messages="messages"
+    :time-formatter="formatTime"
+    style="height: 640px"
+  />
+</template>`;
+
 const customBlockCode = `<script setup lang="ts">
 import { onUnmounted } from "vue";
 import {
@@ -722,6 +756,14 @@ export const ReasoningStream: Story = {
   parameters: source(reasoningStreamCode),
 };
 export const Conversation: Story = { parameters: source(chatSource(conversation)) };
+export const TimeMessages: Story = {
+  args: {
+    intervalSeconds: 10 * 60,
+    messages: createTimeMessages(),
+    timeFormatter,
+  },
+  parameters: source(timeMessagesCode),
+};
 export const RichMarkdown: Story = {
   args: { messages: markdownShowcase },
   parameters: source(chatSource(markdownShowcase)),

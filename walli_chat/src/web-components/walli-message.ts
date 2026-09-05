@@ -45,6 +45,23 @@ export class WalliMessageElement extends HTMLElement {
   }
 
   private renderLayout(message: ChatMessageInstance, blocks: BlockLayout[]): TemplateResult {
+    if (message.frame.role === "system") {
+      return html`<div
+        class="absolute left-0 w-full"
+        style=${`top:${message.top}px;height:${message.frame.totalHeight}px;`}
+        @click=${this.handleSystemMessageClick}
+      >
+        ${blocks.map((block) =>
+          renderMessageBlockTemplate(
+            block,
+            Math.max(0, (message.frame.frameWidth - getBlockUsedWidth(block)) / 2),
+            block.kind === "custom" ? this.currentBlockContext : undefined,
+            block.kind === "custom" ? message.prepared.id : undefined,
+          ),
+        )}
+      </div>`;
+    }
+
     const assetsGroups =
       message.frame.role === "user" ? blocks.filter((block) => block.kind === "assetsGroup") : [];
     const hasAssets = assetsGroups.length > 0;
@@ -107,8 +124,30 @@ export class WalliMessageElement extends HTMLElement {
 
   private computeKey(message: ChatMessageInstance): string {
     const frame: MessageFrame = message.frame;
-    return `${message.top}:${frame.frameWidth}:${frame.bubbleHeight}:${frame.totalHeight}:${frame.layoutContentWidth}:${frame.contentInsetX}`;
+    return `${message.top}:${frame.frameWidth}:${frame.bubbleHeight}:${frame.totalHeight}:${frame.layoutContentWidth}:${frame.contentInsetX}:${message.prepared.markdown}`;
   }
+
+  private readonly handleSystemMessageClick = (event: MouseEvent): void => {
+    const anchor = event
+      .composedPath()
+      .find((target): target is HTMLAnchorElement => target instanceof HTMLAnchorElement);
+    if (
+      anchor === undefined ||
+      this.currentMessage === null ||
+      this.currentBlockContext === undefined
+    )
+      return;
+
+    event.preventDefault();
+    void this.currentBlockContext.action({
+      data: {
+        href: anchor.getAttribute("href") ?? "",
+        text: anchor.textContent ?? "",
+      },
+      messageId: this.currentMessage.prepared.id,
+      name: "system-message-link",
+    });
+  };
 }
 
 function getTextBubbleStyle(

@@ -82,6 +82,7 @@ export type ChatHistoryMessage = {
   id: string;
   role: "assistant" | "user";
   markdown: string;
+  createdAt: number;
 };
 
 export type ChatHistoryPage = {

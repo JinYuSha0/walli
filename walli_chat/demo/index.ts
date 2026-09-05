@@ -50,6 +50,10 @@ if (chat) {
     console.log("share", { id, markdown });
   };
   chat.onAction = async ({ data, messageId, name }) => {
+    if (name === "system-message-link") {
+      console.log("system message link", { data, messageId });
+      return;
+    }
     if (name !== "confirmation-card") return;
     const submission = data as ConfirmationCardSubmission;
     await new Promise((resolve) => window.setTimeout(resolve, 600));
@@ -77,6 +81,7 @@ if (chat) {
       [
         {
           id: `confirmation-success-${crypto.randomUUID()}`,
+          createdAt: Date.now(),
           role: "assistant",
           markdown: createNoticeMarkdown({
             text: "预约信息提交成功。",
@@ -151,6 +156,7 @@ if (composer) {
     chat?.insertMessagesAtBottom([
       {
         id: `demo-user-${crypto.randomUUID()}`,
+        createdAt: Date.now(),
         markdown,
         role: "user",
       },
@@ -294,6 +300,7 @@ appendWithoutActionsButton.addEventListener("click", () => {
     [
       {
         id: `loading-block-${batch}`,
+        createdAt: Date.now(),
         role: "assistant",
         markdown: ":::loading-block\n:::",
         showActions: false,
@@ -520,9 +527,11 @@ let insertionSequence = 0;
 
 function createTopInsertionBatch(): WalliChatMessage[] {
   const batch = ++insertionSequence;
+  const createdAt = Date.now() - (14 + batch) * 24 * 60 * 60 * 1_000;
   return [
     {
       id: `top-${batch}-assistant-1`,
+      createdAt,
       role: "assistant",
       markdown: [
         `### 历史消息批次 #${batch}`,
@@ -532,11 +541,13 @@ function createTopInsertionBatch(): WalliChatMessage[] {
     },
     {
       id: `top-${batch}-user-1`,
+      createdAt: createdAt + 1_000,
       role: "user",
       markdown: `收到，继续回放更早的上下文（batch ${batch}）。`,
     },
     {
       id: `top-${batch}-assistant-2`,
+      createdAt: createdAt + 2_000,
       role: "assistant",
       markdown: [
         "- 目标：保持当前可见范围",
@@ -549,9 +560,11 @@ function createTopInsertionBatch(): WalliChatMessage[] {
 
 function createBottomInsertionBatch(): WalliChatMessage[] {
   const batch = ++insertionSequence;
+  const createdAt = Date.now();
   return [
     {
       id: `bottom-${batch}-assistant-1`,
+      createdAt,
       role: "assistant",
       markdown: [
         `### 新消息批次 #${batch}`,
@@ -561,11 +574,13 @@ function createBottomInsertionBatch(): WalliChatMessage[] {
     },
     {
       id: `bottom-${batch}-user-1`,
+      createdAt: createdAt + 1_000,
       role: "user",
       markdown: `好的，我还在看前面的内容；这条是 batch ${batch} 的跟进。`,
     },
     {
       id: `bottom-${batch}-assistant-2`,
+      createdAt: createdAt + 2_000,
       role: "assistant",
       markdown: [
         "```json",

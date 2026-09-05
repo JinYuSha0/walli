@@ -12,6 +12,18 @@ import {
 import { getCommonStyle, inlinePiece } from "./styles";
 import { resolveBuiltInBlockDefinition, resolveCustomBlockToken } from "./block-registry";
 import { getSpace } from "./styles/config";
+import type { InlineVariant } from "./blocks/inline-block";
+
+export function parseInlineMarkdownBlocks(
+  markdown: string,
+  variant: InlineVariant = "body",
+): PreparedBlock[] {
+  return resolveBuiltInBlockDefinition("inline").prepare(
+    marked.Lexer.lexInline(markdown),
+    variant,
+    { listDepth: 0, quoteDepth: 0 },
+  );
+}
 
 export function parseMarkdownBlocks(markdown: string, streaming = false): PreparedBlock[] {
   const source = streaming ? remend(markdown) : markdown;

@@ -41,13 +41,13 @@ export class WalliScrollToBottomButtonElement extends LitElement {
           this.streaming
             ? html`<span class="flex items-center gap-[3px]" aria-hidden="true">
                 <span
-                  class="animate-walli-scroll-to-bottom-dot-pulse h-1 w-1 flex-none rounded-full bg-current motion-reduce:animate-none"
+                  class="animate-walli-scroll-to-bottom-dot-pulse h-1 w-1 flex-none rounded-full bg-current"
                 ></span>
                 <span
-                  class="animate-walli-scroll-to-bottom-dot-pulse h-1 w-1 flex-none rounded-full bg-current ![animation-delay:100ms] motion-reduce:animate-none"
+                  class="animate-walli-scroll-to-bottom-dot-pulse h-1 w-1 flex-none rounded-full bg-current ![animation-delay:100ms]"
                 ></span>
                 <span
-                  class="animate-walli-scroll-to-bottom-dot-pulse h-1 w-1 flex-none rounded-full bg-current ![animation-delay:200ms] motion-reduce:animate-none"
+                  class="animate-walli-scroll-to-bottom-dot-pulse h-1 w-1 flex-none rounded-full bg-current ![animation-delay:200ms]"
                 ></span>
               </span>`
             : html`<svg

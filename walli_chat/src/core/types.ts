@@ -83,9 +83,10 @@ export type PreparedBlock =
 export type PreparedChatMessage = {
   blocks: PreparedBlock[];
   bottomPaddingHeight?: number;
+  createdAt?: number;
   markdown: string;
   id: string;
-  role: "assistant" | "user";
+  role: "assistant" | "system" | "user";
   showActions: boolean;
   streaming?: boolean;
 };
@@ -125,7 +126,7 @@ export type MessageFrame = {
   contentInsetX: number;
   frameWidth: number;
   layoutContentWidth: number;
-  role: "assistant" | "user";
+  role: "assistant" | "system" | "user";
   totalHeight: number;
   paddingTop?: number;
 };
@@ -143,5 +144,6 @@ export type ConversationFrame = {
   composerBottomInsetHeight: number;
   chatWidth: number;
   messages: ChatMessageInstance[];
+  sourceMessages: ChatMessageInstance[];
   totalHeight: number;
 };

@@ -1,4 +1,6 @@
-import type { PresetWind3Theme } from "unocss";
+import { presetWind3, type PresetWind3Theme } from "unocss";
+
+const wind3Theme = presetWind3().theme as PresetWind3Theme;
 
 function themeColor(name: string): string {
   return `var(--${name}, var(--walli-${name}))`;
@@ -37,6 +39,7 @@ export const walliUnoTheme: PresetWind3Theme = {
     },
   },
   colors: {
+    ...wind3Theme.colors,
     background: themeColor("background"),
     "scroll-to-bottom": themeColor("scroll-to-bottom-background"),
     "scroll-to-bottom-hover": themeColor("scroll-to-bottom-background-hover"),

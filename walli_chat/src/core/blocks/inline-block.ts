@@ -21,7 +21,7 @@ import { customElement } from "lit/decorators.js";
 import { BlockShellElement } from "../block-shell";
 import { html, type TemplateResult } from "lit";
 
-export type InlineVariant = "body" | "h1" | "h2";
+export type InlineVariant = "body" | "h1" | "h2" | "system";
 export type InlinePiece = {
   breakMode: "normal" | "never";
   className: string;
