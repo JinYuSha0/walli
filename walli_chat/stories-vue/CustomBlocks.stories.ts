@@ -14,7 +14,7 @@ import {
   WalliChat,
   WalliChatComposer,
   registerBlock,
-  type WalliChatBlockAction,
+  type WalliChatAction,
   type WalliChatExpose,
   type WalliChatMessage,
 } from "../src/vue";
@@ -246,7 +246,9 @@ const CustomBlocksSurface = defineComponent({
   props: { messages: { required: true, type: Array } },
   setup(props) {
     const chat = ref<WalliChatExpose>();
-    const handleAction = async ({ data, messageId, name }: WalliChatBlockAction) => {
+    const handleAction = async (action: WalliChatAction) => {
+      if (action.type !== "block") return;
+      const { data, messageId, name } = action;
       if (name !== "confirmation-card") return;
       const submission = data as ConfirmationCardSubmission;
       const message = chat.value?.element?.messages.find((item) => item.id === messageId);

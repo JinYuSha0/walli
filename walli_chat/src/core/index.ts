@@ -91,7 +91,7 @@ export function buildConversationFrame(
   );
   const assistantFrameWidth = laneWidth;
   const messages: ChatMessageInstance[] = [];
-  const sourceMessages: ChatMessageInstance[] = new Array(preparedMessages.length);
+  const sourceMessages: ChatMessageInstance[] = [];
   const chatTopPadding = topOcclusionHeight + getCommonStyle("chatTopPadding");
   const chatBottomPadding =
     bottomOcclusionHeight + composerBottomInsetHeight + getCommonStyle("chatBottomPadding");
@@ -137,7 +137,8 @@ export function buildConversationFrame(
       if (previousMessage?.role === "assistant") y -= getCommonStyle("messageGap");
       appendMessage(systemMessage);
     }
-    sourceMessages[ordinal] = appendMessage(preparedMessage);
+    const message = appendMessage(preparedMessage);
+    if (preparedMessage.role !== "system") sourceMessages.push(message);
     if (preparedMessage.role === "user") previousUserMessage = preparedMessage;
   }
 

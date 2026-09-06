@@ -16,6 +16,7 @@ import {
   createTimeMessages,
   customBlockMessage,
   imageMessage,
+  initialIndexMessages,
   markdownShowcase,
   mockFullChatTranscription,
   mockFullChatUpload,
@@ -50,9 +51,7 @@ function ChatSurface({ messages, compact = false, ...props }: Args & { compact?:
       <WalliChat
         {...props}
         messages={messages}
-        onFeedback={(id, _markdown, feedback) => console.info("Feedback", { id, feedback })}
-        onReply={(id) => console.info("Reply", { id })}
-        onShare={(id) => console.info("Share", { id })}
+        onAction={(action) => console.info("Action", action)}
         style={chatStyle}
       />
     </div>
@@ -72,6 +71,7 @@ const meta = {
     children: { control: false },
     className: { control: "text" },
     defaultScrollToBottom: { control: "boolean" },
+    defaultScrollToIndex: { control: "number" },
     emptyContent: { control: false },
     loading: { control: "boolean" },
     intervalSeconds: { control: { min: 0, step: 60, type: "number" } },
@@ -79,9 +79,6 @@ const meta = {
     onAction: { control: false },
     onEndReached: { control: false },
     onEndReachedThreshold: { control: "number" },
-    onFeedback: { control: false },
-    onReply: { control: false },
-    onShare: { control: false },
     style: { control: "object" },
     timeFormatter: { control: false },
   },
@@ -151,9 +148,17 @@ export const ScrollControls: Story = {
   render: () => <ScrollControlsDemo />,
   parameters: source(exampleSources.scrollControls),
 };
+export const InitialIndex: Story = {
+  render: () => <InitialIndexDemo />,
+  parameters: source(exampleSources.initialIndex),
+};
 export const InsertMessages: Story = {
   render: () => <InsertMessagesDemo />,
   parameters: source(exampleSources.insertMessages),
+};
+export const ReplaceMessage: Story = {
+  render: () => <ReplaceMessageDemo />,
+  parameters: source(exampleSources.replaceMessage),
 };
 export const LoadOlderAtTop: Story = {
   render: () => <PaginationDemo loadAtTop />,
@@ -181,6 +186,19 @@ function ReplaceBlockDemo() {
   return (
     <div style={{ height: 320, width: "100%", background: "var(--walli-background)" }}>
       <WalliChat ref={chat} messages={noMessages} style={chatStyle} />
+    </div>
+  );
+}
+
+function InitialIndexDemo() {
+  return (
+    <div style={{ height: 640, width: "100%", background: "var(--walli-background)" }}>
+      <WalliChat
+        defaultScrollToIndex={8}
+        intervalSeconds={6 * 60 * 60}
+        messages={initialIndexMessages}
+        style={chatStyle}
+      />
     </div>
   );
 }
@@ -356,6 +374,41 @@ function InsertMessagesDemo() {
       </div>
       <ChatPanel>
         <WalliChat ref={chat} messages={initialInsertMessages} style={chatStyle} />
+      </ChatPanel>
+    </DemoFrame>
+  );
+}
+
+function ReplaceMessageDemo() {
+  const chat = useRef<WalliChatRef>(null);
+  const version = useRef(1);
+  const messageId = useRef("react-replace-1");
+
+  const replace = () => {
+    const nextVersion = version.current + 1;
+    const nextId = `react-replace-${nextVersion}`;
+    if (
+      chat.current?.replaceMessage(messageId.current, {
+        id: nextId,
+        markdown: `## React message ${nextVersion}\n\nReplaced in place.`,
+      })
+    ) {
+      version.current = nextVersion;
+      messageId.current = nextId;
+    }
+  };
+
+  return (
+    <DemoFrame>
+      <button style={buttonStyle} onClick={replace}>
+        Replace message
+      </button>
+      <ChatPanel>
+        <WalliChat
+          ref={chat}
+          messages={[{ id: "react-replace-1", role: "assistant", markdown: "## React message 1" }]}
+          style={chatStyle}
+        />
       </ChatPanel>
     </DemoFrame>
   );

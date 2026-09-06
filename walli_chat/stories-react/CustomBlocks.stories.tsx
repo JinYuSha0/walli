@@ -14,7 +14,7 @@ import {
   WalliChat,
   WalliChatComposer,
   registerBlock,
-  type WalliChatBlockAction,
+  type WalliChatAction,
   type WalliChatMessage,
   type WalliChatRef,
 } from "../src/react";
@@ -94,7 +94,9 @@ export function CustomBlocks() {
     <WalliChat
       ref={chat}
       messages={messages}
-      onAction={async ({ name, data }) => {
+      onAction={async (action) => {
+        if (action.type !== "block") return;
+        const { name, data } = action;
         if (name !== "confirmation-card") return;
         await submitConfirmation(data);
         chat.current?.insertMessagesAtBottom([{
@@ -214,7 +216,9 @@ export function ConfirmationCard() {
         meta: confirmation,
         showActions: false,
       }]}
-      onAction={async ({ name, data }) => {
+      onAction={async (action) => {
+        if (action.type !== "block") return;
+        const { name, data } = action;
         if (name === "confirmation-card") await submitConfirmation(data);
       }}
       style={{ height: 720 }}
@@ -250,7 +254,9 @@ export function Notices() {
 function CustomBlocksSurface({ messages }: Args) {
   const chat = useRef<WalliChatRef>(null);
 
-  const handleAction = async ({ data, messageId, name }: WalliChatBlockAction) => {
+  const handleAction = async (action: WalliChatAction) => {
+    if (action.type !== "block") return;
+    const { data, messageId, name } = action;
     if (name !== "confirmation-card") return;
     const submission = data as ConfirmationCardSubmission;
     const message = chat.current?.element?.messages.find((item) => item.id === messageId);

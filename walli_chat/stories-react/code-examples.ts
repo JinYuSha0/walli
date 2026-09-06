@@ -21,6 +21,24 @@ export function Example() {
 }
 
 export const exampleSources = {
+  initialIndex: `import { WalliChat } from "@wallilabs/chat/react";
+
+const messages = [
+  { id: "day-1-user", role: "user", markdown: "Day 1", createdAt: Date.UTC(2026, 7, 24, 9) },
+  { id: "day-1-reply", role: "assistant", markdown: "First reply", createdAt: Date.UTC(2026, 7, 24, 9, 15) },
+  // Additional messages from day 2 and day 3...
+];
+
+export function Example() {
+  return (
+    <WalliChat
+      defaultScrollToIndex={8}
+      intervalSeconds={6 * 60 * 60}
+      messages={messages}
+      style={{ height: 640 }}
+    />
+  );
+}`,
   conversation: chat(conversation),
   timeMessages: `import { WalliChat, type WalliChatMessage } from "@wallilabs/chat/react";
 import "@wallilabs/chat/theme.css";
@@ -202,6 +220,37 @@ export function Example({ initialMessages }) {
         Insert at bottom
       </button>
       <WalliChat ref={chat} messages={initialMessages} style={{ height: 640 }} />
+    </>
+  );
+}`,
+  replaceMessage: `import { useRef } from "react";
+import { WalliChat, type WalliChatRef } from "@wallilabs/chat/react";
+
+export function Example() {
+  const chat = useRef<WalliChatRef>(null);
+  const version = useRef(1);
+  const messageId = useRef("message-1");
+
+  const replace = () => {
+    const nextVersion = version.current + 1;
+    const nextId = \`message-\${nextVersion}\`;
+    if (chat.current?.replaceMessage(messageId.current, {
+      id: nextId,
+      markdown: \`## Message \${nextVersion}\`,
+    })) {
+      version.current = nextVersion;
+      messageId.current = nextId;
+    }
+  };
+
+  return (
+    <>
+      <button onClick={replace}>Replace message</button>
+      <WalliChat
+        ref={chat}
+        messages={[{ id: "message-1", role: "assistant", markdown: "## Message 1" }]}
+        style={{ height: 640 }}
+      />
     </>
   );
 }`,

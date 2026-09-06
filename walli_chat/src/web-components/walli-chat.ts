@@ -22,11 +22,10 @@ import { timeScheduler } from "../core/helper";
 import type {
   WalliChatMessage,
   WalliChatEndReachedCallback,
-  WalliChatFeedbackCallback,
   WalliChatInsertMessagesOptions,
-  WalliChatMessageCallback,
+  WalliChatBlockAction,
   WalliChatMessagePatch,
-  WalliChatBlockActionCallback,
+  WalliChatActionCallback,
   WalliChatRemoveMessages,
   WalliChatScrollToIndexOptions,
   WalliChatScrollToOptions,
@@ -81,12 +80,9 @@ function createErrorBlockMarkdown(text: string): string {
 export class WalliChatElement extends LitElement {
   @property({ attribute: false }) accessor emptyContent: unknown;
   @property({ type: Boolean, reflect: true }) accessor loading = false;
-  @property({ attribute: false }) accessor onFeedback: WalliChatFeedbackCallback | undefined;
-  @property({ attribute: false }) accessor onAction: WalliChatBlockActionCallback | undefined;
+  @property({ attribute: false }) accessor onAction: WalliChatActionCallback | undefined;
   @property({ attribute: false }) accessor onEndReached: WalliChatEndReachedCallback | undefined;
   @property({ attribute: false }) accessor onEndReachedThreshold = 0;
-  @property({ attribute: false }) accessor onReply: WalliChatMessageCallback | undefined;
-  @property({ attribute: false }) accessor onShare: WalliChatMessageCallback | undefined;
   @property({ attribute: "interval-seconds", type: Number }) accessor intervalSeconds = 0;
   @property({ attribute: false }) accessor timeFormatter: WalliChatTimeFormatter | undefined;
   @property({ attribute: false }) accessor bottomOcclusionHeight =
@@ -185,17 +181,18 @@ export class WalliChatElement extends LitElement {
     this.requestUpdate("messages", previousMessages);
     this.invalidateFrame();
 
-    if (this.defaultScrollToBottom && previousMessages.length === 0 && messages.length > 0) {
-      // Keep the initial load pinned while the first frame, composer, and mobile viewport settle.
-      // Otherwise the projection scheduled by invalidateFrame() can mark the chat as scrolled
-      // away from the bottom before the pending scroll request is applied.
-      this.isScrollingToBottom = true;
-      this.isAtBottom = true;
-      this.pendingScrollRequest = {
-        animated: false,
-        target: "bottom",
-      };
-      this.scheduleScrollRequest();
+    if (previousMessages.length === 0 && messages.length > 0) {
+      if (this.defaultScrollToIndex !== undefined) {
+        this.isScrollingToBottom = false;
+        this.isAtBottom = false;
+        this.pendingScrollRequest = { animated: false, index: this.defaultScrollToIndex };
+      } else if (this.defaultScrollToBottom) {
+        // Keep the initial load pinned while the first frame, composer, and mobile viewport settle.
+        this.isScrollingToBottom = true;
+        this.isAtBottom = true;
+        this.pendingScrollRequest = { animated: false, target: "bottom" };
+      }
+      if (this.pendingScrollRequest !== null) this.scheduleScrollRequest();
     }
   }
 
@@ -207,6 +204,9 @@ export class WalliChatElement extends LitElement {
     },
   })
   accessor defaultScrollToBottom = true;
+
+  @property({ attribute: "default-scroll-to-index", type: Number })
+  accessor defaultScrollToIndex: number | undefined;
 
   scrollToIndex(options: WalliChatScrollToIndexOptions): void {
     this.pendingScrollRequest = {
@@ -292,14 +292,16 @@ export class WalliChatElement extends LitElement {
   replaceMessage(id: string, patch: WalliChatMessagePatch): boolean {
     const index = this._messages.findIndex((item) => item.id === id);
     if (index < 0) return false;
-    const message = { ...this._messages[index]!, ...patch, id };
+    const previousMessage = this._messages[index]!;
+    const nextMessage = { ...previousMessage, ...patch };
+    if (nextMessage.id !== previousMessage.id) this.blockStates.delete(previousMessage.id);
     const previousMessages = this._messages;
     this._messages = [
       ...previousMessages.slice(0, index),
-      message,
+      nextMessage,
       ...previousMessages.slice(index + 1),
     ];
-    this.preparedMessages.splice(index, 1, ...createPreparedChatMessages([message]));
+    this.preparedMessages.splice(index, 1, ...createPreparedChatMessages([nextMessage]));
     this.requestUpdate("messages", previousMessages);
     this.invalidateFrame({ keepMountedRows: true });
     return true;
@@ -742,9 +744,9 @@ export class WalliChatElement extends LitElement {
   }
 
   override updated(changedProperties: Map<PropertyKey, unknown>): void {
-    this.toggleAttribute("feedback-enabled", this.onFeedback !== undefined);
-    this.toggleAttribute("reply-enabled", this.onReply !== undefined);
-    this.toggleAttribute("share-enabled", this.onShare !== undefined);
+    this.toggleAttribute("feedback-enabled", this.onAction !== undefined);
+    this.toggleAttribute("reply-enabled", this.onAction !== undefined);
+    this.toggleAttribute("share-enabled", this.onAction !== undefined);
     if (changedProperties.has("bottomOcclusionHeight")) {
       this.handleBottomOcclusionChange();
     }
@@ -763,15 +765,20 @@ export class WalliChatElement extends LitElement {
   private handleFeedback(
     event: CustomEvent<{ id: string; markdown: string; feedback: "like" | "dislike" }>,
   ): void {
-    this.onFeedback?.(event.detail.id, event.detail.markdown, event.detail.feedback);
+    this.onAction?.({
+      type: "feedback",
+      messageId: event.detail.id,
+      markdown: event.detail.markdown,
+      feedback: event.detail.feedback,
+    });
   }
 
   private handleReply(event: CustomEvent<{ id: string; markdown: string }>): void {
-    this.onReply?.(event.detail.id, event.detail.markdown);
+    this.onAction?.({ type: "reply", messageId: event.detail.id, markdown: event.detail.markdown });
   }
 
   private handleShare(event: CustomEvent<{ id: string; markdown: string }>): void {
-    this.onShare?.(event.detail.id, event.detail.markdown);
+    this.onAction?.({ type: "share", messageId: event.detail.id, markdown: event.detail.markdown });
   }
 
   private handleComposerSlotChange(event: Event): void {
@@ -921,11 +928,9 @@ export class WalliChatElement extends LitElement {
     state.set(key, value);
   }
 
-  private readonly handleBlockAction = async (
-    action: Parameters<NonNullable<WalliChatBlockActionCallback>>[0],
-  ): Promise<boolean> => {
+  private readonly handleBlockAction = async (action: WalliChatBlockAction): Promise<boolean> => {
     if (this.onAction === undefined) return false;
-    await this.onAction(action);
+    await this.onAction({ type: "block", ...action });
     return true;
   };
 
@@ -1236,7 +1241,13 @@ export class WalliChatElement extends LitElement {
     const indexedMessage =
       "index" in request
         ? frame.sourceMessages[
-            Math.max(0, Math.min(frame.sourceMessages.length - 1, request.index))
+            Math.max(
+              0,
+              Math.min(
+                frame.sourceMessages.length - 1,
+                Number.isFinite(request.index) ? Math.trunc(request.index) : 0,
+              ),
+            )
           ]
         : undefined;
     const target =
@@ -1342,8 +1353,16 @@ export class WalliChatElement extends LitElement {
     end: number,
     force: boolean,
   ): void {
+    const canvas = this.canvasElement;
+    if (canvas === null) return;
+
     const blockContext = this.createBlockContext();
-    if (!force && start === this.mountedStart && end === this.mountedEnd) {
+    const canReuseMountedRange =
+      !force &&
+      start === this.mountedStart &&
+      end === this.mountedEnd &&
+      [...this.mountedMessageElements.values()].every((element) => element.parentNode === canvas);
+    if (canReuseMountedRange) {
       for (let index = start; index < end; index++) {
         const element = this.mountedMessageElements.get(index);
         if (element !== undefined) {
@@ -1355,11 +1374,9 @@ export class WalliChatElement extends LitElement {
       return;
     }
 
-    const canvas = this.canvasElement;
-    if (canvas === null) return;
-
     const elementsByMessageId = new Map<string, WalliMessageElement>();
     for (const element of this.mountedMessageElements.values()) {
+      if (element.parentNode !== canvas) continue;
       const id = element.message?.prepared.id;
       if (id !== undefined) elementsByMessageId.set(id, element);
     }

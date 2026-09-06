@@ -8,24 +8,21 @@ export type WalliChatMessage = {
   markdown: string;
   showActions?: boolean;
 };
-export type WalliChatMessagePatch = Partial<Omit<WalliChatMessage, "id">>;
+export type WalliChatMessagePatch = Partial<WalliChatMessage>;
 export type WalliChatTimeFormatter = (createdAt: number) => string;
 
 export type WalliChatFeedback = "like" | "dislike";
-export type WalliChatFeedbackCallback = (
-  id: string,
-  markdown: string,
-  feedback: WalliChatFeedback,
-) => void;
-export type WalliChatMessageCallback = (id: string, markdown: string) => void;
 export type WalliChatBlockAction = {
   data: unknown;
   messageId: string;
   name: string;
 };
-export type WalliChatBlockActionCallback = (
-  action: WalliChatBlockAction,
-) => void | PromiseLike<void>;
+export type WalliChatAction =
+  | ({ type: "block" } & WalliChatBlockAction)
+  | { type: "feedback"; messageId: string; markdown: string; feedback: WalliChatFeedback }
+  | { type: "reply"; messageId: string; markdown: string }
+  | { type: "share"; messageId: string; markdown: string };
+export type WalliChatActionCallback = (action: WalliChatAction) => void | PromiseLike<void>;
 export type WalliChatRemoveMessages = () => void;
 export type WalliChatEndReachedInfo = {
   distanceFromEnd: number;

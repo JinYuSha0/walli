@@ -15,6 +15,7 @@ import {
   createTimeMessages,
   customBlockMessage,
   imageMessage,
+  initialIndexMessages,
   markdownShowcase,
   mockFullChatTranscription,
   mockFullChatUpload,
@@ -40,7 +41,11 @@ const buttonStyle = {
 };
 const component = (name: string, setup: () => () => ReturnType<typeof h>) =>
   defineComponent({ name, setup });
-const render = (demo: object) => () => ({ components: { Demo: demo }, template: `<Demo />` });
+const render = (demo: object, props?: Record<string, unknown>) => () => ({
+  components: { Demo: demo },
+  setup: () => ({ props }),
+  template: props ? `<Demo v-bind="props" />` : `<Demo />`,
+});
 const frame = (children: ReturnType<typeof h>[]) =>
   h(
     "div",
@@ -75,25 +80,29 @@ const button = (label: string, onClick: () => void) =>
   h("button", { style: buttonStyle, onClick }, label);
 
 const ChatSurface = defineComponent({
+  inheritAttrs: false,
   props: {
     compact: Boolean,
-    intervalSeconds: Number,
-    messages: { required: true, type: Array },
+    intervalSeconds: { default: 0, type: Number },
+    messages: {
+      required: true,
+      type: Array as PropType<readonly WalliChatMessage[]>,
+    },
     timeFormatter: Function as PropType<(createdAt: number) => string>,
   },
-  setup: (props) => () =>
-    h("div", { style: { height: props.compact ? "240px" : "640px", width: "100%" } }, [
-      h(WalliChat, {
-        intervalSeconds: props.intervalSeconds,
-        messages: props.messages,
-        style,
-        timeFormatter: props.timeFormatter,
-        onFeedback: (id: string, _markdown: string, feedback: string) =>
-          console.info("Feedback", { id, feedback }),
-        onReply: (id: string) => console.info("Reply", { id }),
-        onShare: (id: string) => console.info("Share", { id }),
-      }),
-    ]),
+  setup:
+    (props, { attrs }) =>
+    () =>
+      h("div", { style: { height: props.compact ? "240px" : "640px", width: "100%" } }, [
+        h(WalliChat, {
+          ...attrs,
+          intervalSeconds: props.intervalSeconds,
+          messages: props.messages,
+          style,
+          timeFormatter: props.timeFormatter,
+          onAction: (action) => console.info("Action", action),
+        } as Args),
+      ]),
 });
 
 const meta = {
@@ -105,19 +114,16 @@ const meta = {
     docs: { description: { component: "Vue versions of every walli-chat demo." } },
   },
   argTypes: {
-    action: { control: false },
     bottomOcclusionHeight: { control: "number" },
     class: { control: "text" },
     defaultScrollToBottom: { control: "boolean" },
-    feedback: { control: false },
+    defaultScrollToIndex: { control: "number" },
     intervalSeconds: { control: { min: 0, step: 60, type: "number" } },
     loading: { control: "boolean" },
     messages: { control: "object" },
     onAction: { control: false },
     onEndReached: { control: false },
     onEndReachedThreshold: { control: "number" },
-    reply: { control: false },
-    share: { control: false },
     style: { control: "object" },
     timeFormatter: { control: false },
   },
@@ -222,6 +228,19 @@ const ScrollControlsDemo = component("ScrollControlsDemo", () => {
     ]);
 });
 
+const InitialIndexDemo = component(
+  "InitialIndexDemo",
+  () => () =>
+    h("div", { style: { height: "640px", width: "100%" } }, [
+      h(WalliChat, {
+        defaultScrollToIndex: 8,
+        intervalSeconds: 6 * 60 * 60,
+        messages: initialIndexMessages,
+        style,
+      }),
+    ]),
+);
+
 const initialMessages: WalliChatMessage[] = Array.from({ length: 20 }, (_, index) => ({
   id: `vue-insert-${index}`,
   role: index % 2 ? "assistant" : "user",
@@ -288,6 +307,33 @@ const InsertMessagesDemo = component("InsertMessagesDemo", () => {
     ]);
 });
 
+const ReplaceMessageDemo = component("ReplaceMessageDemo", () => {
+  const chat = ref<WalliChatExpose>();
+  let version = 1;
+  let messageId = "vue-replace-1";
+  const messages: WalliChatMessage[] = [
+    { id: messageId, role: "assistant", markdown: "## Vue message 1" },
+  ];
+  const replace = () => {
+    const nextVersion = version + 1;
+    const nextId = `vue-replace-${nextVersion}`;
+    if (
+      chat.value?.replaceMessage(messageId, {
+        id: nextId,
+        markdown: `## Vue message ${nextVersion}\n\nReplaced in place.`,
+      })
+    ) {
+      version = nextVersion;
+      messageId = nextId;
+    }
+  };
+  return () =>
+    frame([
+      button("Replace message", replace),
+      panel(h(WalliChat, { ref: chat, messages, style })),
+    ]);
+});
+
 const PaginationDemo = defineComponent({
   props: { loadAtTop: Boolean },
   setup(props) {
@@ -349,9 +395,15 @@ const PaginationDemo = defineComponent({
   },
 });
 
-const FullChatDemo = component(
-  "FullChatDemo",
-  (props: { mode: "bottomPadding" | "stickToBottom" }) => {
+const FullChatDemo = defineComponent({
+  name: "FullChatDemo",
+  props: {
+    mode: {
+      required: true,
+      type: String as PropType<"bottomPadding" | "stickToBottom">,
+    },
+  },
+  setup(props) {
     const chat = ref<WalliChatExpose>();
     const value = ref("");
     let active: WalliChatStreamingHandle | undefined;
@@ -363,7 +415,8 @@ const FullChatDemo = component(
       );
       value.value = "";
       const commonOptions = {
-        getToolLabel: (name) => ({ web_search: "Searching the web" })[name] ?? name,
+        getToolLabel: (name: string) =>
+          ({ web_search: "Searching the web" })[name as "web_search"] ?? name,
         messageId: `vue-assistant-${crypto.randomUUID()}`,
       };
       active = chat.value.insertStreamingMessageAtBottom(
@@ -411,7 +464,7 @@ const FullChatDemo = component(
         ),
       ]);
   },
-);
+});
 
 const ReasoningStreamDemo = component("ReasoningStreamDemo", () => {
   const chat = ref<WalliChatExpose>();
@@ -489,10 +542,6 @@ async function transcribe({ stream, finished }) {
 
 async function submit(markdown: string) {
   if (!markdown) return;
-  chat.value.insertMessagesAtBottom(
-    [{ id: crypto.randomUUID(), role: "user", markdown }],
-    { stick: true },
-  );
   value.value = "";
   activeStream = chat.value.insertStreamingMessageAtBottom(
     createStorySseStream(),
@@ -703,6 +752,54 @@ function insertAtBottom() {
   <WalliChat ref="chat" :messages="initialMessages" style="height: 640px" />
 </template>`;
 
+const initialIndexCode = `<script setup lang="ts">
+import { WalliChat } from "@wallilabs/chat/vue";
+
+const messages = [
+  { id: "day-1-user", role: "user", markdown: "Day 1", createdAt: Date.UTC(2026, 7, 24, 9) },
+  { id: "day-1-reply", role: "assistant", markdown: "First reply", createdAt: Date.UTC(2026, 7, 24, 9, 15) },
+  // Additional messages from day 2 and day 3...
+];
+</script>
+
+<template>
+  <WalliChat
+    :default-scroll-to-index="8"
+    :interval-seconds="6 * 60 * 60"
+    :messages="messages"
+    style="height: 640px"
+  />
+</template>`;
+
+const replaceMessageCode = `<script setup lang="ts">
+import { ref } from "vue";
+import { WalliChat } from "@wallilabs/chat/vue";
+
+const chat = ref();
+let version = 1;
+let messageId = "message-1";
+const messages = [
+  { id: messageId, role: "assistant", markdown: "## Message 1" },
+];
+
+function replace() {
+  const nextVersion = version + 1;
+  const nextId = \`message-\${nextVersion}\`;
+  if (chat.value.replaceMessage(messageId, {
+    id: nextId,
+    markdown: \`## Message \${nextVersion}\`,
+  })) {
+    version = nextVersion;
+    messageId = nextId;
+  }
+}
+</script>
+
+<template>
+  <button @click="replace">Replace message</button>
+  <WalliChat ref="chat" :messages="messages" style="height: 640px" />
+</template>`;
+
 function paginationCode(loadAtTop: boolean) {
   const method = loadAtTop ? "insertMessagesAtTop" : "insertMessagesAtBottom";
   return `<script setup lang="ts">
@@ -806,9 +903,17 @@ export const ScrollControls: Story = {
   render: render(ScrollControlsDemo),
   parameters: source(scrollControlsCode),
 };
+export const InitialIndex: Story = {
+  render: render(InitialIndexDemo),
+  parameters: source(initialIndexCode),
+};
 export const InsertMessages: Story = {
   render: render(InsertMessagesDemo),
   parameters: source(insertMessagesCode),
+};
+export const ReplaceMessage: Story = {
+  render: render(ReplaceMessageDemo),
+  parameters: source(replaceMessageCode),
 };
 export const LoadOlderAtTop: Story = {
   render: () => ({ components: { PaginationDemo }, template: `<PaginationDemo load-at-top />` }),

@@ -15,6 +15,7 @@ import {
 import type {
   WalliChatComposerElement,
   WalliChatElement,
+  WalliChatAction,
   WalliChatMessage,
   WalliChatStreamingHandle,
 } from "@wallilabs/chat";
@@ -43,56 +44,71 @@ if (chat) {
     chat.loading = false;
     chat.messages = demoMessages;
   });
-  chat.onFeedback = (id, markdown, feedback) => {
-    console.log("feedback", { id, markdown, feedback });
-  };
-  chat.onShare = (id, markdown) => {
-    console.log("share", { id, markdown });
-  };
-  chat.onAction = async ({ data, messageId, name }) => {
-    if (name === "system-message-link") {
-      console.log("system message link", { data, messageId });
-      return;
+  chat.onAction = async (action) => {
+    switch (action.type) {
+      case "block":
+        await handleBlockAction(chat, action);
+        break;
+      case "feedback":
+        console.log("feedback", action);
+        break;
+      case "reply":
+        console.log("reply", action);
+        break;
+      case "share":
+        console.log("share", action);
+        break;
     }
-    if (name !== "confirmation-card") return;
-    const submission = data as ConfirmationCardSubmission;
-    await new Promise((resolve) => window.setTimeout(resolve, 600));
-    const message = chat.messages.find((item) => item.id === messageId);
-    const cardData = message?.meta as ConfirmationCardData | undefined;
-    if (cardData === undefined) throw new Error("Confirmation card metadata is missing");
-    const fields = cardData.fields.map<ConfirmationCardField>(
-      (field) =>
-        ({
-          ...field,
-          editable: false,
-          value: submission.fields[field.id] ?? field.value,
-        }) as ConfirmationCardField,
-    );
-    const confirmedCardData: ConfirmationCardData = {
-      ...cardData,
-      action: { ...cardData.action, disabled: true, label: "已提交" },
-      fields,
-    };
-    chat.replaceMessage(messageId, {
-      markdown: createConfirmationCardMarkdown(confirmedCardData),
-      meta: confirmedCardData,
-    });
-    chat.insertMessagesAtBottom(
-      [
-        {
-          id: `confirmation-success-${crypto.randomUUID()}`,
-          createdAt: Date.now(),
-          role: "assistant",
-          markdown: createNoticeMarkdown({
-            text: "预约信息提交成功。",
-            variant: "success",
-          }),
-          showActions: false,
-        },
-      ],
-      { stick: true },
-    );
   };
+}
+
+async function handleBlockAction(
+  chat: WalliChatElement,
+  { data, messageId, name }: Extract<WalliChatAction, { type: "block" }>,
+): Promise<void> {
+  if (name === "system-message-link") {
+    console.log("system message link", { data, messageId });
+    return;
+  }
+  if (name !== "confirmation-card") return;
+
+  const submission = data as ConfirmationCardSubmission;
+  await new Promise((resolve) => window.setTimeout(resolve, 600));
+  const message = chat.messages.find((item) => item.id === messageId);
+  const cardData = message?.meta as ConfirmationCardData | undefined;
+  if (cardData === undefined) throw new Error("Confirmation card metadata is missing");
+  const fields = cardData.fields.map<ConfirmationCardField>(
+    (field) =>
+      ({
+        ...field,
+        editable: false,
+        value: submission.fields[field.id] ?? field.value,
+      }) as ConfirmationCardField,
+  );
+  const confirmedCardData: ConfirmationCardData = {
+    ...cardData,
+    action: { ...cardData.action, disabled: true, label: "已提交" },
+    fields,
+  };
+  chat.replaceMessage(messageId, {
+    markdown: createConfirmationCardMarkdown(confirmedCardData),
+    meta: confirmedCardData,
+  });
+  chat.insertMessagesAtBottom(
+    [
+      {
+        id: `confirmation-success-${crypto.randomUUID()}`,
+        createdAt: Date.now(),
+        role: "assistant",
+        markdown: createNoticeMarkdown({
+          text: "预约信息提交成功。",
+          variant: "success",
+        }),
+        showActions: false,
+      },
+    ],
+    { stick: true },
+  );
 }
 
 if (composer) {

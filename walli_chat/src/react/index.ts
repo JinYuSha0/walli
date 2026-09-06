@@ -10,8 +10,8 @@ import {
   type ReactNode,
 } from "react";
 import type {
-  WalliChatBlockAction,
-  WalliChatBlockActionCallback,
+  WalliChatAction,
+  WalliChatActionCallback,
   WalliChatComposerElement,
   WalliChatElement,
   WalliLoadingElement,
@@ -44,9 +44,7 @@ import type {
   WalliChatComposerUploadImagesCallback,
   WalliChatComposerUploadResult,
   WalliChatComposerValueCallback,
-  WalliChatFeedbackCallback,
   WalliChatInsertMessagesOptions,
-  WalliChatMessageCallback,
   WalliChatMessagePatch,
   WalliChatRemoveMessages,
   WalliChatScrollTarget,
@@ -186,15 +184,13 @@ export type WalliChatProps = {
   children?: ReactNode;
   className?: string;
   defaultScrollToBottom?: boolean;
+  defaultScrollToIndex?: number;
   emptyContent?: ReactNode;
   loading?: boolean;
   messages: readonly WalliChatMessage[];
-  onAction?: WalliChatBlockActionCallback;
+  onAction?: WalliChatActionCallback;
   onEndReached?: WalliChatEndReachedCallback;
   onEndReachedThreshold?: number;
-  onFeedback?: WalliChatFeedbackCallback;
-  onReply?: WalliChatMessageCallback;
-  onShare?: WalliChatMessageCallback;
   style?: CSSProperties;
   timeFormatter?: WalliChatTimeFormatter;
   intervalSeconds?: number;
@@ -233,15 +229,13 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
     children,
     className,
     defaultScrollToBottom = true,
+    defaultScrollToIndex,
     emptyContent,
     loading = false,
     messages,
     onAction,
     onEndReached,
     onEndReachedThreshold = 0,
-    onFeedback,
-    onReply,
-    onShare,
     style,
     timeFormatter,
     intervalSeconds = 0,
@@ -252,18 +246,19 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
 
   useEffect(() => {
     if (elementRef.current) {
+      elementRef.current.defaultScrollToBottom = defaultScrollToBottom;
+      elementRef.current.defaultScrollToIndex = defaultScrollToIndex;
       elementRef.current.messages = messages;
       elementRef.current.timeFormatter = timeFormatter;
       elementRef.current.intervalSeconds = intervalSeconds;
     }
-  }, [intervalSeconds, messages, timeFormatter]);
+  }, [defaultScrollToBottom, defaultScrollToIndex, intervalSeconds, messages, timeFormatter]);
 
   useEffect(() => {
     if (elementRef.current) {
-      elementRef.current.defaultScrollToBottom = defaultScrollToBottom;
       elementRef.current.loading = loading;
     }
-  }, [defaultScrollToBottom, loading]);
+  }, [loading]);
 
   useEffect(() => {
     if (elementRef.current && bottomOcclusionHeight !== undefined) {
@@ -276,11 +271,8 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
       elementRef.current.onEndReached = onEndReached;
       elementRef.current.onAction = onAction;
       elementRef.current.onEndReachedThreshold = onEndReachedThreshold;
-      elementRef.current.onFeedback = onFeedback;
-      elementRef.current.onReply = onReply;
-      elementRef.current.onShare = onShare;
     }
-  }, [onAction, onEndReached, onEndReachedThreshold, onFeedback, onReply, onShare]);
+  }, [onAction, onEndReached, onEndReachedThreshold]);
 
   useImperativeHandle(
     forwardedRef,
@@ -330,8 +322,8 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
 });
 
 export type {
-  WalliChatBlockAction,
-  WalliChatBlockActionCallback,
+  WalliChatAction,
+  WalliChatActionCallback,
   WalliChatBlockDefinition,
   WalliChatBlockName,
   WalliChatBlockRegistration,
@@ -354,9 +346,7 @@ export type {
   WalliChatEndReachedCallback,
   WalliChatEndReachedInfo,
   WalliChatMessage,
-  WalliChatFeedbackCallback,
   WalliChatInsertMessagesOptions,
-  WalliChatMessageCallback,
   WalliChatMessagePatch,
   WalliChatRemoveMessages,
   WalliChatScrollTarget,

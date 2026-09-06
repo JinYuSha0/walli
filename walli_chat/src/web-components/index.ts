@@ -19,7 +19,8 @@ export {
 };
 export type {
   WalliChatBlockAction,
-  WalliChatBlockActionCallback,
+  WalliChatAction,
+  WalliChatActionCallback,
   WalliChatComposerActionCallback,
   WalliChatComposerAsset,
   WalliChatComposerInsertedAssetsHandle,
@@ -39,9 +40,7 @@ export type {
   WalliChatEndReachedCallback,
   WalliChatEndReachedInfo,
   WalliChatFeedback,
-  WalliChatFeedbackCallback,
   WalliChatInsertMessagesOptions,
-  WalliChatMessageCallback,
   WalliChatMessagePatch,
   WalliChatRemoveMessages,
   WalliChatScrollTarget,

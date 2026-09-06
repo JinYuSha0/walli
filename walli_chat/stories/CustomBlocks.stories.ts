@@ -15,7 +15,7 @@ import {
 import { html } from "lit";
 import { ref } from "lit/directives/ref.js";
 import { expect, waitFor } from "storybook/test";
-import type { WalliChatBlockAction, WalliChatMessage } from "../src/types";
+import type { WalliChatAction, WalliChatMessage } from "../src/types";
 import { registerBlock } from "../src/core/block-registry";
 import type { WalliChatElement } from "../src/web-components/walli-chat";
 import "../src/web-components/walli-chat";
@@ -332,7 +332,9 @@ function renderBlocks(messages: WalliChatMessage[]) {
       })}
       style="display:block;height:100%;width:100%"
       .messages=${messages}
-      .onAction=${async ({ data, messageId, name }: WalliChatBlockAction) => {
+      .onAction=${async (action: WalliChatAction) => {
+        if (action.type !== "block") return;
+        const { data, messageId, name } = action;
         if (!chat || name !== "confirmation-card") return;
         const submission = data as ConfirmationCardSubmission;
         const message = chat.messages.find((item) => item.id === messageId);

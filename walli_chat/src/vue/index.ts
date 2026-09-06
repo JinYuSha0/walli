@@ -1,8 +1,8 @@
 import "../web-components";
 import { defineComponent, h, ref, watchEffect, type CSSProperties, type PropType } from "vue";
 import type {
-  WalliChatBlockAction,
-  WalliChatBlockActionCallback,
+  WalliChatAction,
+  WalliChatActionCallback,
   WalliChatComposerElement,
   WalliChatElement,
   WalliLoadingElement,
@@ -34,10 +34,8 @@ import type {
   WalliChatComposerValueCallback,
   WalliChatEndReachedCallback,
   WalliChatEndReachedInfo,
-  WalliChatFeedbackCallback,
   WalliChatInsertMessagesOptions,
   WalliChatMessage,
-  WalliChatMessageCallback,
   WalliChatMessagePatch,
   WalliChatRemoveMessages,
   WalliChatScrollTarget,
@@ -145,12 +143,13 @@ export const WalliChat = defineComponent({
     bottomOcclusionHeight: Number,
     class: String,
     defaultScrollToBottom: { default: true, type: Boolean },
+    defaultScrollToIndex: Number,
     loading: { default: false, type: Boolean },
     messages: {
       default: () => [],
       type: Array as PropType<readonly WalliChatMessage[]>,
     },
-    onAction: Function as PropType<WalliChatBlockActionCallback>,
+    onAction: Function as PropType<WalliChatActionCallback>,
     onEndReached: Function as PropType<WalliChatEndReachedCallback>,
     onEndReachedThreshold: { default: 0, type: Number },
     style: styleProp,
@@ -158,10 +157,7 @@ export const WalliChat = defineComponent({
     intervalSeconds: { default: 0, type: Number },
   },
   emits: {
-    action: (_action: WalliChatBlockAction) => true,
-    feedback: (_id: string, _markdown: string, _feedback: "like" | "dislike") => true,
-    reply: (_id: string, _markdown: string) => true,
-    share: (_id: string, _markdown: string) => true,
+    action: (_action: WalliChatAction) => true,
   },
   setup(props, { attrs, emit, expose, slots }) {
     const element = ref<WalliChatElement | null>(null);
@@ -169,8 +165,9 @@ export const WalliChat = defineComponent({
     watchEffect(() => {
       const chat = element.value;
       if (!chat) return;
-      chat.messages = props.messages;
       chat.defaultScrollToBottom = props.defaultScrollToBottom;
+      chat.defaultScrollToIndex = props.defaultScrollToIndex;
+      chat.messages = props.messages;
       chat.loading = props.loading;
       chat.timeFormatter = props.timeFormatter;
       chat.intervalSeconds = props.intervalSeconds;
@@ -183,15 +180,6 @@ export const WalliChat = defineComponent({
         emit("action", action);
       };
       chat.onEndReachedThreshold = props.onEndReachedThreshold;
-      chat.onFeedback = (id, markdown, feedback) => {
-        emit("feedback", id, markdown, feedback);
-      };
-      chat.onReply = (id, markdown) => {
-        emit("reply", id, markdown);
-      };
-      chat.onShare = (id, markdown) => {
-        emit("share", id, markdown);
-      };
     });
 
     expose({
@@ -261,8 +249,8 @@ export type WalliChatExpose = {
 };
 
 export type {
-  WalliChatBlockAction,
-  WalliChatBlockActionCallback,
+  WalliChatAction,
+  WalliChatActionCallback,
   WalliChatBlockDefinition,
   WalliChatBlockName,
   WalliChatBlockRegistration,
@@ -284,10 +272,8 @@ export type {
   WalliChatComposerValueCallback,
   WalliChatEndReachedCallback,
   WalliChatEndReachedInfo,
-  WalliChatFeedbackCallback,
   WalliChatInsertMessagesOptions,
   WalliChatMessage,
-  WalliChatMessageCallback,
   WalliChatMessagePatch,
   WalliChatRemoveMessages,
   WalliChatScrollTarget,

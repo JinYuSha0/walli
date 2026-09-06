@@ -23,15 +23,13 @@ type Args = Pick<
   WalliChatElement,
   | "bottomOcclusionHeight"
   | "defaultScrollToBottom"
+  | "defaultScrollToIndex"
   | "emptyContent"
   | "loading"
   | "messages"
   | "onAction"
   | "onEndReached"
   | "onEndReachedThreshold"
-  | "onFeedback"
-  | "onReply"
-  | "onShare"
   | "timeFormatter"
   | "intervalSeconds"
 >;
@@ -455,6 +453,7 @@ const meta: Meta<Args> = {
   args: {
     bottomOcclusionHeight: 8,
     defaultScrollToBottom: true,
+    defaultScrollToIndex: undefined,
     loading: false,
     messages: conversation,
     onEndReachedThreshold: 0,
@@ -470,6 +469,11 @@ const meta: Meta<Args> = {
       control: "boolean",
       description: "Starts a non-empty conversation at the bottom when initially rendered.",
       table: { defaultValue: { summary: "true" }, type: { summary: "boolean" } },
+    },
+    defaultScrollToIndex: {
+      control: { min: 0, type: "number" },
+      description: "Starts at a zero-based non-system message index when initially rendered.",
+      table: { type: { summary: "number | undefined" } },
     },
     emptyContent: {
       control: false,
@@ -489,7 +493,7 @@ const meta: Meta<Args> = {
     onAction: {
       control: false,
       description: "Handles actions emitted by custom blocks.",
-      table: { type: { summary: "WalliChatBlockActionCallback" } },
+      table: { type: { summary: "WalliChatActionCallback" } },
     },
     onEndReached: {
       control: false,
@@ -500,21 +504,6 @@ const meta: Meta<Args> = {
       control: { min: 0, step: 0.1, type: "number" },
       description: "Pagination threshold expressed as a viewport-height multiplier.",
       table: { defaultValue: { summary: "0" }, type: { summary: "number" } },
-    },
-    onFeedback: {
-      control: false,
-      description: "Handles like and dislike actions.",
-      table: { type: { summary: "WalliChatFeedbackCallback" } },
-    },
-    onReply: {
-      control: false,
-      description: "Handles message reply actions.",
-      table: { type: { summary: "WalliChatMessageCallback" } },
-    },
-    onShare: {
-      control: false,
-      description: "Handles message share actions.",
-      table: { type: { summary: "WalliChatMessageCallback" } },
     },
     intervalSeconds: {
       control: { min: 0, type: "number" },
@@ -533,15 +522,13 @@ const meta: Meta<Args> = {
         style="display:block;height:100%;width:100%"
         .bottomOcclusionHeight=${args.bottomOcclusionHeight}
         .defaultScrollToBottom=${args.defaultScrollToBottom}
+        .defaultScrollToIndex=${args.defaultScrollToIndex}
         .emptyContent=${args.emptyContent}
         .loading=${args.loading}
         .messages=${args.messages}
         .onAction=${args.onAction}
         .onEndReached=${args.onEndReached}
         .onEndReachedThreshold=${args.onEndReachedThreshold}
-        .onFeedback=${args.onFeedback}
-        .onReply=${args.onReply}
-        .onShare=${args.onShare}
         .timeFormatter=${args.timeFormatter}
         .intervalSeconds=${args.intervalSeconds}
       ></walli-chat>
@@ -582,9 +569,7 @@ const FullChatStickToBottom: Story = {
   chat.messages = [
     { id: "welcome", role: "assistant", markdown: "## Welcome to Walli\\n\\nSend a message to start the streaming demo." },
   ];
-  chat.onFeedback = () => {};
-  chat.onReply = () => {};
-  chat.onShare = () => {};
+  chat.onAction = () => {};
 
   composer.onSubmit = async (markdown) => {
     chat.insertMessagesAtBottom([
@@ -982,6 +967,7 @@ export const TimeMessages: Story = {
     };
     await userEvent.click(link!);
     await expect(receivedAction).toEqual({
+      type: "block",
       data: { href: "#details", text: "Custom time" },
       messageId: expect.stringContaining("system-time:"),
       name: "system-message-link",
@@ -1199,6 +1185,56 @@ export const ScrollControls: Story = {
   },
 };
 
+export const initialIndexMessages: WalliChatMessage[] = Array.from({ length: 3 }, (_, day) =>
+  Array.from({ length: 6 }, (_, offset): WalliChatMessage => {
+    const index = day * 6 + offset;
+    const role = offset % 2 === 0 ? "user" : "assistant";
+    return {
+      createdAt: Date.UTC(2026, 7, 24 + day, 9, offset * 15),
+      id: `initial-index-message-${index}`,
+      role,
+      markdown:
+        role === "user"
+          ? `Day ${day + 1} · question ${index}`
+          : `## Day ${day + 1} response ${index}\n\nThis is non-system message index ${index}.`,
+    };
+  }),
+).flat();
+
+export const InitialIndex: Story = {
+  args: {
+    defaultScrollToIndex: 8,
+    intervalSeconds: 6 * 60 * 60,
+    messages: initialIndexMessages,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Shows three days of messages and starts at non-system message index 8; generated date separators do not count toward index.",
+      },
+      source: {
+        code: `<walli-chat default-scroll-to-index="8" interval-seconds="21600"></walli-chat>
+
+<script type="module">
+  const chat = document.querySelector("walli-chat");
+  chat.messages = messages;
+</script>`,
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const chat = await getRenderedChat(canvasElement);
+    await waitFor(() =>
+      expect(
+        [...chat.renderRoot.querySelectorAll("walli-message")].some(
+          (element) => element.message?.prepared.id === "initial-index-message-8",
+        ),
+      ).toBe(true),
+    );
+  },
+};
+
 export const InsertMessages: Story = {
   parameters: {
     docs: {
@@ -1270,6 +1306,58 @@ export const InsertMessages: Story = {
           (element) => element.message?.prepared.id === "system-time:insert-bottom-time",
         ),
       ).toBe(true),
+    );
+  },
+};
+
+export const ReplaceMessage: Story = {
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Replaces an existing message in place. Each click updates both its content and its ID.",
+      },
+      source: {
+        code: `<button id="replace">Replace message</button>
+<walli-chat></walli-chat>
+
+<script type="module">
+  import "@wallilabs/chat";
+
+  const chat = document.querySelector("walli-chat");
+  let version = 1;
+  let messageId = \`replace-message-\${version}\`;
+  chat.messages = [
+    { id: messageId, role: "assistant", markdown: \`## Message \${version}\` },
+  ];
+
+  document.querySelector("#replace").onclick = () => {
+    const nextVersion = version + 1;
+    const nextId = \`replace-message-\${nextVersion}\`;
+    chat.replaceMessage(messageId, {
+      id: nextId,
+      markdown: \`## Message \${nextVersion}\n\nReplaced in place.\`,
+    });
+    version = nextVersion;
+    messageId = nextId;
+  };
+</script>`,
+      },
+    },
+  },
+  render: () => renderReplaceMessage(),
+  play: async ({ canvasElement }) => {
+    const chat = canvasElement.querySelector<WalliChatElement>("walli-chat")!;
+    const button = canvasElement.querySelector<HTMLButtonElement>("button")!;
+
+    await userEvent.click(button);
+    await expect(chat.messages[0]?.id).toBe("replace-message-2");
+    await userEvent.click(button);
+    await expect(chat.messages[0]?.id).toBe("replace-message-3");
+    await waitFor(() =>
+      expect(chat.renderRoot.querySelector("walli-message")?.message?.prepared.id).toBe(
+        "replace-message-3",
+      ),
     );
   },
 };
@@ -1363,15 +1451,13 @@ function createPaginationSource(loadAtTop: boolean): string {
 </script>`;
 }
 
-function renderCompactMessages(messages: WalliChatMessage[]) {
+function renderCompactMessages(messages: readonly WalliChatMessage[]) {
   return html`
     <div style="height:240px;width:100%;background:var(--walli-background)">
       <walli-chat
         style="display:block;height:100%;width:100%"
         .messages=${messages}
-        .onFeedback=${() => undefined}
-        .onReply=${() => undefined}
-        .onShare=${() => undefined}
+        .onAction=${() => undefined}
       ></walli-chat>
     </div>
   `;
@@ -1492,6 +1578,58 @@ function createReasoningDemoStream(): ReadableStream<string> {
       controller.enqueue(`data: ${JSON.stringify(data)}\n\n`);
     },
   });
+}
+
+function renderReplaceMessage() {
+  let chat: WalliChatElement | undefined;
+  let version = 1;
+  let messageId = `replace-message-${version}`;
+  const buttonStyle =
+    "cursor:pointer;border:1px solid var(--walli-border);border-radius:999px;background:var(--walli-card);color:var(--walli-card-foreground);padding:8px 14px;font:600 13px sans-serif";
+
+  return html`
+    <div
+      style="box-sizing:border-box;display:flex;height:360px;width:100%;flex-direction:column;gap:12px;padding:16px;background:var(--walli-background)"
+    >
+      <button
+        type="button"
+        style=${buttonStyle}
+        @click=${() => {
+          if (!chat) return;
+          const nextVersion = version + 1;
+          const nextId = `replace-message-${nextVersion}`;
+          if (
+            chat.replaceMessage(messageId, {
+              id: nextId,
+              markdown: `## Message ${nextVersion}\n\nReplaced in place.`,
+            })
+          ) {
+            version = nextVersion;
+            messageId = nextId;
+          }
+        }}
+      >
+        Replace message
+      </button>
+      <div style="min-height:0;flex:1;border:1px solid var(--walli-border);border-radius:16px">
+        <walli-chat
+          ${ref((element) => {
+            if (element?.localName === "walli-chat") chat = element as WalliChatElement;
+          })}
+          style="display:block;height:100%;width:100%;border-radius:inherit"
+          .messages=${
+            [
+              {
+                id: messageId,
+                role: "assistant",
+                markdown: `## Message ${version}`,
+              },
+            ] satisfies WalliChatMessage[]
+          }
+        ></walli-chat>
+      </div>
+    </div>
+  `;
 }
 
 function renderReplaceBlock() {
@@ -1827,9 +1965,7 @@ function renderFullChat(mode: "bottomPadding" | "stickToBottom") {
           if (element?.localName === "walli-chat") chat = element as WalliChatElement;
         })}
         style="display:block;height:100%;width:100%"
-        .onFeedback=${() => undefined}
-        .onReply=${() => undefined}
-        .onShare=${() => undefined}
+        .onAction=${() => undefined}
         .messages=${
           [
             {
@@ -1877,10 +2013,8 @@ function renderFullChat(mode: "bottomPadding" | "stickToBottom") {
             );
             composer.value = "";
             const commonOptions = {
-              getToolLabel: (toolName) =>
-                ({
-                  web_search: "Searching the web",
-                })[toolName] ?? toolName,
+              getToolLabel: (toolName: string) =>
+                toolName === "web_search" ? "Searching the web" : toolName,
               messageId: `full-chat-assistant-${crypto.randomUUID()}`,
             };
             activeStream = chat.insertStreamingMessageAtBottom(
