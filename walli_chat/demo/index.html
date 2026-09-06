@@ -18,6 +18,12 @@
         overflow: hidden;
         touch-action: manipulation;
       }
+      @supports (height: 100dvh) {
+        html,
+        body {
+          height: 100dvh;
+        }
+      }
       body {
         overscroll-behavior: none;
       }

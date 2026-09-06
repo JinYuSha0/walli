@@ -1278,6 +1278,10 @@ export const LoadOlderAtTop: Story = {
   play: async ({ canvasElement }) => {
     const chat = await getRenderedChat(canvasElement);
     await expect(chat.defaultScrollToBottom).toBe(true);
+    const viewport = chat.renderRoot.querySelector<HTMLElement>(".chat-viewport")!;
+    await waitFor(() =>
+      expect(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop).toBeLessThan(2),
+    );
     await expect(chat.messages.length).toBeGreaterThanOrEqual(12);
     await expect(chat.messages[0]?.id).toContain("pagination-");
   },

@@ -186,6 +186,11 @@ export class WalliChatElement extends LitElement {
     this.invalidateFrame();
 
     if (this.defaultScrollToBottom && previousMessages.length === 0 && messages.length > 0) {
+      // Keep the initial load pinned while the first frame, composer, and mobile viewport settle.
+      // Otherwise the projection scheduled by invalidateFrame() can mark the chat as scrolled
+      // away from the bottom before the pending scroll request is applied.
+      this.isScrollingToBottom = true;
+      this.isAtBottom = true;
       this.pendingScrollRequest = {
         animated: false,
         target: "bottom",
