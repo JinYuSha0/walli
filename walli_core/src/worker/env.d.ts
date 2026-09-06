@@ -15,4 +15,5 @@ interface Env {
   DB: D1Database;
   APP_KV: KVNamespace;
   USER_DO: DurableObjectNamespace<import("./durable-objects/user").UserDO>;
+  CONFIRM_FLOW_DO: DurableObjectNamespace<import("./durable-objects/confirmFlow").ConfirmFlowDO>;
 }

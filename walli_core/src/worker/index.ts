@@ -13,6 +13,7 @@ import { createDb } from "./db/client";
 import { toolsRoute } from "./tools";
 import { runWithChatAsyncContext } from "./lib/async-context";
 export { UserDO } from "./durable-objects/user";
+export { ConfirmFlowDO } from "./durable-objects/confirmFlow";
 
 const app = new Hono<AppBindings>();
 

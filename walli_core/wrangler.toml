@@ -36,6 +36,14 @@ id = "a3ead2192a94459db359c9d11e47bc92"
 name = "USER_DO"
 class_name = "UserDO"
 
+[[durable_objects.bindings]]
+name = "CONFIRM_FLOW_DO"
+class_name = "ConfirmFlowDO"
+
 [exports.UserDO]
+type = "durable-object"
+storage = "sqlite"
+
+[exports.ConfirmFlowDO]
 type = "durable-object"
 storage = "sqlite"
