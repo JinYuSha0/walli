@@ -19,6 +19,16 @@ export class WalliMessageActionsElement extends LitElement {
   @property({ attribute: false })
   accessor variant: MessageActionRole = "assistant";
 
+  connectedCallback(): void {
+    super.connectedCallback();
+    document.addEventListener("pointerdown", this.handleDocumentPointerDown);
+  }
+
+  disconnectedCallback(): void {
+    document.removeEventListener("pointerdown", this.handleDocumentPointerDown);
+    super.disconnectedCallback();
+  }
+
   protected override createRenderRoot(): HTMLElement {
     return this;
   }
@@ -38,7 +48,13 @@ export class WalliMessageActionsElement extends LitElement {
     const icon = blockState?.actionIcons.get(item.type) ?? item.icon;
     if (!icon) {
       const component = item.component?.({ blockStates: blockState?.values, setIcon });
-      if (component) return component;
+      if (component) {
+        return html`<div
+          class="relative flex h-8 w-8 flex-none items-center justify-center overflow-visible"
+        >
+          ${component}
+        </div>`;
+      }
     }
     return html`<walli-action-button
       .action=${{
@@ -87,4 +103,12 @@ export class WalliMessageActionsElement extends LitElement {
       this.requestUpdate();
     };
   }
+
+  private readonly handleDocumentPointerDown = (event: PointerEvent): void => {
+    const target = event.target;
+    if (!(target instanceof Node)) return;
+    for (const details of this.querySelectorAll<HTMLDetailsElement>("details[open]")) {
+      if (!details.contains(target)) details.open = false;
+    }
+  };
 }

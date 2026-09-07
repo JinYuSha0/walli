@@ -62,8 +62,12 @@ if (chat) {
       share: { visible: true, sort: 3 },
       enhance: {
         component: ({ blockStates, setIcon }) => html`
-          <details style="position:relative">
-            <summary style="cursor:pointer;list-style:none;padding:7px" title="Enhance">✨</summary>
+          <details style="position:relative;width:32px;height:32px">
+            <summary
+              style="box-sizing:border-box;display:flex;width:32px;height:32px;cursor:pointer;list-style:none;align-items:center;justify-content:center;border-radius:8px"
+              title="Enhance"
+              >✨</summary
+            >
             <div
               style="position:absolute;z-index:10;bottom:calc(100% + 8px);left:50%;width:180px;transform:translateX(-50%);border:1px solid #e5e7eb;border-radius:12px;background:white;color:#111827;padding:12px;box-shadow:0 12px 32px rgb(0 0 0 / 18%);"
             >

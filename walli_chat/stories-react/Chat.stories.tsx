@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { FileSpreadsheet, ImagePlus, Search } from "lucide";
+import { FileSpreadsheet, ImagePlus, Search, Sparkles, ThumbsDown, ThumbsUp, type IconNode } from "lucide";
+import { html } from "lit";
 import {
   WalliChat,
   WalliChatComposer,
@@ -12,6 +13,7 @@ import {
 } from "../src/react";
 import {
   assistantMessage,
+  actionMessages,
   conversation,
   createTimeMessages,
   customBlockMessage,
@@ -48,12 +50,7 @@ function ChatSurface({ messages, compact = false, ...props }: Args & { compact?:
     <div
       style={{ height: compact ? 240 : 640, width: "100%", background: "var(--walli-background)" }}
     >
-      <WalliChat
-        {...props}
-        messages={messages}
-        onAction={(action) => console.info("Action", action)}
-        style={chatStyle}
-      />
+      <WalliChat {...props} messages={messages} style={chatStyle} />
     </div>
   );
 }
@@ -67,6 +64,16 @@ const meta = {
     docs: { description: { component: "React versions of every walli-chat demo." } },
   },
   argTypes: {
+    actionConfig: {
+      control: "object",
+      table: {
+        type: {
+          summary: "WalliChatActionConfig",
+          detail:
+            "ActionItem = boolean | { visible: boolean; sort?: number }\nCustomAction = { type: string; icon?: IconNode; component?: (context) => unknown; label?: string; visible: boolean; sort?: number }\nAssistant = { copy?: ActionItem; feedback?: ActionItem; share?: ActionItem; [name: string]: ActionItem | CustomAction | undefined }\nUser = { copy?: ActionItem; edit?: ActionItem; [name: string]: ActionItem | CustomAction | undefined }",
+        },
+      },
+    },
     bottomOcclusionHeight: { control: "number" },
     children: { control: false },
     className: { control: "text" },
@@ -106,6 +113,64 @@ export const ReasoningStream: Story = {
   parameters: source(exampleSources.reasoningStream),
 };
 export const Conversation: Story = { parameters: source(exampleSources.conversation) };
+
+function fillIcon(icon: IconNode): IconNode {
+  return icon.map(([tag, attributes]) => [tag, { ...attributes, fill: "currentColor" }]);
+}
+
+export const Actions: Story = {
+  render: () => (
+    <div style={{ height: 320, width: "100%" }}>
+      <WalliChat
+        actionConfig={{
+          assistant: {
+            copy: { visible: true, sort: 1 },
+            feedback: { visible: true, sort: 2 },
+            share: { visible: true, sort: 3 },
+            enhance: {
+              component: ({ blockStates, setIcon }) => html`
+                <details style="position:relative;width:32px;height:32px">
+                  <summary
+                    style="box-sizing:border-box;display:flex;width:32px;height:32px;cursor:pointer;list-style:none;align-items:center;justify-content:center;border-radius:8px"
+                    title="Enhance"
+                    >✨</summary
+                  >
+                  <div
+                    style="position:absolute;z-index:10;bottom:calc(100% + 8px);left:50%;width:180px;transform:translateX(-50%);border:1px solid #e5e7eb;border-radius:12px;background:white;color:#111827;padding:12px;box-shadow:0 12px 32px rgb(0 0 0 / 18%);"
+                  >
+                    <strong>Enhance response</strong>
+                    <p style="margin:6px 0 10px;font-size:12px;color:#6b7280">
+                      State entries: ${blockStates?.size ?? 0}
+                    </p>
+                    <button type="button" @click=${() => setIcon(fillIcon(Sparkles))}>Apply</button>
+                  </div>
+                </details>
+              `,
+              label: "Enhance",
+              sort: 4,
+              type: "enhance",
+              visible: true,
+            },
+          },
+          user: {
+            edit: { visible: true, sort: 1 },
+            copy: { visible: true, sort: 2 },
+          },
+        }}
+        messages={actionMessages}
+        onAction={(action) => {
+          if (action.type === "feedback" && "feedback" in action) {
+            action.setIcon(fillIcon(action.feedback === "like" ? ThumbsUp : ThumbsDown));
+            action.setIcon(undefined, action.feedback === "like" ? "dislike" : "like");
+          }
+          console.info("Action", action);
+        }}
+        style={chatStyle}
+      />
+    </div>
+  ),
+  parameters: source(exampleSources.actions),
+};
 export const TimeMessages: Story = {
   args: {
     intervalSeconds: 10 * 60,

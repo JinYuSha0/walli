@@ -2,10 +2,11 @@ import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import type { UIMessageChunk } from "ai";
 import { html } from "lit";
 import { ref } from "lit/directives/ref.js";
-import { FileSpreadsheet, ImagePlus, Search } from "lucide";
+import { FileSpreadsheet, ImagePlus, Search, Sparkles, ThumbsDown, ThumbsUp, type IconNode } from "lucide";
 import { expect, userEvent, waitFor } from "storybook/test";
 import type {
   WalliChatComposerTranscriptionContext,
+  WalliChatAction,
   WalliChatMessage,
   WalliChatStreamingHandle,
 } from "../src/types";
@@ -21,6 +22,7 @@ registerBlock(noticeBlockDefinition);
 
 type Args = Pick<
   WalliChatElement,
+  | "actionConfig"
   | "bottomOcclusionHeight"
   | "defaultScrollToBottom"
   | "defaultScrollToIndex"
@@ -72,6 +74,15 @@ export const conversation: WalliChatMessage[] = [
       "",
       "This keeps scrolling stable without measuring mounted DOM nodes.",
     ].join("\n"),
+  },
+];
+
+export const actionMessages: WalliChatMessage[] = [
+  { id: "actions-user", role: "user", markdown: "Can these message actions be customized?" },
+  {
+    id: "actions-assistant",
+    role: "assistant",
+    markdown: "Yes. Click an action to update its icon.",
   },
 ];
 
@@ -460,6 +471,17 @@ const meta: Meta<Args> = {
     intervalSeconds: 0,
   },
   argTypes: {
+    actionConfig: {
+      control: "object",
+      description: "Controls which assistant and user message actions are visible.",
+      table: {
+        type: {
+          summary: "WalliChatActionConfig",
+          detail:
+            "ActionItem = boolean | { visible: boolean; sort?: number }\nCustomAction = { type: string; icon?: IconNode; component?: (context) => unknown; label?: string; visible: boolean; sort?: number }\nAssistant = { copy?: ActionItem; feedback?: ActionItem; share?: ActionItem; [name: string]: ActionItem | CustomAction | undefined }\nUser = { copy?: ActionItem; edit?: ActionItem; [name: string]: ActionItem | CustomAction | undefined }",
+        },
+      },
+    },
     bottomOcclusionHeight: {
       control: { min: 0, type: "number" },
       description: "Bottom viewport area, in pixels, excluded from visible-range calculations.",
@@ -520,6 +542,7 @@ const meta: Meta<Args> = {
     <div style="height:640px;width:100%;background:var(--walli-background)">
       <walli-chat
         style="display:block;height:100%;width:100%"
+        .actionConfig=${args.actionConfig ?? {}}
         .bottomOcclusionHeight=${args.bottomOcclusionHeight}
         .defaultScrollToBottom=${args.defaultScrollToBottom}
         .defaultScrollToIndex=${args.defaultScrollToIndex}
@@ -920,6 +943,131 @@ export const Conversation: Story = {
   },
 };
 
+
+function fillIcon(icon: IconNode): IconNode {
+  return icon.map(([tag, attributes]) => [tag, { ...attributes, fill: "currentColor" }]);
+}
+
+export const Actions: Story = {
+  args: {
+    actionConfig: {
+      assistant: {
+        copy: { visible: true, sort: 1 },
+        feedback: { visible: true, sort: 2 },
+        share: { visible: true, sort: 3 },
+        enhance: {
+          component: ({ blockStates, setIcon }) => html`
+            <details style="position:relative;width:32px;height:32px">
+              <summary
+                style="box-sizing:border-box;display:flex;width:32px;height:32px;cursor:pointer;list-style:none;align-items:center;justify-content:center;border-radius:8px"
+                title="Enhance"
+                >✨</summary
+              >
+              <div
+                style="position:absolute;z-index:10;bottom:calc(100% + 8px);left:50%;width:180px;transform:translateX(-50%);border:1px solid #e5e7eb;border-radius:12px;background:white;color:#111827;padding:12px;box-shadow:0 12px 32px rgb(0 0 0 / 18%);"
+              >
+                <strong>Enhance response</strong>
+                <p style="margin:6px 0 10px;font-size:12px;color:#6b7280">
+                  State entries: ${blockStates?.size ?? 0}
+                </p>
+                <button type="button" @click=${() => setIcon(fillIcon(Sparkles))}>Apply</button>
+              </div>
+            </details>
+          `,
+          label: "Enhance",
+          sort: 4,
+          type: "enhance",
+          visible: true,
+        },
+      },
+      user: {
+        edit: { visible: true, sort: 1 },
+        copy: { visible: true, sort: 2 },
+      },
+    },
+    messages: actionMessages,
+    onAction: (action: WalliChatAction) => {
+      if (action.type === "feedback" && "feedback" in action) {
+        action.setIcon(fillIcon(action.feedback === "like" ? ThumbsUp : ThumbsDown));
+        action.setIcon(undefined, action.feedback === "like" ? "dislike" : "like");
+      }
+      console.info("Action", action);
+    },
+  },
+  parameters: {
+    docs: {
+      source: {
+        code: `import { Sparkles, ThumbsDown, ThumbsUp, type IconNode } from "lucide";
+import { html } from "lit";
+function fillIcon(icon: IconNode): IconNode {
+  return icon.map(([tag, attributes]) => [tag, { ...attributes, fill: "currentColor" }]);
+}
+
+import "@wallilabs/chat";
+import "@wallilabs/chat/theme.css";
+import type { WalliChatAction, WalliChatElement } from "@wallilabs/chat";
+
+const chat = document.querySelector<WalliChatElement>("walli-chat")!;
+chat.messages = [
+  {
+    id: "user-1",
+    role: "user",
+    markdown: "Can these actions be customized?",
+  },
+  {
+    id: "assistant-1",
+    role: "assistant",
+    markdown: "Yes. Click an action.",
+  },
+];
+chat.actionConfig = {
+  assistant: {
+    copy: { visible: true, sort: 1 },
+    feedback: { visible: true, sort: 2 },
+    share: { visible: true, sort: 3 },
+    enhance: {
+      component: ({ blockStates, setIcon }) => html\`
+          <details style="position:relative;width:32px;height:32px">
+            <summary
+              style="box-sizing:border-box;display:flex;width:32px;height:32px;cursor:pointer;list-style:none;align-items:center;justify-content:center;border-radius:8px"
+              title="Enhance"
+              >✨</summary
+            >
+            <div
+              style="position:absolute;z-index:10;bottom:calc(100% + 8px);left:50%;width:180px;transform:translateX(-50%);border:1px solid #e5e7eb;border-radius:12px;background:white;color:#111827;padding:12px;box-shadow:0 12px 32px rgb(0 0 0 / 18%);"
+            >
+              <strong>Enhance response</strong>
+              <p style="margin:6px 0 10px;font-size:12px;color:#6b7280">
+                State entries: \${blockStates?.size ?? 0}
+              </p>
+              <button type="button" @click=\${() => setIcon(fillIcon(Sparkles))}>Apply</button>
+            </div>
+          </details>
+        \`,
+      label: "Enhance",
+      sort: 4,
+      type: "enhance",
+      visible: true,
+    },
+  },
+  user: {
+    edit: { visible: true, sort: 1 },
+    copy: { visible: true, sort: 2 },
+  },
+};
+chat.onAction = (action: WalliChatAction) => {
+  if (action.type === "feedback" && "feedback" in action) {
+    action.setIcon(fillIcon(action.feedback === "like" ? ThumbsUp : ThumbsDown));
+    const other = action.feedback === "like" ? "dislike" : "like";
+    action.setIcon(undefined, other);
+  }
+};`,
+        language: "ts",
+      },
+    },
+  },
+};
+
 export const TimeMessages: Story = {
   args: {
     messages: createTimeMessages(),
@@ -970,6 +1118,8 @@ export const TimeMessages: Story = {
       type: "block",
       data: { href: "#details", text: "Custom time" },
       messageId: expect.stringContaining("system-time:"),
+      messageType: "system",
+      markdown: "[Custom time](#details) **Bold** ~~Deleted~~",
       name: "system-message-link",
     });
     const inlineSpans = [...(systemMessage?.querySelectorAll("span") ?? [])];

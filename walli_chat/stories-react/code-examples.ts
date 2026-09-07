@@ -21,6 +21,80 @@ export function Example() {
 }
 
 export const exampleSources = {
+  actions: `import { Sparkles, ThumbsDown, ThumbsUp, type IconNode } from "lucide";
+import { html } from "lit";
+function fillIcon(icon: IconNode): IconNode {
+  return icon.map(([tag, attributes]) => [tag, { ...attributes, fill: "currentColor" }]);
+}
+
+import { WalliChat, type WalliChatAction, type WalliChatMessage } from "@wallilabs/chat/react";
+import "@wallilabs/chat/theme.css";
+
+const messages: WalliChatMessage[] = [
+  {
+    id: "user-1",
+    role: "user",
+    markdown: "Can these actions be customized?",
+  },
+  {
+    id: "assistant-1",
+    role: "assistant",
+    markdown: "Yes. Click an action.",
+  },
+];
+
+function handleAction(action: WalliChatAction) {
+  if (action.type === "feedback" && "feedback" in action) {
+    action.setIcon(fillIcon(action.feedback === "like" ? ThumbsUp : ThumbsDown));
+    const other = action.feedback === "like" ? "dislike" : "like";
+    action.setIcon(undefined, other);
+  }
+}
+
+export function Example() {
+  return (
+    <WalliChat
+      actionConfig={{
+        assistant: {
+          copy: { visible: true, sort: 1 },
+          feedback: { visible: true, sort: 2 },
+          share: { visible: true, sort: 3 },
+          enhance: {
+            component: ({ blockStates, setIcon }) => html\`
+          <details style="position:relative;width:32px;height:32px">
+            <summary
+              style="box-sizing:border-box;display:flex;width:32px;height:32px;cursor:pointer;list-style:none;align-items:center;justify-content:center;border-radius:8px"
+              title="Enhance"
+              >✨</summary
+            >
+            <div
+              style="position:absolute;z-index:10;bottom:calc(100% + 8px);left:50%;width:180px;transform:translateX(-50%);border:1px solid #e5e7eb;border-radius:12px;background:white;color:#111827;padding:12px;box-shadow:0 12px 32px rgb(0 0 0 / 18%);"
+            >
+              <strong>Enhance response</strong>
+              <p style="margin:6px 0 10px;font-size:12px;color:#6b7280">
+                State entries: \${blockStates?.size ?? 0}
+              </p>
+              <button type="button" @click=\${() => setIcon(fillIcon(Sparkles))}>Apply</button>
+            </div>
+          </details>
+        \`,
+            label: "Enhance",
+            sort: 4,
+            type: "enhance",
+            visible: true,
+          },
+        },
+        user: {
+          edit: { visible: true, sort: 1 },
+          copy: { visible: true, sort: 2 },
+        },
+      }}
+      messages={messages}
+      onAction={handleAction}
+      style={{ height: 320 }}
+    />
+  );
+}`,
   initialIndex: `import { WalliChat } from "@wallilabs/chat/react";
 
 const messages = [
