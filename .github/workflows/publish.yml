@@ -2,15 +2,14 @@ name: Publish npm packages
 
 on:
   push:
-    branches: [main]
+    tags: ["v*"]
 
 permissions:
   contents: write
   id-token: write
-  pull-requests: write
 
 concurrency:
-  group: npm-release-${{ github.ref }}
+  group: npm-release
   cancel-in-progress: false
 
 jobs:
@@ -41,19 +40,36 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Validate release tag
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const tag = process.env.GITHUB_REF_NAME;
+          for (const directory of ['walli_chat', 'walli_chat_blocks']) {
+            const pkg = JSON.parse(readFileSync(`${directory}/package.json`, 'utf8'));
+            if (tag !== `v${pkg.version}`) {
+              throw new Error(`Tag ${tag} does not match ${pkg.name}@${pkg.version}`);
+            }
+          }
+          NODE
+
       - name: Install Playwright Chromium
         run: pnpm --filter @wallilabs/chat exec playwright install --with-deps chromium
 
       - name: Run release gate
         run: pnpm --filter @wallilabs/chat run test:release
 
-      - name: Create version pull request or publish packages
-        id: changesets
-        uses: changesets/action@v2
-        with:
-          commit-message: "chore: release packages"
-          create-github-releases: true
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          pr-title: "chore: release packages"
-          publish-script: pnpm run release
-          version-script: pnpm run version-packages
+      - name: Publish packages
+        run: pnpm run release
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+              gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --prerelease
+            else
+              gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
+            fi
+          fi
