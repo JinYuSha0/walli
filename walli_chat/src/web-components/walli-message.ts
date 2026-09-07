@@ -2,12 +2,13 @@ import { html, render, type TemplateResult } from "lit";
 import { customElement } from "lit/decorators.js";
 import { getBlockUsedWidth, materializeMessageBlocks } from "../core";
 import type { BlockLayout, ChatMessageInstance, MessageFrame } from "../core/types";
-import { renderMessageBlockTemplate } from "../core/block-registry";
-import type { WalliChatBlockContext } from "../core/block-registry";
+import {
+  renderMessageBlockTemplate,
+  type WalliChatBlockContext,
+} from "../core/block-registry";
 import { getCommonStyle } from "../core/styles";
 import clsx from "clsx";
-import "./walli-assistant-message-actions";
-import "./walli-user-message-actions";
+import "./walli-message-actions";
 
 @customElement("walli-message")
 export class WalliMessageElement extends HTMLElement {
@@ -19,6 +20,7 @@ export class WalliMessageElement extends HTMLElement {
 
   update(message: ChatMessageInstance, context: WalliChatBlockContext): void {
     const streamingChanged = this.currentBlockContext?.isStreaming !== context.isStreaming;
+    const actionConfigChanged = this.currentBlockContext?.actionConfig !== context.actionConfig;
     this.currentBlockContext = context;
     const key = this.computeKey(message);
     const canReuseContents =
@@ -30,7 +32,7 @@ export class WalliMessageElement extends HTMLElement {
       const materialized = materializeMessageBlocks(message);
       this.currentBlocks = materialized.blocks;
       this.currentHasCustomBlock = materialized.hasCustomBlock;
-    } else if (!streamingChanged || !this.currentHasCustomBlock) {
+    } else if (!actionConfigChanged && (!streamingChanged || !this.currentHasCustomBlock)) {
       return;
     }
     this.renderMessage(message);
@@ -45,6 +47,7 @@ export class WalliMessageElement extends HTMLElement {
   }
 
   private renderLayout(message: ChatMessageInstance, blocks: BlockLayout[]): TemplateResult {
+    const blockContext = this.createMessageBlockContext(message);
     if (message.frame.role === "system") {
       return html`<div
         class="absolute left-0 w-full"
@@ -55,7 +58,7 @@ export class WalliMessageElement extends HTMLElement {
           renderMessageBlockTemplate(
             block,
             Math.max(0, (message.frame.frameWidth - getBlockUsedWidth(block)) / 2),
-            block.kind === "custom" ? this.currentBlockContext : undefined,
+            block.kind === "custom" ? blockContext : undefined,
             block.kind === "custom" ? message.prepared.id : undefined,
           ),
         )}
@@ -68,6 +71,7 @@ export class WalliMessageElement extends HTMLElement {
     const textBlocks = hasAssets ? blocks.filter((block) => block.kind !== "assetsGroup") : [];
     const textBubbleStyle = getTextBubbleStyle(message.frame, textBlocks);
     const textContentInset = getTextContentInset(message.frame, textBlocks);
+    const messageActionContext = this.createMessageActionContext(message);
 
     return html`<div
       class=${clsx({
@@ -100,7 +104,7 @@ export class WalliMessageElement extends HTMLElement {
             renderMessageBlockTemplate(
               block,
               block.kind === "assetsGroup" ? 0 : textContentInset,
-              block.kind === "custom" ? this.currentBlockContext : undefined,
+              block.kind === "custom" ? blockContext : undefined,
               block.kind === "custom" ? message.prepared.id : undefined,
             ),
           )}
@@ -108,15 +112,10 @@ export class WalliMessageElement extends HTMLElement {
         ${
           message.prepared.streaming || !message.prepared.showActions
             ? null
-            : message.frame.role === "assistant"
-              ? html`<walli-assistant-message-actions
-                  .id=${message.prepared.id}
-                  .markdown=${message.prepared.markdown}
-                ></walli-assistant-message-actions>`
-              : html`<walli-user-message-actions
-                  .id=${message.prepared.id}
-                  .markdown=${message.prepared.markdown}
-                ></walli-user-message-actions>`
+            : html`<walli-message-actions
+                .context=${messageActionContext}
+                .variant=${message.frame.role}
+              ></walli-message-actions>`
         }
       </div>
     </div>`;
@@ -125,6 +124,41 @@ export class WalliMessageElement extends HTMLElement {
   private computeKey(message: ChatMessageInstance): string {
     const frame: MessageFrame = message.frame;
     return `${message.top}:${frame.frameWidth}:${frame.bubbleHeight}:${frame.totalHeight}:${frame.layoutContentWidth}:${frame.contentInsetX}:${message.prepared.markdown}`;
+  }
+
+  private createMessageBlockContext(
+    message: ChatMessageInstance,
+  ): WalliChatBlockContext | undefined {
+    const context = this.currentBlockContext;
+    if (context === undefined) return undefined;
+    return {
+      ...context,
+      action: (action) =>
+        context.action({
+          ...action,
+          markdown: message.prepared.markdown,
+          messageType: message.prepared.role,
+        }),
+    };
+  }
+
+  private createMessageActionContext(message: ChatMessageInstance) {
+    const context = this.currentBlockContext!;
+    const messageId = message.prepared.id;
+    return {
+      actionConfig:
+        message.prepared.role === "assistant"
+          ? (context.actionConfig.assistant ?? {})
+          : (context.actionConfig.user ?? {}),
+      blockStates: context.blockStates,
+      id: messageId,
+      markdown: message.prepared.markdown,
+      getBlockState: (key: string) => context.getBlockState(messageId, key),
+      setBlockState: (key: string, value: unknown) => {
+        context.setBlockState(messageId, key, value);
+        context.requestRender();
+      },
+    };
   }
 
   private readonly handleSystemMessageClick = (event: MouseEvent): void => {
@@ -139,14 +173,17 @@ export class WalliMessageElement extends HTMLElement {
       return;
 
     event.preventDefault();
-    void this.currentBlockContext.action({
+    const action = {
       data: {
         href: anchor.getAttribute("href") ?? "",
         text: anchor.textContent ?? "",
       },
+      markdown: this.currentMessage.prepared.markdown,
       messageId: this.currentMessage.prepared.id,
+      messageType: this.currentMessage.prepared.role,
       name: "system-message-link",
-    });
+    };
+    void this.currentBlockContext.action(action);
   };
 }
 

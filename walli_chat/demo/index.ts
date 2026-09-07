@@ -1,6 +1,14 @@
 import "@wallilabs/chat/theme.css";
 import "@wallilabs/chat-blocks/theme.css";
-import { FileSpreadsheet, ImagePlus, Search } from "lucide";
+import {
+  FileSpreadsheet,
+  ImagePlus,
+  Search,
+  Sparkles,
+  ThumbsDown,
+  ThumbsUp,
+  type IconNode,
+} from "lucide";
 import { registerBlock } from "@wallilabs/chat";
 import {
   confirmationCardBlockDefinition,
@@ -22,8 +30,17 @@ import type {
 import { getDemoMessages } from "./store";
 import { createDemoSseRecords } from "./mock/stream";
 import { TimeScheduler } from "../src/core/helper";
+import { html } from "lit";
 
 const timeScheduler = new TimeScheduler();
+const filledThumbs = {
+  dislike: fillIcon(ThumbsDown),
+  like: fillIcon(ThumbsUp),
+};
+
+function fillIcon(icon: IconNode): IconNode {
+  return icon.map(([tag, attributes]) => [tag, { ...attributes, fill: "currentColor" }]);
+}
 
 registerBlock(noticeBlockDefinition);
 registerBlock(recommendedRepliesBlockDefinition);
@@ -38,6 +55,34 @@ const demoMessages = getDemoMessages().map((message, index) => ({
 }));
 
 if (chat) {
+  chat.actionConfig = {
+    assistant: {
+      copy: { visible: true, sort: 1 },
+      feedback: { visible: true, sort: 2 },
+      share: { visible: true, sort: 3 },
+      enhance: {
+        component: ({ blockStates, setIcon }) => html`
+          <details style="position:relative">
+            <summary style="cursor:pointer;list-style:none;padding:7px" title="Enhance">✨</summary>
+            <div
+              style="position:absolute;z-index:10;bottom:calc(100% + 8px);left:50%;width:180px;transform:translateX(-50%);border:1px solid #e5e7eb;border-radius:12px;background:white;color:#111827;padding:12px;box-shadow:0 12px 32px rgb(0 0 0 / 18%);"
+            >
+              <strong>Enhance response</strong>
+              <p style="margin:6px 0 10px;font-size:12px;color:#6b7280">
+                State entries: ${blockStates?.size ?? 0}
+              </p>
+              <button type="button" @click=${() => setIcon(fillIcon(Sparkles))}>Apply</button>
+            </div>
+          </details>
+        `,
+        label: "Enhance",
+        sort: 4,
+        type: "enhance",
+        visible: true,
+      },
+    },
+    user: { edit: { visible: true, sort: 1 }, copy: { visible: true, sort: 2 } },
+  };
   chat.messages = [];
   chat.loading = true;
   window.setTimeout(() => {
@@ -47,13 +92,22 @@ if (chat) {
   chat.onAction = async (action) => {
     switch (action.type) {
       case "block":
-        await handleBlockAction(chat, action);
+        if ("name" in action) await handleBlockAction(chat, action);
         break;
       case "feedback":
+        if (!("feedback" in action)) break;
+        action.setIcon(filledThumbs[action.feedback]);
+        action.setIcon(undefined, action.feedback === "like" ? "dislike" : "like");
         console.log("feedback", action);
         break;
-      case "reply":
-        console.log("reply", action);
+      case "enhance":
+        console.log("enhance", action);
+        break;
+      case "copy":
+        console.log("copy", action);
+        break;
+      case "edit":
+        console.log("edit", action);
         break;
       case "share":
         console.log("share", action);
@@ -64,10 +118,11 @@ if (chat) {
 
 async function handleBlockAction(
   chat: WalliChatElement,
-  { data, messageId, name }: Extract<WalliChatAction, { type: "block" }>,
+  action: Extract<WalliChatAction, { type: "block" }>,
 ): Promise<void> {
+  const { data, messageId, name } = action;
   if (name === "system-message-link") {
-    console.log("system message link", { data, messageId });
+    console.log("system message link", action);
     return;
   }
   if (name !== "confirmation-card") return;

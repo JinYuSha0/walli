@@ -4,8 +4,7 @@ import { WalliChatComposerAssetsElement } from "./walli-chat-composer-assets";
 import { WalliMessageElement } from "./walli-message";
 import { WalliLoadingElement } from "./walli-loading";
 import { WalliActionButtonElement } from "./walli-action-button";
-import { WalliAssistantMessageActionsElement } from "./walli-assistant-message-actions";
-import { WalliUserMessageActionsElement } from "./walli-user-message-actions";
+import { WalliMessageActionsElement } from "./walli-message-actions";
 
 export {
   WalliChatComposerAssetsElement,
@@ -14,13 +13,18 @@ export {
   WalliMessageElement,
   WalliLoadingElement,
   WalliActionButtonElement,
-  WalliAssistantMessageActionsElement,
-  WalliUserMessageActionsElement,
+  WalliMessageActionsElement,
 };
 export type {
   WalliChatBlockAction,
   WalliChatAction,
+  WalliChatActionComponent,
+  WalliChatActionComponentContext,
   WalliChatActionCallback,
+  WalliChatActionConfig,
+  WalliChatActionContext,
+  WalliChatActionItemConfig,
+  WalliChatIconActionContext,
   WalliChatComposerActionCallback,
   WalliChatComposerAsset,
   WalliChatComposerInsertedAssetsHandle,
@@ -36,13 +40,16 @@ export type {
   WalliChatComposerUploadImagesCallback,
   WalliChatComposerUploadResult,
   WalliChatComposerValueCallback,
+  WalliChatCustomActionConfig,
   WalliChatMessage,
+  WalliChatMessageType,
   WalliChatEndReachedCallback,
   WalliChatEndReachedInfo,
   WalliChatFeedback,
   WalliChatInsertMessagesOptions,
   WalliChatMessagePatch,
   WalliChatRemoveMessages,
+  WalliChatSetActionIcon,
   WalliChatScrollTarget,
   WalliChatScrollToIndexOptions,
   WalliChatScrollToOptions,
@@ -62,7 +69,6 @@ declare global {
     "walli-message": WalliMessageElement;
     "walli-loading": WalliLoadingElement;
     "walli-action-button": WalliActionButtonElement;
-    "walli-assistant-message-actions": WalliAssistantMessageActionsElement;
-    "walli-user-message-actions": WalliUserMessageActionsElement;
+    "walli-message-actions": WalliMessageActionsElement;
   }
 }

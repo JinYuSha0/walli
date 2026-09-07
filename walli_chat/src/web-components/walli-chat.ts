@@ -14,7 +14,12 @@ import {
   findVisibleRange,
 } from "../core/index";
 import type { ConversationFrame, PreparedChatMessage } from "../core/types";
-import type { WalliChatBlockContext, WalliChatScrollState } from "../core/block-registry";
+import {
+  getOrCreateMessageBlockState,
+  type WalliChatBlockContext,
+  type WalliChatMessageBlockState,
+  type WalliChatScrollState,
+} from "../core/block-registry";
 import { StreamingMarkdownParser } from "../core/md-parse";
 import { parseEventData, ServerSentEventParser, type ServerSentEvent } from "../core/sse-parser";
 import { getCommonStyle } from "../core/styles";
@@ -25,6 +30,8 @@ import type {
   WalliChatInsertMessagesOptions,
   WalliChatBlockAction,
   WalliChatMessagePatch,
+  WalliChatAction,
+  WalliChatActionConfig,
   WalliChatActionCallback,
   WalliChatRemoveMessages,
   WalliChatScrollToIndexOptions,
@@ -81,6 +88,7 @@ export class WalliChatElement extends LitElement {
   @property({ attribute: false }) accessor emptyContent: unknown;
   @property({ type: Boolean, reflect: true }) accessor loading = false;
   @property({ attribute: false }) accessor onAction: WalliChatActionCallback | undefined;
+  @property({ attribute: false }) accessor actionConfig: WalliChatActionConfig = {};
   @property({ attribute: false }) accessor onEndReached: WalliChatEndReachedCallback | undefined;
   @property({ attribute: false }) accessor onEndReachedThreshold = 0;
   @property({ attribute: "interval-seconds", type: Number }) accessor intervalSeconds = 0;
@@ -88,7 +96,7 @@ export class WalliChatElement extends LitElement {
   @property({ attribute: false }) accessor bottomOcclusionHeight =
     getCommonStyle("bottomOcclusionHeight");
   private _messages: readonly WalliChatMessage[] = [];
-  private readonly blockStates = new Map<string, Map<string, unknown>>();
+  private readonly blockStates = new Map<string, WalliChatMessageBlockState>();
   private preparedMessages: PreparedChatMessage[] = [];
   private topInsertedMessageGroups: WalliChatMessage[][] = [];
   private bottomInsertedMessageGroups: WalliChatMessage[][] = [];
@@ -177,6 +185,7 @@ export class WalliChatElement extends LitElement {
     }
 
     this._messages = messages;
+    this.pruneMessageState(messages);
     this.preparedMessages = createPreparedChatMessages(messages);
     this.requestUpdate("messages", previousMessages);
     this.invalidateFrame();
@@ -294,7 +303,9 @@ export class WalliChatElement extends LitElement {
     if (index < 0) return false;
     const previousMessage = this._messages[index]!;
     const nextMessage = { ...previousMessage, ...patch };
-    if (nextMessage.id !== previousMessage.id) this.blockStates.delete(previousMessage.id);
+    if (nextMessage.id !== previousMessage.id) {
+      this.blockStates.delete(previousMessage.id);
+    }
     const previousMessages = this._messages;
     this._messages = [
       ...previousMessages.slice(0, index),
@@ -353,6 +364,7 @@ export class WalliChatElement extends LitElement {
           )
         : null;
       this._messages = nextMessages;
+      this.pruneMessageState(nextMessages);
       this.preparedMessages.splice(start, insertedMessages.length);
       this.requestUpdate("messages", previousMessages);
       this.invalidateFrame({ keepMountedRows: true });
@@ -744,13 +756,13 @@ export class WalliChatElement extends LitElement {
   }
 
   override updated(changedProperties: Map<PropertyKey, unknown>): void {
-    this.toggleAttribute("feedback-enabled", this.onAction !== undefined);
-    this.toggleAttribute("reply-enabled", this.onAction !== undefined);
-    this.toggleAttribute("share-enabled", this.onAction !== undefined);
     if (changedProperties.has("bottomOcclusionHeight")) {
       this.handleBottomOcclusionChange();
     }
     if (changedProperties.has("intervalSeconds") || changedProperties.has("timeFormatter")) {
+      this.invalidateFrame({ keepMountedRows: true });
+    }
+    if (changedProperties.has("actionConfig")) {
       this.invalidateFrame({ keepMountedRows: true });
     }
     if (changedProperties.has("defaultScrollToBottom")) {
@@ -762,23 +774,10 @@ export class WalliChatElement extends LitElement {
     }
   }
 
-  private handleFeedback(
-    event: CustomEvent<{ id: string; markdown: string; feedback: "like" | "dislike" }>,
+  private handleMessageAction(
+    event: CustomEvent<Exclude<WalliChatAction, { type: "block" }>>,
   ): void {
-    this.onAction?.({
-      type: "feedback",
-      messageId: event.detail.id,
-      markdown: event.detail.markdown,
-      feedback: event.detail.feedback,
-    });
-  }
-
-  private handleReply(event: CustomEvent<{ id: string; markdown: string }>): void {
-    this.onAction?.({ type: "reply", messageId: event.detail.id, markdown: event.detail.markdown });
-  }
-
-  private handleShare(event: CustomEvent<{ id: string; markdown: string }>): void {
-    this.onAction?.({ type: "share", messageId: event.detail.id, markdown: event.detail.markdown });
+    this.onAction?.(event.detail);
   }
 
   private handleComposerSlotChange(event: Event): void {
@@ -901,6 +900,8 @@ export class WalliChatElement extends LitElement {
 
   private createBlockContext(): WalliChatBlockContext {
     return {
+      actionConfig: this.actionConfig,
+      blockStates: this.blockStates,
       isStreaming: this.activeStreamingMessageCount > 0,
       action: this.handleBlockAction,
       getBlockState: (messageId, key) => this.getBlockState(messageId, key),
@@ -916,21 +917,34 @@ export class WalliChatElement extends LitElement {
   }
 
   private getBlockState(messageId: string, key: string): unknown {
-    return this.blockStates.get(messageId)?.get(key);
+    return this.blockStates.get(messageId)?.values.get(key);
   }
 
   private setBlockState(messageId: string, key: string, value: unknown): void {
-    let state = this.blockStates.get(messageId);
-    if (state === undefined) {
-      state = new Map();
-      this.blockStates.set(messageId, state);
+    getOrCreateMessageBlockState(this.blockStates, messageId).values.set(key, value);
+  }
+
+  private pruneMessageState(messages: readonly WalliChatMessage[]): void {
+    const messageIds = new Set(messages.map((message) => message.id));
+    for (const messageId of this.blockStates.keys()) {
+      if (!messageIds.has(messageId)) this.blockStates.delete(messageId);
     }
-    state.set(key, value);
   }
 
   private readonly handleBlockAction = async (action: WalliChatBlockAction): Promise<boolean> => {
     if (this.onAction === undefined) return false;
-    await this.onAction({ type: "block", ...action });
+    if (action.markdown === undefined || action.messageType === undefined) return false;
+    await this.onAction({
+      ...action,
+      markdown: action.markdown,
+      messageType: action.messageType,
+      getBlockState: (key) => this.getBlockState(action.messageId, key),
+      setBlockState: (key, value) => {
+        this.setBlockState(action.messageId, key, value);
+        this.invalidateFrame({ keepMountedRows: true });
+      },
+      type: "block",
+    });
     return true;
   };
 
@@ -1457,9 +1471,7 @@ export class WalliChatElement extends LitElement {
     return html`
       <main
         class="relative h-full w-full overflow-clip bg-background text-foreground font-sans"
-        @walli-feedback=${this.handleFeedback}
-        @walli-reply=${this.handleReply}
-        @walli-share=${this.handleShare}
+        @walli-message-action=${this.handleMessageAction}
       >
         <div
           class="chat-viewport absolute inset-0 overflow-auto [overflow-anchor:none]"

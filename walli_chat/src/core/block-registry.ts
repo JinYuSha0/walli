@@ -1,6 +1,7 @@
 import { marked, type Token, type TokenizerExtension } from "marked";
 import type { BlockFrame, BlockLayout, PreparedBlock } from "./types";
 import type {
+  WalliChatActionConfig,
   WalliChatBlockAction,
   WalliChatInsertMessagesOptions,
   WalliChatMessage,
@@ -8,6 +9,7 @@ import type {
   WalliChatScrollToIndexOptions,
   WalliChatScrollToOptions,
 } from "../types";
+import type { IconNode } from "lucide";
 
 export type WalliChatBlockMeasureContext = {
   availableWidth: number;
@@ -27,6 +29,23 @@ export type WalliChatBlockState = {
   isStreaming: boolean;
 };
 
+export type WalliChatMessageBlockState = {
+  actionIcons: Map<string, IconNode>;
+  values: Map<string, unknown>;
+};
+
+export function getOrCreateMessageBlockState(
+  blockStates: Map<string, WalliChatMessageBlockState>,
+  messageId: string,
+): WalliChatMessageBlockState {
+  let state = blockStates.get(messageId);
+  if (state === undefined) {
+    state = { actionIcons: new Map(), values: new Map() };
+    blockStates.set(messageId, state);
+  }
+  return state;
+}
+
 export type WalliChatScrollState = {
   distanceToBottom: number;
   isAtBottom: boolean;
@@ -36,6 +55,8 @@ export type WalliChatScrollState = {
 };
 
 export type WalliChatBlockContext = WalliChatBlockState & {
+  actionConfig: WalliChatActionConfig;
+  blockStates: Map<string, WalliChatMessageBlockState>;
   action: (action: WalliChatBlockAction) => Promise<boolean>;
   getBlockState: (messageId: string, key: string) => unknown;
   getScrollState: () => WalliChatScrollState;

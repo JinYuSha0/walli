@@ -12,16 +12,62 @@ export type WalliChatMessagePatch = Partial<WalliChatMessage>;
 export type WalliChatTimeFormatter = (createdAt: number) => string;
 
 export type WalliChatFeedback = "like" | "dislike";
+export type WalliChatActionItemConfig = boolean | { sort?: number; visible: boolean };
+export type WalliChatActionComponentContext = {
+  blockStates?: ReadonlyMap<string, unknown>;
+  setIcon: (icon?: IconNode, type?: string) => void;
+};
+export type WalliChatActionComponent = (context: WalliChatActionComponentContext) => unknown;
+export type WalliChatCustomActionConfig = {
+  component?: WalliChatActionComponent;
+  icon?: IconNode;
+  label?: string;
+  sort?: number;
+  type: string;
+  visible: boolean;
+};
+type WalliChatRoleActionConfig<BuiltInAction extends string> = Partial<
+  Record<BuiltInAction, WalliChatActionItemConfig | WalliChatCustomActionConfig>
+> &
+  Record<string, WalliChatActionItemConfig | WalliChatCustomActionConfig | undefined>;
+export type WalliChatActionConfig = {
+  assistant?: WalliChatRoleActionConfig<"copy" | "feedback" | "share">;
+  user?: WalliChatRoleActionConfig<"copy" | "edit">;
+};
+export type WalliChatMessageType = WalliChatMessage["role"];
+export type WalliChatSetActionIcon = (icon?: IconNode, type?: string) => void;
+export type WalliChatActionContext<
+  MessageType extends WalliChatMessageType = WalliChatMessageType,
+> = {
+  messageId: string;
+  messageType: MessageType;
+  markdown: string;
+  getBlockState: (key: string) => unknown;
+  setBlockState: (key: string, value: unknown) => void;
+};
+export type WalliChatIconActionContext<
+  MessageType extends Exclude<WalliChatMessageType, "system"> = Exclude<
+    WalliChatMessageType,
+    "system"
+  >,
+> = WalliChatActionContext<MessageType> & {
+  setIcon: WalliChatSetActionIcon;
+};
 export type WalliChatBlockAction = {
   data: unknown;
   messageId: string;
   name: string;
-};
+} & Partial<WalliChatActionContext>;
 export type WalliChatAction =
-  | ({ type: "block" } & WalliChatBlockAction)
-  | { type: "feedback"; messageId: string; markdown: string; feedback: WalliChatFeedback }
-  | { type: "reply"; messageId: string; markdown: string }
-  | { type: "share"; messageId: string; markdown: string };
+  | (WalliChatActionContext & Omit<WalliChatBlockAction, "messageId"> & { type: "block" })
+  | (WalliChatIconActionContext & { type: "copy" })
+  | (WalliChatIconActionContext<"user"> & { type: "edit" })
+  | (WalliChatIconActionContext<"assistant"> & {
+      feedback: WalliChatFeedback;
+      type: "feedback";
+    })
+  | (WalliChatIconActionContext<"assistant"> & { type: "share" })
+  | (WalliChatIconActionContext & { type: string });
 export type WalliChatActionCallback = (action: WalliChatAction) => void | PromiseLike<void>;
 export type WalliChatRemoveMessages = () => void;
 export type WalliChatEndReachedInfo = {

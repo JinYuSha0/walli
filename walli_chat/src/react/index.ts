@@ -11,7 +11,16 @@ import {
 } from "react";
 import type {
   WalliChatAction,
+  WalliChatActionComponent,
+  WalliChatActionComponentContext,
   WalliChatActionCallback,
+  WalliChatActionConfig,
+  WalliChatActionContext,
+  WalliChatActionItemConfig,
+  WalliChatIconActionContext,
+  WalliChatMessageType,
+  WalliChatSetActionIcon,
+  WalliChatCustomActionConfig,
   WalliChatComposerElement,
   WalliChatElement,
   WalliLoadingElement,
@@ -180,6 +189,7 @@ export const WalliChatComposer = forwardRef<WalliChatComposerRef, WalliChatCompo
 );
 
 export type WalliChatProps = {
+  actionConfig?: WalliChatActionConfig;
   bottomOcclusionHeight?: number;
   children?: ReactNode;
   className?: string;
@@ -225,6 +235,7 @@ export type WalliChatRef = {
 
 export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function WalliChat(
   {
+    actionConfig,
     bottomOcclusionHeight,
     children,
     className,
@@ -270,9 +281,10 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
     if (elementRef.current) {
       elementRef.current.onEndReached = onEndReached;
       elementRef.current.onAction = onAction;
+      elementRef.current.actionConfig = actionConfig ?? {};
       elementRef.current.onEndReachedThreshold = onEndReachedThreshold;
     }
-  }, [onAction, onEndReached, onEndReachedThreshold]);
+  }, [actionConfig, onAction, onEndReached, onEndReachedThreshold]);
 
   useImperativeHandle(
     forwardedRef,
@@ -323,7 +335,16 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
 
 export type {
   WalliChatAction,
+  WalliChatActionComponent,
+  WalliChatActionComponentContext,
   WalliChatActionCallback,
+  WalliChatActionConfig,
+  WalliChatActionContext,
+  WalliChatActionItemConfig,
+  WalliChatIconActionContext,
+  WalliChatMessageType,
+  WalliChatSetActionIcon,
+  WalliChatCustomActionConfig,
   WalliChatBlockDefinition,
   WalliChatBlockName,
   WalliChatBlockRegistration,

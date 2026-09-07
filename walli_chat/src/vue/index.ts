@@ -2,7 +2,16 @@ import "../web-components";
 import { defineComponent, h, ref, watchEffect, type CSSProperties, type PropType } from "vue";
 import type {
   WalliChatAction,
+  WalliChatActionComponent,
+  WalliChatActionComponentContext,
   WalliChatActionCallback,
+  WalliChatActionConfig,
+  WalliChatActionContext,
+  WalliChatActionItemConfig,
+  WalliChatIconActionContext,
+  WalliChatMessageType,
+  WalliChatSetActionIcon,
+  WalliChatCustomActionConfig,
   WalliChatComposerElement,
   WalliChatElement,
   WalliLoadingElement,
@@ -140,6 +149,7 @@ export const WalliChat = defineComponent({
   name: "WalliChat",
   inheritAttrs: false,
   props: {
+    actionConfig: Object as PropType<WalliChatActionConfig>,
     bottomOcclusionHeight: Number,
     class: String,
     defaultScrollToBottom: { default: true, type: Boolean },
@@ -166,6 +176,7 @@ export const WalliChat = defineComponent({
       const chat = element.value;
       if (!chat) return;
       chat.defaultScrollToBottom = props.defaultScrollToBottom;
+      chat.actionConfig = props.actionConfig ?? {};
       chat.defaultScrollToIndex = props.defaultScrollToIndex;
       chat.messages = props.messages;
       chat.loading = props.loading;
@@ -250,7 +261,16 @@ export type WalliChatExpose = {
 
 export type {
   WalliChatAction,
+  WalliChatActionComponent,
+  WalliChatActionComponentContext,
   WalliChatActionCallback,
+  WalliChatActionConfig,
+  WalliChatActionContext,
+  WalliChatActionItemConfig,
+  WalliChatIconActionContext,
+  WalliChatMessageType,
+  WalliChatSetActionIcon,
+  WalliChatCustomActionConfig,
   WalliChatBlockDefinition,
   WalliChatBlockName,
   WalliChatBlockRegistration,
