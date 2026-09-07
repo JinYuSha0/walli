@@ -12,6 +12,7 @@ import {
   createPreparedChatMessages,
   getMaxChatWidth,
   findVisibleRange,
+  type MessageLayoutCache,
 } from "../core/index";
 import type { ConversationFrame, PreparedChatMessage } from "../core/types";
 import {
@@ -98,6 +99,7 @@ export class WalliChatElement extends LitElement {
   private _messages: readonly WalliChatMessage[] = [];
   private readonly blockStates = new Map<string, WalliChatMessageBlockState>();
   private preparedMessages: PreparedChatMessage[] = [];
+  private readonly messageLayoutCache: MessageLayoutCache = new Map();
   private topInsertedMessageGroups: WalliChatMessage[][] = [];
   private bottomInsertedMessageGroups: WalliChatMessage[][] = [];
   private pendingScrollRequest: PendingScrollRequest | null = null;
@@ -907,7 +909,11 @@ export class WalliChatElement extends LitElement {
       action: this.handleBlockAction,
       getBlockState: (messageId, key) => this.getBlockState(messageId, key),
       getScrollState: () => this.getScrollState(),
-      requestRender: () => this.invalidateFrame({ keepMountedRows: true }),
+      requestRender: (messageId) => {
+        if (!messageId) this.messageLayoutCache.clear();
+        else this.messageLayoutCache.delete(messageId);
+        this.invalidateFrame({ keepMountedRows: true });
+      },
       setBlockState: (messageId, key, value) => this.setBlockState(messageId, key, value),
       insertMessagesAtBottom: (messages, options) => this.insertMessagesAtBottom(messages, options),
       insertMessagesAtTop: (messages, options) => this.insertMessagesAtTop(messages, options),
@@ -922,6 +928,7 @@ export class WalliChatElement extends LitElement {
   }
 
   private setBlockState(messageId: string, key: string, value: unknown): void {
+    this.messageLayoutCache.delete(messageId);
     getOrCreateMessageBlockState(this.blockStates, messageId).values.set(key, value);
   }
 
@@ -1201,6 +1208,7 @@ export class WalliChatElement extends LitElement {
         formatter: this.timeFormatter,
         intervalSeconds: this.intervalSeconds,
       },
+      this.messageLayoutCache,
     );
     const preparedMessage = this.getStreamingBottomPaddingMessage();
     if (preparedMessage === undefined) return frame;

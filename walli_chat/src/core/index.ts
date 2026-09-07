@@ -23,6 +23,15 @@ type TimeSystemMessageOptions = {
   intervalSeconds: number;
 };
 
+export type MessageLayoutCache = Map<
+  string,
+  {
+    prepared: PreparedChatMessage;
+    width: number;
+    frame: MessageFrame;
+  }
+>;
+
 export function createPreparedChatMessages(
   messages: readonly WalliChatMessage[],
   options: { bottomPaddingHeight?: number; streaming?: boolean } = {},
@@ -83,6 +92,7 @@ export function buildConversationFrame(
   bottomOcclusionHeight: number = getCommonStyle("bottomOcclusionHeight"),
   composerBottomInsetHeight = 0,
   timeOptions?: TimeSystemMessageOptions,
+  layoutCache: MessageLayoutCache = new Map(),
 ): ConversationFrame {
   const laneWidth = Math.max(120, chatWidth - getCommonStyle("messageSidePadding") * 2);
   const userFrameWidth = Math.min(
@@ -101,12 +111,16 @@ export function buildConversationFrame(
     const contentInsetX = preparedMessage.role === "user" ? getCommonStyle("bubblePaddingX") : 0;
     const frameWidth = preparedMessage.role === "user" ? userFrameWidth : assistantFrameWidth;
     const contentWidth = Math.max(120, frameWidth - contentInsetX * 2);
-    const messageFrame = layoutMessageFrame(
-      preparedMessage,
-      frameWidth,
-      contentWidth,
-      contentInsetX,
-    );
+    const cached = layoutCache.get(preparedMessage.id);
+    const messageFrame =
+      cached?.prepared === preparedMessage && cached.width === frameWidth
+        ? cached.frame
+        : layoutMessageFrame(preparedMessage, frameWidth, contentWidth, contentInsetX);
+    layoutCache.set(preparedMessage.id, {
+      prepared: preparedMessage,
+      width: frameWidth,
+      frame: messageFrame,
+    });
     const top = y;
     const bottom = top + messageFrame.totalHeight;
 
@@ -132,6 +146,7 @@ export function buildConversationFrame(
       preparedMessage,
       previousUserMessage,
       timeOptions,
+      layoutCache,
     );
     if (systemMessage !== undefined) {
       if (previousMessage?.role === "assistant") y -= getCommonStyle("messageGap");
@@ -143,6 +158,10 @@ export function buildConversationFrame(
   }
 
   const lastMessage = preparedMessages[preparedMessages.length - 1];
+  const messageIds = new Set(messages.map((message) => message.prepared.id));
+  for (const id of layoutCache.keys()) {
+    if (!messageIds.has(id)) layoutCache.delete(id);
+  }
   const trailingMessageGap = lastMessage?.role === "assistant" ? getCommonStyle("messageGap") : 0;
   const totalHeight =
     messages.length === 0
@@ -207,7 +226,7 @@ function layoutMessageFrame(
     preparedMessage.role === "user"
       ? Math.min(maxFrameWidth, contentInsetX * 2 + Math.max(1, usedContentWidth))
       : maxFrameWidth;
-  return {
+  const frame: MessageFrame = {
     actionHeight,
     blocks,
     bubbleHeight,
@@ -218,12 +237,14 @@ function layoutMessageFrame(
     totalHeight: bubbleHeight + paddingTop + actionHeight,
     paddingTop,
   };
+  return frame;
 }
 
 function createTimeSystemMessage(
   message: PreparedChatMessage,
   previousUserMessage: PreparedChatMessage | undefined,
   options: TimeSystemMessageOptions | undefined,
+  layoutCache: MessageLayoutCache,
 ): PreparedChatMessage | undefined {
   if (message.role !== "user" || options === undefined) return undefined;
 
@@ -241,9 +262,10 @@ function createTimeSystemMessage(
   if (elapsedMilliseconds <= intervalMilliseconds) return undefined;
 
   const text = options.formatter?.(createdAt) ?? formatTimeSystemMessage(createdAt);
-  return createPreparedChatMessages([
-    createSystemMessage(text, { createdAt, id: `system-time:${message.id}` }),
-  ])[0];
+  const id = `system-time:${message.id}`;
+  const cached = layoutCache.get(id)?.prepared;
+  if (cached?.markdown === text && cached.createdAt === createdAt) return cached;
+  return createPreparedChatMessages([createSystemMessage(text, { createdAt, id })])[0]!;
 }
 
 export function materializeMessageBlocks(message: ChatMessageInstance): {

@@ -133,6 +133,9 @@ export class WalliMessageElement extends HTMLElement {
     if (context === undefined) return undefined;
     return {
       ...context,
+      requestRender: () => {
+        context.requestRender(message.prepared.id);
+      },
       action: (action) =>
         context.action({
           ...action,
@@ -156,7 +159,7 @@ export class WalliMessageElement extends HTMLElement {
       getBlockState: (key: string) => context.getBlockState(messageId, key),
       setBlockState: (key: string, value: unknown) => {
         context.setBlockState(messageId, key, value);
-        context.requestRender();
+        context.requestRender(messageId);
       },
     };
   }

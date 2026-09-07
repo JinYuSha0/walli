@@ -60,7 +60,7 @@ export type WalliChatBlockContext = WalliChatBlockState & {
   action: (action: WalliChatBlockAction) => Promise<boolean>;
   getBlockState: (messageId: string, key: string) => unknown;
   getScrollState: () => WalliChatScrollState;
-  requestRender: () => void;
+  requestRender: (messageId?: string) => void;
   setBlockState: (messageId: string, key: string, value: unknown) => void;
   insertMessagesAtBottom: (
     messages: readonly WalliChatMessage[],
