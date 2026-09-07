@@ -588,7 +588,8 @@ export class WalliChatElement extends LitElement {
         this.requestStreamingFollow();
       }
     } finally {
-      const shouldRestoreBottomAfterAbort = signal.aborted && this.isAtBottom;
+      const shouldRestoreBottomAfterAbort =
+        signal.aborted && this.isAtBottom && this.getStreamingBottomPaddingMessage() === undefined;
       signal.removeEventListener("abort", handleAbort);
       if (renderRaf !== null) {
         cancelAnimationFrame(renderRaf);
