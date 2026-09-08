@@ -12,19 +12,17 @@ import type {
 } from "../types";
 import type { WalliChatMessageBlockState } from "../core/block-registry";
 
-export type WalliActionKind = "copy" | "dislike" | "edit" | "like" | "share";
 export type WalliActionButtonConfig = {
   icon?: IconNode;
-  kind?: WalliActionKind;
   label?: string;
   onAction?: () => void;
   text?: string;
+  type?: string;
 };
 
 export type MessageActionItem = {
   component?: WalliChatActionComponent;
   icon?: IconNode;
-  kind?: WalliActionKind;
   label?: string;
   sort: number;
   type: string;
@@ -58,7 +56,7 @@ export type MessageActionRole = "assistant" | "user";
 type BuiltInActionConfig = {
   defaultSort: number;
   defaultVisible: boolean;
-  items: readonly { kind: WalliActionKind; label: string }[];
+  items: readonly { icon: IconNode; label: string; type: string }[];
   name: "copy" | "edit" | "feedback" | "share";
 };
 
@@ -67,22 +65,22 @@ const builtInActions: Record<MessageActionRole, readonly BuiltInActionConfig[]> 
     {
       defaultSort: 1,
       defaultVisible: true,
-      items: [{ kind: "copy", label: "Copy" }],
+      items: [{ icon: Copy, label: "Copy", type: "copy" }],
       name: "copy",
     },
     {
       defaultSort: 2,
       defaultVisible: false,
       items: [
-        { kind: "like", label: "Good response" },
-        { kind: "dislike", label: "Bad response" },
+        { icon: ThumbsUp, label: "Good response", type: "like" },
+        { icon: ThumbsDown, label: "Bad response", type: "dislike" },
       ],
       name: "feedback",
     },
     {
       defaultSort: 3,
       defaultVisible: false,
-      items: [{ kind: "share", label: "Share" }],
+      items: [{ icon: Share2, label: "Share", type: "share" }],
       name: "share",
     },
   ],
@@ -90,13 +88,13 @@ const builtInActions: Record<MessageActionRole, readonly BuiltInActionConfig[]> 
     {
       defaultSort: 1,
       defaultVisible: true,
-      items: [{ kind: "copy", label: "Copy" }],
+      items: [{ icon: Copy, label: "Copy", type: "copy" }],
       name: "copy",
     },
     {
       defaultSort: 2,
       defaultVisible: false,
-      items: [{ kind: "edit", label: "Edit" }],
+      items: [{ icon: Pencil, label: "Edit", type: "edit" }],
       name: "edit",
     },
   ],
@@ -108,21 +106,22 @@ export function createMessageActionItems<Role extends MessageActionRole>(
 ): MessageActionItem[] {
   const actionConfig = config as Record<string, WalliChatActionItemConfig | undefined>;
   const builtIns = builtInActions[role];
+  const builtInNames = new Set(builtIns.map((builtIn) => builtIn.name));
   const customConfigs = Object.entries(config).filter(
     (entry): entry is [string, WalliChatCustomActionConfig] => {
-      const [, value] = entry;
-      return typeof value === "object" && "type" in value;
+      const [name, value] = entry;
+      return !builtInNames.has(name as BuiltInActionConfig["name"]) && typeof value === "object";
     },
   );
-  const customTypes = new Set(customConfigs.map(([, value]) => value.type));
+  const customTypes = new Set(customConfigs.map(([type]) => type));
   const items: MessageActionItem[] = customConfigs
     .filter(([, value]) => value.visible)
-    .map<MessageActionItem>(([, value], index) => ({
+    .map<MessageActionItem>(([type, value], index) => ({
       component: value.component,
       icon: value.icon,
       label: value.label,
       sort: value.sort ?? index + 1,
-      type: value.type,
+      type,
     }));
 
   for (const builtIn of builtIns) {
@@ -132,10 +131,10 @@ export function createMessageActionItems<Role extends MessageActionRole>(
     const sort = getActionSort(value, builtIn.defaultSort);
     items.push(
       ...builtIn.items.map((item, index) => ({
-        kind: item.kind,
+        icon: item.icon,
         label: item.label,
         sort: sort + index / 10,
-        type: item.kind,
+        type: item.type,
       })),
     );
   }
@@ -152,21 +151,18 @@ export function createMessageActionDetail(
   setBlockState: (key: string, value: unknown) => void,
 ) {
   const actionSetIcon: WalliChatSetActionIcon = (icon, type) => setIcon(type ?? item.type, icon);
-  const base = {
+  return {
     messageId,
     messageType,
     markdown,
     getBlockState,
     setBlockState,
     setIcon: actionSetIcon,
+    type: item.type,
   };
-  if (item.type === "like" || item.type === "dislike") {
-    return { ...base, feedback: item.type, type: "feedback" as const };
-  }
-  return { ...base, type: item.type };
 }
 
-const actionIcons: Record<WalliActionKind, () => SVGElement> = {
+const actionIcons: Record<string, () => SVGElement> = {
   copy: () => createActionIcon(Copy),
   dislike: () => createActionIcon(ThumbsDown),
   like: () => createActionIcon(ThumbsUp),
@@ -186,7 +182,7 @@ function createActionIcon(icon: LucideIconNode): SVGElement {
 
 @customElement("walli-action-button")
 export class WalliActionButtonElement extends HTMLElement {
-  private config: WalliActionButtonConfig = { kind: "copy" };
+  private config: WalliActionButtonConfig = { type: "copy" };
 
   connectedCallback(): void {
     this.renderButton();
@@ -198,7 +194,7 @@ export class WalliActionButtonElement extends HTMLElement {
   }
 
   private performAction(): void {
-    if (this.config.kind === "copy") {
+    if (this.config.type === "copy") {
       void navigator.clipboard.writeText(this.config.text ?? "");
     }
     this.config.onAction?.();
@@ -214,11 +210,13 @@ export class WalliActionButtonElement extends HTMLElement {
         aria-label=${label}
         @click=${() => this.performAction()}
       >
-        ${this.config.icon
-          ? createActionIcon(this.config.icon)
-          : this.config.kind
-            ? actionIcons[this.config.kind]()
-            : null}
+        ${
+          this.config.icon
+            ? createActionIcon(this.config.icon)
+            : this.config.type
+              ? actionIcons[this.config.type]?.()
+              : null
+        }
       </button>`,
       this,
     );

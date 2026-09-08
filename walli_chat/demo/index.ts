@@ -54,7 +54,19 @@ const demoMessages = getDemoMessages().map((message, index) => ({
   id: `demo-${index}`,
 }));
 
+type DemoBlockActions = {
+  "confirmation-card": ConfirmationCardSubmission;
+  "system-message-link": { href: string; text: string };
+};
+type DemoAction = WalliChatAction<{ enhance: undefined }, DemoBlockActions>;
+type DemoBlockAction = Extract<DemoAction, { type: "block" }>;
+
 if (chat) {
+  chat.editConfig = {
+    cancelLabel: "取消",
+    placeholder: "编辑消息",
+    submitLabel: "发送",
+  };
   chat.actionConfig = {
     assistant: {
       copy: { visible: true, sort: 1 },
@@ -66,8 +78,9 @@ if (chat) {
             <summary
               style="box-sizing:border-box;display:flex;width:32px;height:32px;cursor:pointer;list-style:none;align-items:center;justify-content:center;border-radius:8px"
               title="Enhance"
-              >✨</summary
             >
+              ✨
+            </summary>
             <div
               style="position:absolute;z-index:10;bottom:calc(100% + 8px);left:50%;width:180px;transform:translateX(-50%);border:1px solid #e5e7eb;border-radius:12px;background:white;color:#111827;padding:12px;box-shadow:0 12px 32px rgb(0 0 0 / 18%);"
             >
@@ -81,11 +94,10 @@ if (chat) {
         `,
         label: "Enhance",
         sort: 4,
-        type: "enhance",
         visible: true,
       },
     },
-    user: { edit: { visible: true, sort: 1 }, copy: { visible: true, sort: 2 } },
+    user: { copy: { visible: true, sort: 1 }, edit: { visible: true, sort: 2 } },
   };
   chat.messages = [];
   chat.loading = true;
@@ -93,16 +105,20 @@ if (chat) {
     chat.loading = false;
     chat.messages = demoMessages;
   });
-  chat.onAction = async (action) => {
+  chat.onAction = async (action: DemoAction) => {
     switch (action.type) {
       case "block":
-        if ("name" in action) await handleBlockAction(chat, action);
+        await handleBlockAction(chat, action);
         break;
-      case "feedback":
-        if (!("feedback" in action)) break;
-        action.setIcon(filledThumbs[action.feedback]);
-        action.setIcon(undefined, action.feedback === "like" ? "dislike" : "like");
-        console.log("feedback", action);
+      case "like":
+        action.setIcon(filledThumbs.like);
+        action.setIcon(undefined, "dislike");
+        console.log("like", action);
+        break;
+      case "dislike":
+        action.setIcon(filledThumbs.dislike);
+        action.setIcon(undefined, "like");
+        console.log("dislike", action);
         break;
       case "enhance":
         console.log("enhance", action);
@@ -111,7 +127,7 @@ if (chat) {
         console.log("copy", action);
         break;
       case "edit":
-        console.log("edit", action);
+        action.edit(action.messageId);
         break;
       case "share":
         console.log("share", action);
@@ -120,54 +136,64 @@ if (chat) {
   };
 }
 
-async function handleBlockAction(
-  chat: WalliChatElement,
-  action: Extract<WalliChatAction, { type: "block" }>,
-): Promise<void> {
+async function handleBlockAction(chat: WalliChatElement, action: DemoBlockAction): Promise<void> {
   const { data, messageId, name } = action;
-  if (name === "system-message-link") {
-    console.log("system message link", action);
-    return;
+  switch (name) {
+    case "edit-block": {
+      console.log("edit block", action);
+      if (data.action === "cancel") break;
+      const { messageIndex, messages } = data;
+      action.deleteMessages(
+        messages.slice(messageIndex).map((message) => message.id),
+        { maintainHeight: true },
+      );
+      await action.submit(action.markdown);
+      break;
+    }
+    case "system-message-link":
+      console.log("system message link", action);
+      break;
+    case "confirmation-card": {
+      const submission = data;
+      await new Promise((resolve) => window.setTimeout(resolve, 600));
+      const message = chat.messages.find((item) => item.id === messageId);
+      const cardData = message?.meta as ConfirmationCardData | undefined;
+      if (cardData === undefined) throw new Error("Confirmation card metadata is missing");
+      const fields = cardData.fields.map<ConfirmationCardField>(
+        (field) =>
+          ({
+            ...field,
+            editable: false,
+            value: submission.fields[field.id] ?? field.value,
+          }) as ConfirmationCardField,
+      );
+      const confirmedCardData: ConfirmationCardData = {
+        ...cardData,
+        action: { ...cardData.action, disabled: true, label: "已提交" },
+        fields,
+      };
+      chat.replaceMessage(messageId, {
+        markdown: createConfirmationCardMarkdown(confirmedCardData),
+        meta: confirmedCardData,
+      });
+      chat.insertMessagesAtBottom(
+        [
+          {
+            id: `confirmation-success-${crypto.randomUUID()}`,
+            createdAt: Date.now(),
+            role: "assistant",
+            markdown: createNoticeMarkdown({
+              text: "预约信息提交成功。",
+              variant: "success",
+            }),
+            showActions: false,
+          },
+        ],
+        { stick: true },
+      );
+      break;
+    }
   }
-  if (name !== "confirmation-card") return;
-
-  const submission = data as ConfirmationCardSubmission;
-  await new Promise((resolve) => window.setTimeout(resolve, 600));
-  const message = chat.messages.find((item) => item.id === messageId);
-  const cardData = message?.meta as ConfirmationCardData | undefined;
-  if (cardData === undefined) throw new Error("Confirmation card metadata is missing");
-  const fields = cardData.fields.map<ConfirmationCardField>(
-    (field) =>
-      ({
-        ...field,
-        editable: false,
-        value: submission.fields[field.id] ?? field.value,
-      }) as ConfirmationCardField,
-  );
-  const confirmedCardData: ConfirmationCardData = {
-    ...cardData,
-    action: { ...cardData.action, disabled: true, label: "已提交" },
-    fields,
-  };
-  chat.replaceMessage(messageId, {
-    markdown: createConfirmationCardMarkdown(confirmedCardData),
-    meta: confirmedCardData,
-  });
-  chat.insertMessagesAtBottom(
-    [
-      {
-        id: `confirmation-success-${crypto.randomUUID()}`,
-        createdAt: Date.now(),
-        role: "assistant",
-        markdown: createNoticeMarkdown({
-          text: "预约信息提交成功。",
-          variant: "success",
-        }),
-        showActions: false,
-      },
-    ],
-    { stick: true },
-  );
 }
 
 if (composer) {
@@ -228,6 +254,7 @@ if (composer) {
   composer.onSubmit = (markdown, text, assets) => {
     if (!markdown) return;
 
+    console.log("submit", { assets, markdown, text });
     chat?.insertMessagesAtBottom([
       {
         id: `demo-user-${crypto.randomUUID()}`,
@@ -586,10 +613,7 @@ function applyButtonStyle(button: HTMLButtonElement): void {
 }
 
 function getScrollTargetIndex(): number {
-  const maxIndex = Math.max(0, (chat?.messages.length ?? 1) - 1);
-  const index = Number(indexInput.value);
-  if (!Number.isFinite(index)) return 0;
-  return Math.max(0, Math.min(maxIndex, Math.floor(index)));
+  return Number(indexInput.value);
 }
 
 function getScrollTargetTop(): number {

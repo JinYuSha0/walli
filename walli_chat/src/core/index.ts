@@ -200,7 +200,9 @@ function layoutMessageFrame(
   contentInsetX: number,
 ): MessageFrame {
   const isSystem = preparedMessage.role === "system";
-  const bubblePaddingY = isSystem ? 16 : getCommonStyle("bubblePaddingY");
+  const bubblePaddingY = isSystem
+    ? getCommonStyle("systemBubblePaddingY")
+    : getCommonStyle("bubblePaddingY");
   let y = bubblePaddingY;
   const blocks: BlockFrame[] = [];
   let usedContentWidth = 0;

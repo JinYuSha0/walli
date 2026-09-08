@@ -136,6 +136,18 @@ export function appendBlockGroup(
   }
 }
 
+export function unescapeMarkdownText(markdown: string): string {
+  return markdown.replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, "$1");
+}
+
+const internalActionPrefix = `walli-internal-${
+  globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)
+}`;
+
+export function createInternalActionName<Name extends string>(name: Name): `${string}:${Name}` {
+  return `${internalActionPrefix}:${name}`;
+}
+
 export class TimeScheduler<T = string> {
   private static instance: TimeScheduler;
   private tasks: Map<string, { timestamp: number; execute: () => void }>;

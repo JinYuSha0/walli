@@ -9,9 +9,17 @@ export type WalliChatMessage = {
   showActions?: boolean;
 };
 export type WalliChatMessagePatch = Partial<WalliChatMessage>;
+export type WalliChatDeleteMessages = (
+  ids: readonly string[],
+  options?: WalliChatDeleteMessagesOptions,
+) => number;
 export type WalliChatTimeFormatter = (createdAt: number) => string;
+export type WalliChatEditConfig = {
+  cancelLabel?: string;
+  placeholder?: string;
+  submitLabel?: string;
+};
 
-export type WalliChatFeedback = "like" | "dislike";
 export type WalliChatActionItemConfig = boolean | { sort?: number; visible: boolean };
 export type WalliChatActionComponentContext = {
   blockStates?: ReadonlyMap<string, unknown>;
@@ -23,7 +31,6 @@ export type WalliChatCustomActionConfig = {
   icon?: IconNode;
   label?: string;
   sort?: number;
-  type: string;
   visible: boolean;
 };
 type WalliChatRoleActionConfig<BuiltInAction extends string> = Partial<
@@ -36,40 +43,102 @@ export type WalliChatActionConfig = {
 };
 export type WalliChatMessageType = WalliChatMessage["role"];
 export type WalliChatSetActionIcon = (icon?: IconNode, type?: string) => void;
+export type WalliChatActionApi = {
+  deleteMessages: WalliChatDeleteMessages;
+  edit: (messageId: string) => boolean;
+  getScrollState: () => {
+    distanceToBottom: number;
+    isAtBottom: boolean;
+    scrollHeight: number;
+    scrollTop: number;
+    viewportHeight: number;
+  };
+  insertMessagesAtBottom: (
+    messages: readonly WalliChatMessage[],
+    options?: WalliChatInsertMessagesOptions,
+  ) => WalliChatRemoveMessages;
+  insertMessagesAtTop: (
+    messages: readonly WalliChatMessage[],
+    options?: WalliChatInsertMessagesOptions,
+  ) => WalliChatRemoveMessages;
+  scrollTo: (options: WalliChatScrollToOptions) => void;
+  scrollToIndex: (options: WalliChatScrollToIndexOptions) => void;
+  submit: (text: string) => Promise<boolean>;
+};
+type WalliChatActionData<Data> = 0 extends 1 & Data
+  ? { data: Data }
+  : [Data] extends [undefined]
+    ? unknown
+    : { data: Data };
 export type WalliChatActionContext<
   MessageType extends WalliChatMessageType = WalliChatMessageType,
-> = {
+  Data = undefined,
+> = WalliChatActionApi & {
   messageId: string;
   messageType: MessageType;
   markdown: string;
   getBlockState: (key: string) => unknown;
   setBlockState: (key: string, value: unknown) => void;
-};
+} & WalliChatActionData<Data>;
 export type WalliChatIconActionContext<
   MessageType extends Exclude<WalliChatMessageType, "system"> = Exclude<
     WalliChatMessageType,
     "system"
   >,
-> = WalliChatActionContext<MessageType> & {
+  Data = undefined,
+> = WalliChatActionContext<MessageType, Data> & {
   setIcon: WalliChatSetActionIcon;
 };
-export type WalliChatBlockAction = {
-  data: unknown;
+export type WalliChatEditActionData = {
+  action: "cancel" | "submit";
+  messageIndex: number;
+  messages: readonly WalliChatMessage[];
+  originalMarkdown: string;
+};
+export type WalliChatEditAction = WalliChatIconActionContext<"user"> & { type: "edit" };
+export type WalliChatBlockAction<Name extends string = string, Data = unknown> = {
+  data: Data;
   messageId: string;
-  name: string;
-} & Partial<WalliChatActionContext>;
-export type WalliChatAction =
-  | (WalliChatActionContext & Omit<WalliChatBlockAction, "messageId"> & { type: "block" })
+  name: Name;
+} & Partial<Omit<WalliChatActionContext, "data">>;
+export type WalliChatCustomBlockAction<
+  Name extends string = string,
+  Data = unknown,
+> = WalliChatBlockAction<Name, Data>;
+export type WalliChatAction<
+  CustomActions extends Record<string, unknown> = {},
+  BlockActions extends Record<string, unknown> = Record<string, any>,
+> =
+  | {
+      [
+        Name in keyof (BlockActions & { "edit-block": WalliChatEditActionData }) & string
+      ]: WalliChatActionContext<
+        WalliChatMessageType,
+        (BlockActions & { "edit-block": WalliChatEditActionData })[Name]
+      > & { name: Name; type: "block" };
+    }[keyof (BlockActions & { "edit-block": WalliChatEditActionData }) & string]
   | (WalliChatIconActionContext & { type: "copy" })
-  | (WalliChatIconActionContext<"user"> & { type: "edit" })
-  | (WalliChatIconActionContext<"assistant"> & {
-      feedback: WalliChatFeedback;
-      type: "feedback";
-    })
+  | WalliChatEditAction
+  | (WalliChatIconActionContext<"assistant"> & { type: "like" })
+  | (WalliChatIconActionContext<"assistant"> & { type: "dislike" })
   | (WalliChatIconActionContext<"assistant"> & { type: "share" })
-  | (WalliChatIconActionContext & { type: string });
-export type WalliChatActionCallback = (action: WalliChatAction) => void | PromiseLike<void>;
+  | {
+      [Type in keyof CustomActions & string]: WalliChatIconActionContext<
+        Exclude<WalliChatMessageType, "system">,
+        CustomActions[Type]
+      > & { type: Type };
+    }[keyof CustomActions & string];
+export type WalliChatActionCallback<
+  CustomActions extends Record<string, unknown> = {},
+  BlockActions extends Record<string, unknown> = Record<string, any>,
+> = {
+  bivarianceHack(action: WalliChatAction<CustomActions, BlockActions>): void | PromiseLike<void>;
+}["bivarianceHack"];
 export type WalliChatRemoveMessages = () => void;
+export type WalliChatDeleteMessagesOptions = {
+  /** Keep the conversation's current rendered height after deleting messages. */
+  maintainHeight: true;
+};
 export type WalliChatEndReachedInfo = {
   distanceFromEnd: number;
 };

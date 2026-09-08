@@ -2,7 +2,8 @@ import { marked, type Token, type TokenizerExtension } from "marked";
 import type { BlockFrame, BlockLayout, PreparedBlock } from "./types";
 import type {
   WalliChatActionConfig,
-  WalliChatBlockAction,
+  WalliChatDeleteMessagesOptions,
+  WalliChatCustomBlockAction,
   WalliChatInsertMessagesOptions,
   WalliChatMessage,
   WalliChatRemoveMessages,
@@ -57,11 +58,12 @@ export type WalliChatScrollState = {
 export type WalliChatBlockContext = WalliChatBlockState & {
   actionConfig: WalliChatActionConfig;
   blockStates: Map<string, WalliChatMessageBlockState>;
-  action: (action: WalliChatBlockAction) => Promise<boolean>;
+  action: (action: WalliChatCustomBlockAction) => Promise<boolean>;
   getBlockState: (messageId: string, key: string) => unknown;
   getScrollState: () => WalliChatScrollState;
   requestRender: (messageId?: string) => void;
   setBlockState: (messageId: string, key: string, value: unknown) => void;
+  deleteMessages: (ids: readonly string[], options?: WalliChatDeleteMessagesOptions) => number;
   insertMessagesAtBottom: (
     messages: readonly WalliChatMessage[],
     options?: WalliChatInsertMessagesOptions,

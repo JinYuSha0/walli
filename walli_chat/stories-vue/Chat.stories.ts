@@ -1,11 +1,21 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
-import { FileSpreadsheet, ImagePlus, Search, Sparkles, ThumbsDown, ThumbsUp, type IconNode } from "lucide";
+import {
+  FileSpreadsheet,
+  ImagePlus,
+  Search,
+  Sparkles,
+  ThumbsDown,
+  ThumbsUp,
+  type IconNode,
+} from "lucide";
 import { defineComponent, h, nextTick, onMounted, ref, type PropType } from "vue";
 import { html } from "lit";
 import {
   WalliChat,
   WalliChatComposer,
   registerBlock,
+  type WalliChatAction,
+  type WalliChatEditActionData,
   type WalliChatExpose,
   type WalliChatMessage,
   type WalliChatStreamingHandle,
@@ -342,6 +352,96 @@ const ReplaceMessageDemo = component("ReplaceMessageDemo", () => {
     frame([
       button("Replace message", replace),
       panel(h(WalliChat, { ref: chat, messages, style })),
+    ]);
+});
+
+const apiDemoMessages: WalliChatMessage[] = [
+  { id: "vue-api-user-1", role: "user", markdown: "Keep this message." },
+  { id: "vue-api-assistant-1", role: "assistant", markdown: "This reply can be deleted." },
+  { id: "vue-api-user-2", role: "user", markdown: "This message can also be deleted." },
+];
+const DeleteMessagesDemo = component("DeleteMessagesDemo", () => {
+  const chat = ref<WalliChatExpose>();
+  const messages = ref<readonly WalliChatMessage[]>(apiDemoMessages);
+  const status = ref("Ready");
+  const deleteMessages = () => {
+    const deletedCount = chat.value?.deleteMessages(["vue-api-assistant-1", "vue-api-user-2"]) ?? 0;
+    status.value = `Deleted ${deletedCount} messages`;
+  };
+  const reset = () => {
+    messages.value = [...apiDemoMessages];
+    status.value = "Ready";
+  };
+  return () =>
+    frame([
+      h("div", { style: { display: "flex", alignItems: "center", gap: "8px" } }, [
+        button("Delete two messages", deleteMessages),
+        button("Reset", reset),
+        h(
+          "span",
+          {
+            "aria-live": "polite",
+            style: { color: "var(--walli-muted-foreground)", font: "500 13px sans-serif" },
+          },
+          status.value,
+        ),
+      ]),
+      panel(h(WalliChat, { ref: chat, messages: messages.value, style })),
+    ]);
+});
+
+type EditMessageDemoAction = WalliChatAction<{}, { "edit-block": WalliChatEditActionData }>;
+
+const EditMessageDemo = component("EditMessageDemo", () => {
+  const chat = ref<WalliChatExpose>();
+  const messages: WalliChatMessage[] = [
+    { id: "vue-edit-user", role: "user", markdown: "Please explain CSS gird." },
+    { id: "vue-edit-assistant", role: "assistant", markdown: "CSS Grid is a layout system." },
+  ];
+  const handleAction = async (action: EditMessageDemoAction) => {
+    switch (action.type) {
+      case "edit":
+        action.edit(action.messageId);
+        break;
+      case "block":
+        if (action.name !== "edit-block" || action.data.action === "cancel") break;
+        action.deleteMessages(
+          action.data.messages.slice(action.data.messageIndex).map((message) => message.id),
+          { maintainHeight: true },
+        );
+        await action.submit(action.markdown);
+        break;
+    }
+  };
+  return () =>
+    h("div", { style: { height: "640px" } }, [
+      h(
+        WalliChat,
+        {
+          ref: chat,
+          actionConfig: { user: { edit: { visible: true, sort: 2 } } },
+          messages,
+          onAction: handleAction,
+          style,
+        },
+        {
+          default: () =>
+            h(WalliChatComposer, {
+              slot: "composer",
+              value: "",
+              onSubmit: async (markdown: string) => {
+                chat.value?.insertMessagesAtBottom([
+                  { id: crypto.randomUUID(), role: "user", markdown },
+                  {
+                    id: crypto.randomUUID(),
+                    role: "assistant",
+                    markdown: "Updated response.",
+                  },
+                ]);
+              },
+            }),
+        },
+      ),
     ]);
 });
 
@@ -811,6 +911,80 @@ function replace() {
   <WalliChat ref="chat" :messages="messages" style="height: 640px" />
 </template>`;
 
+const deleteMessagesCode = `<script setup lang="ts">
+import { ref } from "vue";
+import { WalliChat, type WalliChatExpose, type WalliChatMessage } from "@wallilabs/chat/vue";
+
+const chat = ref<WalliChatExpose>();
+const initialMessages: WalliChatMessage[] = [
+  { id: "user-1", role: "user", markdown: "Keep this message." },
+  { id: "assistant-1", role: "assistant", markdown: "This reply can be deleted." },
+  { id: "user-2", role: "user", markdown: "This message can also be deleted." },
+];
+const messages = ref<readonly WalliChatMessage[]>(initialMessages);
+
+function reset() {
+  messages.value = [...initialMessages];
+}
+</script>
+
+<template>
+  <button @click="chat?.deleteMessages(['assistant-1', 'user-2'])">
+    Delete two messages
+  </button>
+  <button @click="reset">Reset</button>
+  <WalliChat ref="chat" :messages="messages" style="height: 560px" />
+</template>`;
+
+const editMessageCode = `<script setup lang="ts">
+import { ref } from "vue";
+import {
+  WalliChat,
+  WalliChatComposer,
+  type WalliChatAction,
+  type WalliChatEditActionData,
+  type WalliChatExpose,
+} from "@wallilabs/chat/vue";
+
+type EditAction = WalliChatAction<{}, { "edit-block": WalliChatEditActionData }>;
+const chat = ref<WalliChatExpose>();
+
+async function handleAction(action: EditAction) {
+  switch (action.type) {
+    case "edit":
+      action.edit(action.messageId);
+      break;
+    case "block":
+      if (action.name !== "edit-block" || action.data.action === "cancel") break;
+      action.deleteMessages(
+        action.data.messages.slice(action.data.messageIndex).map((message) => message.id),
+        { maintainHeight: true },
+      );
+      await action.submit(action.markdown);
+      break;
+  }
+}
+
+async function submit(markdown: string) {
+  chat.value?.insertMessagesAtBottom([
+    { id: crypto.randomUUID(), role: "user", markdown },
+  ]);
+  // Start the new assistant response here.
+}
+</script>
+
+<template>
+  <WalliChat
+    ref="chat"
+    :action-config="{ user: { edit: { visible: true, sort: 2 } } }"
+    :messages="messages"
+    :on-action="handleAction"
+    style="height: 640px"
+  >
+    <WalliChatComposer slot="composer" value="" :on-submit="submit" />
+  </WalliChat>
+</template>`;
+
 function paginationCode(loadAtTop: boolean) {
   const method = loadAtTop ? "insertMessagesAtTop" : "insertMessagesAtBottom";
   return `<script setup lang="ts">
@@ -885,8 +1059,9 @@ export const Actions: Story = {
                 <summary
                   style="box-sizing:border-box;display:flex;width:32px;height:32px;cursor:pointer;list-style:none;align-items:center;justify-content:center;border-radius:8px"
                   title="Enhance"
-                  >✨</summary
                 >
+                  ✨
+                </summary>
                 <div
                   style="position:absolute;z-index:10;bottom:calc(100% + 8px);left:50%;width:180px;transform:translateX(-50%);border:1px solid #e5e7eb;border-radius:12px;background:white;color:#111827;padding:12px;box-shadow:0 12px 32px rgb(0 0 0 / 18%);"
                 >
@@ -1060,6 +1235,14 @@ export const InsertMessages: Story = {
 export const ReplaceMessage: Story = {
   render: render(ReplaceMessageDemo),
   parameters: source(replaceMessageCode),
+};
+export const DeleteMessages: Story = {
+  render: render(DeleteMessagesDemo),
+  parameters: source(deleteMessagesCode),
+};
+export const EditMessage: Story = {
+  render: render(EditMessageDemo),
+  parameters: source(editMessageCode),
 };
 export const LoadOlderAtTop: Story = {
   render: () => ({ components: { PaginationDemo }, template: `<PaginationDemo load-at-top />` }),

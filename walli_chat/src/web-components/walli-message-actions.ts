@@ -59,10 +59,10 @@ export class WalliMessageActionsElement extends LitElement {
     return html`<walli-action-button
       .action=${{
         icon,
-        kind: item.kind,
         label: item.label,
         onAction: () => this.emit(item),
         text: item.type === "copy" ? this.context.markdown : undefined,
+        type: item.type,
       }}
     ></walli-action-button>`;
   }

@@ -11,6 +11,7 @@ import {
 } from "react";
 import type {
   WalliChatAction,
+  WalliChatActionApi,
   WalliChatActionComponent,
   WalliChatActionComponentContext,
   WalliChatActionCallback,
@@ -54,6 +55,9 @@ import type {
   WalliChatComposerUploadResult,
   WalliChatComposerValueCallback,
   WalliChatInsertMessagesOptions,
+  WalliChatDeleteMessages,
+  WalliChatDeleteMessagesOptions,
+  WalliChatEditConfig,
   WalliChatMessagePatch,
   WalliChatRemoveMessages,
   WalliChatScrollTarget,
@@ -195,6 +199,7 @@ export type WalliChatProps = {
   className?: string;
   defaultScrollToBottom?: boolean;
   defaultScrollToIndex?: number;
+  editConfig?: WalliChatEditConfig;
   emptyContent?: ReactNode;
   loading?: boolean;
   messages: readonly WalliChatMessage[];
@@ -208,6 +213,7 @@ export type WalliChatProps = {
 
 export type WalliChatRef = {
   readonly element: WalliChatElement | null;
+  deleteMessages: (ids: readonly string[], options?: WalliChatDeleteMessagesOptions) => number;
   insertMessagesAtTop: (
     messages: readonly WalliChatMessage[],
     options?: WalliChatInsertMessagesOptions,
@@ -241,6 +247,7 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
     className,
     defaultScrollToBottom = true,
     defaultScrollToIndex,
+    editConfig,
     emptyContent,
     loading = false,
     messages,
@@ -259,11 +266,19 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
     if (elementRef.current) {
       elementRef.current.defaultScrollToBottom = defaultScrollToBottom;
       elementRef.current.defaultScrollToIndex = defaultScrollToIndex;
+      elementRef.current.editConfig = editConfig ?? {};
       elementRef.current.messages = messages;
       elementRef.current.timeFormatter = timeFormatter;
       elementRef.current.intervalSeconds = intervalSeconds;
     }
-  }, [defaultScrollToBottom, defaultScrollToIndex, intervalSeconds, messages, timeFormatter]);
+  }, [
+    defaultScrollToBottom,
+    defaultScrollToIndex,
+    editConfig,
+    intervalSeconds,
+    messages,
+    timeFormatter,
+  ]);
 
   useEffect(() => {
     if (elementRef.current) {
@@ -291,6 +306,9 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
     () => ({
       get element() {
         return elementRef.current;
+      },
+      deleteMessages(ids, options) {
+        return elementRef.current?.deleteMessages(ids, options) ?? 0;
       },
       insertMessagesAtTop(nextMessages, options) {
         return elementRef.current?.insertMessagesAtTop(nextMessages, options) ?? (() => undefined);
@@ -335,6 +353,7 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
 
 export type {
   WalliChatAction,
+  WalliChatActionApi,
   WalliChatActionComponent,
   WalliChatActionComponentContext,
   WalliChatActionCallback,
@@ -367,6 +386,9 @@ export type {
   WalliChatEndReachedCallback,
   WalliChatEndReachedInfo,
   WalliChatMessage,
+  WalliChatDeleteMessages,
+  WalliChatDeleteMessagesOptions,
+  WalliChatEditConfig,
   WalliChatInsertMessagesOptions,
   WalliChatMessagePatch,
   WalliChatRemoveMessages,

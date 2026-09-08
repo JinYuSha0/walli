@@ -1,12 +1,22 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { FileSpreadsheet, ImagePlus, Search, Sparkles, ThumbsDown, ThumbsUp, type IconNode } from "lucide";
+import {
+  FileSpreadsheet,
+  ImagePlus,
+  Search,
+  Sparkles,
+  ThumbsDown,
+  ThumbsUp,
+  type IconNode,
+} from "lucide";
 import { html } from "lit";
 import {
   WalliChat,
   WalliChatComposer,
   registerBlock,
   type WalliChatProps,
+  type WalliChatAction,
+  type WalliChatEditActionData,
   type WalliChatMessage,
   type WalliChatRef,
   type WalliChatStreamingHandle,
@@ -133,8 +143,9 @@ export const Actions: Story = {
                   <summary
                     style="box-sizing:border-box;display:flex;width:32px;height:32px;cursor:pointer;list-style:none;align-items:center;justify-content:center;border-radius:8px"
                     title="Enhance"
-                    >✨</summary
                   >
+                    ✨
+                  </summary>
                   <div
                     style="position:absolute;z-index:10;bottom:calc(100% + 8px);left:50%;width:180px;transform:translateX(-50%);border:1px solid #e5e7eb;border-radius:12px;background:white;color:#111827;padding:12px;box-shadow:0 12px 32px rgb(0 0 0 / 18%);"
                   >
@@ -224,6 +235,14 @@ export const InsertMessages: Story = {
 export const ReplaceMessage: Story = {
   render: () => <ReplaceMessageDemo />,
   parameters: source(exampleSources.replaceMessage),
+};
+export const DeleteMessages: Story = {
+  render: () => <DeleteMessagesDemo />,
+  parameters: source(exampleSources.deleteMessages),
+};
+export const EditMessage: Story = {
+  render: () => <EditMessageDemo />,
+  parameters: source(exampleSources.editMessage),
 };
 export const LoadOlderAtTop: Story = {
   render: () => <PaginationDemo loadAtTop />,
@@ -476,6 +495,109 @@ function ReplaceMessageDemo() {
         />
       </ChatPanel>
     </DemoFrame>
+  );
+}
+
+const apiDemoMessages: WalliChatMessage[] = [
+  { id: "react-api-user-1", role: "user", markdown: "Keep this message." },
+  {
+    id: "react-api-assistant-1",
+    role: "assistant",
+    markdown: "This reply can be deleted.",
+  },
+  { id: "react-api-user-2", role: "user", markdown: "This message can also be deleted." },
+];
+
+function DeleteMessagesDemo() {
+  const chat = useRef<WalliChatRef>(null);
+  const [messages, setMessages] = useState<readonly WalliChatMessage[]>(apiDemoMessages);
+  const [status, setStatus] = useState("Ready");
+  const deleteMessages = () => {
+    const deletedCount =
+      chat.current?.deleteMessages(["react-api-assistant-1", "react-api-user-2"]) ?? 0;
+    setStatus(`Deleted ${deletedCount} messages`);
+  };
+  const reset = () => {
+    setMessages([...apiDemoMessages]);
+    setStatus("Ready");
+  };
+
+  return (
+    <DemoFrame>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button type="button" style={buttonStyle} onClick={deleteMessages}>
+          Delete two messages
+        </button>
+        <button type="button" style={buttonStyle} onClick={reset}>
+          Reset
+        </button>
+        <span
+          aria-live="polite"
+          style={{ color: "var(--walli-muted-foreground)", font: "500 13px sans-serif" }}
+        >
+          {status}
+        </span>
+      </div>
+      <ChatPanel>
+        <WalliChat ref={chat} messages={messages} style={chatStyle} />
+      </ChatPanel>
+    </DemoFrame>
+  );
+}
+
+type EditMessageDemoAction = WalliChatAction<{}, { "edit-block": WalliChatEditActionData }>;
+
+function EditMessageDemo() {
+  const chat = useRef<WalliChatRef>(null);
+  const messages: WalliChatMessage[] = [
+    { id: "react-edit-user", role: "user", markdown: "Please explain CSS gird." },
+    {
+      id: "react-edit-assistant",
+      role: "assistant",
+      markdown: "CSS Grid is a layout system.",
+    },
+  ];
+  const handleAction = async (action: EditMessageDemoAction) => {
+    switch (action.type) {
+      case "edit":
+        action.edit(action.messageId);
+        break;
+      case "block":
+        if (action.name !== "edit-block" || action.data.action === "cancel") break;
+        action.deleteMessages(
+          action.data.messages.slice(action.data.messageIndex).map((message) => message.id),
+          { maintainHeight: true },
+        );
+        await action.submit(action.markdown);
+        break;
+    }
+  };
+
+  return (
+    <div style={{ height: 640 }}>
+      <WalliChat
+        ref={chat}
+        actionConfig={{ user: { edit: { visible: true, sort: 2 } } }}
+        messages={messages}
+        onAction={handleAction}
+        style={chatStyle}
+      >
+        <WalliChatComposer
+          slot="composer"
+          value=""
+          onSubmit={async (markdown) => {
+            chat.current?.insertMessagesAtBottom([
+              { id: crypto.randomUUID(), role: "user", markdown },
+              {
+                id: crypto.randomUUID(),
+                role: "assistant",
+                markdown: "Updated response.",
+              },
+            ]);
+          }}
+        />
+      </WalliChat>
+    </div>
   );
 }
 

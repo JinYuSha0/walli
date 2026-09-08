@@ -21,6 +21,84 @@ export function Example() {
 }
 
 export const exampleSources = {
+  deleteMessages: `import { useRef, useState } from "react";
+import {
+  WalliChat,
+  type WalliChatMessage,
+  type WalliChatRef,
+} from "@wallilabs/chat/react";
+
+const initialMessages: WalliChatMessage[] = [
+  { id: "user-1", role: "user", markdown: "Keep this message." },
+  { id: "assistant-1", role: "assistant", markdown: "This reply can be deleted." },
+  { id: "user-2", role: "user", markdown: "This message can also be deleted." },
+];
+
+export function Example() {
+  const chat = useRef<WalliChatRef>(null);
+  const [messages, setMessages] = useState(initialMessages);
+
+  return (
+    <>
+      <button onClick={() => chat.current?.deleteMessages(["assistant-1", "user-2"])}>
+        Delete two messages
+      </button>
+      <button onClick={() => setMessages([...initialMessages])}>Reset</button>
+      <WalliChat ref={chat} messages={messages} style={{ height: 560 }} />
+    </>
+  );
+}`,
+  editMessage: `import { useRef } from "react";
+import {
+  WalliChat,
+  WalliChatComposer,
+  type WalliChatAction,
+  type WalliChatEditActionData,
+  type WalliChatRef,
+} from "@wallilabs/chat/react";
+
+type EditAction = WalliChatAction<{}, { "edit-block": WalliChatEditActionData }>;
+
+export function Example() {
+  const chat = useRef<WalliChatRef>(null);
+
+  async function handleAction(action: EditAction) {
+    switch (action.type) {
+      case "edit":
+        action.edit(action.messageId);
+        break;
+      case "block":
+        if (action.name !== "edit-block" || action.data.action === "cancel") break;
+        action.deleteMessages(
+          action.data.messages.slice(action.data.messageIndex).map((message) => message.id),
+          { maintainHeight: true },
+        );
+        await action.submit(action.markdown);
+        break;
+    }
+  }
+
+  return (
+    <WalliChat
+      ref={chat}
+      actionConfig={{ user: { edit: { visible: true, sort: 2 } } }}
+      messages={messages}
+      onAction={handleAction}
+      style={{ height: 640 }}
+    >
+      <WalliChatComposer
+        slot="composer"
+        value=""
+        onSubmit={async (markdown) => {
+          chat.current?.insertMessagesAtBottom([
+            { id: crypto.randomUUID(), role: "user", markdown },
+          ]);
+          // Start the new assistant response here.
+        }}
+      />
+    </WalliChat>
+  );
+}`,
   actions: `import { Sparkles, ThumbsDown, ThumbsUp, type IconNode } from "lucide";
 import { html } from "lit";
 function fillIcon(icon: IconNode): IconNode {

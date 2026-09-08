@@ -3,6 +3,7 @@ export {
   assetsGroupBlockDefinition,
   codeBlockDefinition,
   customBlockDefinition,
+  editBlockDefinition,
   imageBlockDefinition,
   inlineBlockDefinition,
   ruleBlockDefinition,

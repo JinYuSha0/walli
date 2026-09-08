@@ -22,18 +22,30 @@ import {
   type WalliChatScrollState,
 } from "../core/block-registry";
 import { StreamingMarkdownParser } from "../core/md-parse";
+import {
+  createEditBlockMarkdown,
+  editBlockCancelActionName,
+  editBlockName,
+  editBlockStateKey,
+  editBlockSubmitActionName,
+  type WalliChatEditBlockAction,
+} from "../core/blocks/edit-block";
 import { parseEventData, ServerSentEventParser, type ServerSentEvent } from "../core/sse-parser";
 import { getCommonStyle } from "../core/styles";
-import { timeScheduler } from "../core/helper";
+import { timeScheduler, unescapeMarkdownText } from "../core/helper";
 import type {
   WalliChatMessage,
+  WalliChatDeleteMessagesOptions,
+  WalliChatEditConfig,
+  WalliChatEditActionData,
   WalliChatEndReachedCallback,
   WalliChatInsertMessagesOptions,
-  WalliChatBlockAction,
+  WalliChatCustomBlockAction,
   WalliChatMessagePatch,
   WalliChatAction,
   WalliChatActionConfig,
   WalliChatActionCallback,
+  WalliChatActionApi,
   WalliChatRemoveMessages,
   WalliChatScrollToIndexOptions,
   WalliChatScrollToOptions,
@@ -56,6 +68,13 @@ type Size = {
 type ScrollAnchor = {
   id: string;
   top: number;
+};
+
+type EditMessageBlockState = {
+  message: WalliChatMessage;
+  messageIndex: number;
+  messages: readonly WalliChatMessage[];
+  value: string;
 };
 
 type PendingScrollRequest = {
@@ -88,8 +107,18 @@ function createErrorBlockMarkdown(text: string): string {
 export class WalliChatElement extends LitElement {
   @property({ attribute: false }) accessor emptyContent: unknown;
   @property({ type: Boolean, reflect: true }) accessor loading = false;
-  @property({ attribute: false }) accessor onAction: WalliChatActionCallback | undefined;
+  private actionCallback: ((...args: any[]) => any) | undefined;
+  @property({ attribute: false })
+  get onAction(): WalliChatActionCallback | undefined {
+    return this.actionCallback;
+  }
+  set onAction(callback: ((action: never) => void | PromiseLike<void>) | undefined) {
+    const previous = this.actionCallback;
+    this.actionCallback = callback;
+    this.requestUpdate("onAction", previous);
+  }
   @property({ attribute: false }) accessor actionConfig: WalliChatActionConfig = {};
+  @property({ attribute: false }) accessor editConfig: WalliChatEditConfig = {};
   @property({ attribute: false }) accessor onEndReached: WalliChatEndReachedCallback | undefined;
   @property({ attribute: false }) accessor onEndReachedThreshold = 0;
   @property({ attribute: "interval-seconds", type: Number }) accessor intervalSeconds = 0;
@@ -220,6 +249,14 @@ export class WalliChatElement extends LitElement {
   accessor defaultScrollToIndex: number | undefined;
 
   scrollToIndex(options: WalliChatScrollToIndexOptions): void {
+    if (!Number.isInteger(options.index)) {
+      throw new RangeError(`WalliChat scroll index must be an integer; received ${options.index}.`);
+    }
+    if (options.index < 0 || options.index >= this._messages.length) {
+      throw new RangeError(
+        `WalliChat scroll index ${options.index} is out of bounds for ${this._messages.length} messages.`,
+      );
+    }
     this.pendingScrollRequest = {
       animated: options.animated ?? false,
       index: options.index,
@@ -318,6 +355,73 @@ export class WalliChatElement extends LitElement {
     this.requestUpdate("messages", previousMessages);
     this.invalidateFrame({ keepMountedRows: true });
     return true;
+  }
+
+  deleteMessages(ids: readonly string[], options?: WalliChatDeleteMessagesOptions): number {
+    if (ids.length === 0) return 0;
+    const idSet = new Set(ids);
+    const deletedIndexes: number[] = [];
+    for (let index = 0; index < this._messages.length; index++) {
+      if (idSet.has(this._messages[index]!.id)) deletedIndexes.push(index);
+    }
+    if (deletedIndexes.length === 0) return 0;
+
+    const deletedIndexSet = new Set(deletedIndexes);
+    const viewportHeight = this.viewportElement?.clientHeight ?? this.containerSize.height;
+    const previousFrame = viewportHeight > 0 ? this.prepareFrameForScroll() : null;
+    const previousScrollTop = this.viewportElement?.scrollTop ?? this.viewportScrollTop;
+    const previousMessages = this._messages;
+    const nextMessages = previousMessages.filter((_, index) => !deletedIndexSet.has(index));
+    const anchor =
+      !options?.maintainHeight && previousFrame
+        ? this.captureScrollAnchor(
+            previousFrame,
+            previousScrollTop,
+            viewportHeight,
+            new Set(nextMessages.map((message) => message.id)),
+          )
+        : null;
+
+    this._messages = nextMessages;
+    this.preparedMessages = this.preparedMessages.filter((_, index) => !deletedIndexSet.has(index));
+    for (const groups of [this.topInsertedMessageGroups, this.bottomInsertedMessageGroups]) {
+      for (const group of groups) {
+        const remaining = group.filter((message) => !idSet.has(message.id));
+        group.splice(0, group.length, ...remaining);
+      }
+    }
+    this.pruneMessageState(nextMessages);
+    for (const id of idSet) {
+      this.messageLayoutCache.delete(id);
+    }
+    this.requestUpdate("messages", previousMessages);
+    this.invalidateFrame({ keepMountedRows: true });
+
+    let nextFrame = previousFrame
+      ? this.buildConversationFrame(
+          previousFrame.chatWidth,
+          previousFrame.topOcclusionHeight,
+          previousFrame.bottomOcclusionHeight,
+        )
+      : null;
+    if (options?.maintainHeight && previousFrame && nextFrame) {
+      const paddingMessage =
+        this.getStreamingBottomPaddingMessage() ?? this.preparedMessages.at(-1);
+      const removedHeight = Math.max(0, previousFrame.totalHeight - nextFrame.totalHeight);
+      if (paddingMessage && removedHeight > 0) {
+        const paddingMessageHeight =
+          nextFrame.messages.find((message) => message.prepared === paddingMessage)?.frame
+            .totalHeight ?? 0;
+        paddingMessage.bottomPaddingHeight =
+          (paddingMessage.bottomPaddingHeight ?? paddingMessageHeight) + removedHeight;
+        this.invalidateFrame({ keepMountedRows: true });
+        nextFrame = this.prepareFrameForScroll();
+      }
+    } else if (previousFrame && nextFrame) {
+      this.frame = nextFrame;
+      this.maintainScrollAnchor(anchor, previousFrame.totalHeight, nextFrame, viewportHeight);
+    }
+    return deletedIndexes.length;
   }
 
   private isSameMessage(left: WalliChatMessage | undefined, right: WalliChatMessage | undefined) {
@@ -777,10 +881,45 @@ export class WalliChatElement extends LitElement {
     }
   }
 
+  private createActionApi(): WalliChatActionApi {
+    return {
+      deleteMessages: (ids, options) => this.deleteMessages(ids, options),
+      edit: (messageId) => this.startEditingMessage(messageId),
+      getScrollState: () => this.getScrollState(),
+      insertMessagesAtBottom: (messages, options) => this.insertMessagesAtBottom(messages, options),
+      insertMessagesAtTop: (messages, options) => this.insertMessagesAtTop(messages, options),
+      scrollTo: (options) => this.scrollTo(options),
+      scrollToIndex: (options) => this.scrollToIndex(options),
+      submit: (text) => this.submitMessage(text),
+    };
+  }
+
   private handleMessageAction(
     event: CustomEvent<Exclude<WalliChatAction, { type: "block" }>>,
   ): void {
-    this.onAction?.(event.detail);
+    this.onAction?.({ ...event.detail, ...this.createActionApi() });
+  }
+
+  private startEditingMessage(messageId: string): boolean {
+    if (this.getBlockState<EditMessageBlockState>(messageId, editBlockStateKey) !== undefined)
+      return false;
+    const messageIndex = this._messages.findIndex((item) => item.id === messageId);
+    if (messageIndex < 0) return false;
+    const message = this._messages[messageIndex]!;
+    if (message.role !== "user") return false;
+    const value = unescapeMarkdownText(message.markdown);
+    this.setBlockState(messageId, editBlockStateKey, {
+      message,
+      messageIndex,
+      messages: this._messages,
+      value,
+    } satisfies EditMessageBlockState);
+    this.replaceMessage(messageId, {
+      markdown: createEditBlockMarkdown(value, this.editConfig),
+      role: "assistant",
+      showActions: false,
+    });
+    return true;
   }
 
   private handleComposerSlotChange(event: Event): void {
@@ -915,6 +1054,7 @@ export class WalliChatElement extends LitElement {
         this.invalidateFrame({ keepMountedRows: true });
       },
       setBlockState: (messageId, key, value) => this.setBlockState(messageId, key, value),
+      deleteMessages: (ids, options) => this.deleteMessages(ids, options),
       insertMessagesAtBottom: (messages, options) => this.insertMessagesAtBottom(messages, options),
       insertMessagesAtTop: (messages, options) => this.insertMessagesAtTop(messages, options),
       scrollTo: (options) => this.scrollTo(options),
@@ -923,13 +1063,17 @@ export class WalliChatElement extends LitElement {
     };
   }
 
-  private getBlockState(messageId: string, key: string): unknown {
-    return this.blockStates.get(messageId)?.values.get(key);
+  private getBlockState<Value = unknown>(messageId: string, key: string): Value | undefined {
+    return this.blockStates.get(messageId)?.values.get(key) as Value | undefined;
   }
 
   private setBlockState(messageId: string, key: string, value: unknown): void {
     this.messageLayoutCache.delete(messageId);
     getOrCreateMessageBlockState(this.blockStates, messageId).values.set(key, value);
+  }
+
+  private deleteBlockState(messageId: string, key: string): void {
+    this.blockStates.get(messageId)?.values.delete(key);
   }
 
   private pruneMessageState(messages: readonly WalliChatMessage[]): void {
@@ -939,14 +1083,18 @@ export class WalliChatElement extends LitElement {
     }
   }
 
-  private readonly handleBlockAction = async (action: WalliChatBlockAction): Promise<boolean> => {
-    if (this.onAction === undefined) return false;
-    if (action.markdown === undefined || action.messageType === undefined) return false;
+  private async emitBlockAction<Name extends string, Data>(
+    action: { data: Data; messageId: string; name: Name },
+    markdown: string,
+    messageType: WalliChatMessage["role"],
+  ): Promise<boolean> {
+    if (!this.onAction) return false;
     await this.onAction({
+      ...this.createActionApi(),
       ...action,
-      markdown: action.markdown,
-      messageType: action.messageType,
       getBlockState: (key) => this.getBlockState(action.messageId, key),
+      markdown,
+      messageType,
       setBlockState: (key, value) => {
         this.setBlockState(action.messageId, key, value);
         this.invalidateFrame({ keepMountedRows: true });
@@ -954,6 +1102,70 @@ export class WalliChatElement extends LitElement {
       type: "block",
     });
     return true;
+  }
+
+  private readonly handleBlockAction = async (
+    action: WalliChatEditBlockAction | WalliChatCustomBlockAction,
+  ): Promise<boolean> => {
+    const editState = this.getBlockState<EditMessageBlockState>(
+      action.messageId,
+      editBlockStateKey,
+    );
+
+    if (editState) {
+      switch (action.name) {
+        case editBlockCancelActionName:
+          this.deleteBlockState(action.messageId, editBlockStateKey);
+          this.replaceMessage(action.messageId, {
+            ...editState.message,
+            showActions: editState.message.showActions ?? true,
+          });
+          await this.emitBlockAction(
+            {
+              data: {
+                action: "cancel",
+                messageIndex: editState.messageIndex,
+                messages: editState.messages,
+                originalMarkdown: editState.message.markdown,
+              } satisfies WalliChatEditActionData,
+              messageId: action.messageId,
+              name: editBlockName,
+            },
+            editState.message.markdown,
+            "user",
+          );
+          return true;
+        case editBlockSubmitActionName: {
+          const markdown = editState.value.trim();
+          if (!markdown) return false;
+          this.deleteBlockState(action.messageId, editBlockStateKey);
+          this.replaceMessage(action.messageId, {
+            ...editState.message,
+            createdAt: Date.now(),
+            markdown,
+            showActions: editState.message.showActions ?? true,
+          });
+          await this.emitBlockAction(
+            {
+              data: {
+                action: "submit",
+                messageIndex: editState.messageIndex,
+                messages: editState.messages,
+                originalMarkdown: editState.message.markdown,
+              } satisfies WalliChatEditActionData,
+              messageId: action.messageId,
+              name: editBlockName,
+            },
+            markdown,
+            "user",
+          );
+          return true;
+        }
+      }
+    }
+
+    if (action.markdown === undefined || action.messageType === undefined) return false;
+    return this.emitBlockAction(action, action.markdown, action.messageType);
   };
 
   private async submitMessage(text: string): Promise<boolean> {
@@ -961,7 +1173,8 @@ export class WalliChatElement extends LitElement {
       .assignedElements({ flatten: true })
       .find((element) => element.localName === "walli-chat-composer") as
       WalliChatComposerElement | undefined;
-    return composer?.submitMessage(text) ?? false;
+    if (!composer) throw new Error("WalliChat action.submit requires a composer.");
+    return composer.submitMessage(text);
   }
 
   private handleScrollInteractionStart(): void {

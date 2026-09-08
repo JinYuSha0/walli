@@ -2,16 +2,25 @@ import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import type { UIMessageChunk } from "ai";
 import { html } from "lit";
 import { ref } from "lit/directives/ref.js";
-import { FileSpreadsheet, ImagePlus, Search, Sparkles, ThumbsDown, ThumbsUp, type IconNode } from "lucide";
+import {
+  FileSpreadsheet,
+  ImagePlus,
+  Search,
+  Sparkles,
+  ThumbsDown,
+  ThumbsUp,
+  type IconNode,
+} from "lucide";
 import { expect, userEvent, waitFor } from "storybook/test";
 import type {
   WalliChatComposerTranscriptionContext,
   WalliChatAction,
+  WalliChatEditActionData,
   WalliChatMessage,
   WalliChatStreamingHandle,
 } from "../src/types";
-import type { WalliChatElement } from "../src/web-components/walli-chat";
-import type { WalliChatComposerElement } from "../src/web-components/walli-chat-composer";
+import { WalliChatElement } from "../src/web-components/walli-chat";
+import { WalliChatComposerElement } from "../src/web-components/walli-chat-composer";
 import { noticeBlockDefinition } from "../demo/blocks/notice-block";
 import { registerBlock } from "../src/core/block-registry";
 import { toolCallBlockDefinition } from "../src/core/blocks";
@@ -478,7 +487,7 @@ const meta: Meta<Args> = {
         type: {
           summary: "WalliChatActionConfig",
           detail:
-            "ActionItem = boolean | { visible: boolean; sort?: number }\nCustomAction = { type: string; icon?: IconNode; component?: (context) => unknown; label?: string; visible: boolean; sort?: number }\nAssistant = { copy?: ActionItem; feedback?: ActionItem; share?: ActionItem; [name: string]: ActionItem | CustomAction | undefined }\nUser = { copy?: ActionItem; edit?: ActionItem; [name: string]: ActionItem | CustomAction | undefined }",
+            "ActionItem = boolean | { visible: boolean; sort?: number }\nCustomAction = { icon?: IconNode; component?: (context) => unknown; label?: string; visible: boolean; sort?: number }\nAssistant = { copy?: ActionItem; feedback?: ActionItem; share?: ActionItem; [type: string]: ActionItem | CustomAction | undefined }\nUser = { copy?: ActionItem; edit?: ActionItem; [type: string]: ActionItem | CustomAction | undefined }",
         },
       },
     },
@@ -943,7 +952,6 @@ export const Conversation: Story = {
   },
 };
 
-
 function fillIcon(icon: IconNode): IconNode {
   return icon.map(([tag, attributes]) => [tag, { ...attributes, fill: "currentColor" }]);
 }
@@ -961,8 +969,9 @@ export const Actions: Story = {
               <summary
                 style="box-sizing:border-box;display:flex;width:32px;height:32px;cursor:pointer;list-style:none;align-items:center;justify-content:center;border-radius:8px"
                 title="Enhance"
-                >✨</summary
               >
+                ✨
+              </summary>
               <div
                 style="position:absolute;z-index:10;bottom:calc(100% + 8px);left:50%;width:180px;transform:translateX(-50%);border:1px solid #e5e7eb;border-radius:12px;background:white;color:#111827;padding:12px;box-shadow:0 12px 32px rgb(0 0 0 / 18%);"
               >
@@ -976,7 +985,6 @@ export const Actions: Story = {
           `,
           label: "Enhance",
           sort: 4,
-          type: "enhance",
           visible: true,
         },
       },
@@ -987,9 +995,9 @@ export const Actions: Story = {
     },
     messages: actionMessages,
     onAction: (action: WalliChatAction) => {
-      if (action.type === "feedback" && "feedback" in action) {
-        action.setIcon(fillIcon(action.feedback === "like" ? ThumbsUp : ThumbsDown));
-        action.setIcon(undefined, action.feedback === "like" ? "dislike" : "like");
+      if (action.type === "like" || action.type === "dislike") {
+        action.setIcon(fillIcon(action.type === "like" ? ThumbsUp : ThumbsDown));
+        action.setIcon(undefined, action.type === "like" ? "dislike" : "like");
       }
       console.info("Action", action);
     },
@@ -1046,7 +1054,6 @@ chat.actionConfig = {
         \`,
       label: "Enhance",
       sort: 4,
-      type: "enhance",
       visible: true,
     },
   },
@@ -1056,9 +1063,9 @@ chat.actionConfig = {
   },
 };
 chat.onAction = (action: WalliChatAction) => {
-  if (action.type === "feedback" && "feedback" in action) {
-    action.setIcon(fillIcon(action.feedback === "like" ? ThumbsUp : ThumbsDown));
-    const other = action.feedback === "like" ? "dislike" : "like";
+  if (action.type === "like" || action.type === "dislike") {
+    action.setIcon(fillIcon(action.type === "like" ? ThumbsUp : ThumbsDown));
+    const other = action.type === "like" ? "dislike" : "like";
     action.setIcon(undefined, other);
   }
 };`,
@@ -1114,13 +1121,15 @@ export const TimeMessages: Story = {
       receivedAction = action;
     };
     await userEvent.click(link!);
-    await expect(receivedAction).toEqual({
+    await expect(receivedAction).toMatchObject({
       type: "block",
       data: { href: "#details", text: "Custom time" },
+      deleteMessages: expect.any(Function),
       messageId: expect.stringContaining("system-time:"),
       messageType: "system",
       markdown: "[Custom time](#details) **Bold** ~~Deleted~~",
       name: "system-message-link",
+      submit: expect.any(Function),
     });
     const inlineSpans = [...(systemMessage?.querySelectorAll("span") ?? [])];
     await expect(inlineSpans.find((span) => span.textContent === "Bold")?.classList).toContain(
@@ -1286,6 +1295,227 @@ export const ThemeToggle: Story = {
   },
 };
 
+const apiDemoMessages: WalliChatMessage[] = [
+  { id: "api-user-1", role: "user", markdown: "Keep this message." },
+  { id: "api-assistant-1", role: "assistant", markdown: "This reply can be deleted." },
+  { id: "api-user-2", role: "user", markdown: "This message can also be deleted." },
+];
+
+export const DeleteMessages: Story = {
+  render: () => {
+    let chat: WalliChatElement | undefined;
+    let result: HTMLElement | undefined;
+    const deleteMessages = () => {
+      const deletedCount = chat?.deleteMessages(["api-assistant-1", "api-user-2"]) ?? 0;
+      if (result) result.textContent = `Deleted ${deletedCount} messages`;
+    };
+    const resetMessages = () => {
+      if (chat) chat.messages = apiDemoMessages;
+      if (result) result.textContent = "Ready";
+    };
+    return html`
+      <div
+        style="box-sizing:border-box;display:flex;height:560px;width:100%;flex-direction:column;gap:12px;padding:16px;background:var(--walli-background)"
+      >
+        <div style="display:flex;align-items:center;gap:8px">
+          <button
+            type="button"
+            style="cursor:pointer;border:1px solid var(--walli-border);border-radius:999px;background:var(--walli-card);color:var(--walli-card-foreground);padding:8px 14px;font:600 13px sans-serif"
+            @click=${deleteMessages}
+          >
+            Delete two messages
+          </button>
+          <button
+            type="button"
+            style="cursor:pointer;border:1px solid var(--walli-border);border-radius:999px;background:var(--walli-card);color:var(--walli-card-foreground);padding:8px 14px;font:600 13px sans-serif"
+            @click=${resetMessages}
+          >
+            Reset
+          </button>
+          <span
+            ${ref((element) => {
+              if (element instanceof HTMLElement) result = element;
+            })}
+            aria-live="polite"
+            style="color:var(--walli-muted-foreground);font:500 13px sans-serif"
+            >Ready</span
+          >
+        </div>
+        <div style="min-height:0;flex:1;border:1px solid var(--walli-border);border-radius:16px">
+          <walli-chat
+            ${ref((element) => {
+              if (element instanceof WalliChatElement) chat = element;
+            })}
+            style="display:block;height:100%;width:100%;border-radius:inherit"
+            .messages=${apiDemoMessages}
+          ></walli-chat>
+        </div>
+      </div>
+    `;
+  },
+  play: async ({ canvasElement }) => {
+    const chat = await getRenderedChat(canvasElement);
+    await userEvent.click(canvasElement.querySelector<HTMLButtonElement>("button")!);
+    await expect(chat.messages.map(({ id }) => id)).toEqual(["api-user-1"]);
+    await expect(canvasElement.querySelector('[aria-live="polite"]')).toHaveTextContent(
+      "Deleted 2 messages",
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: "Deletes multiple messages by id, reports the number removed, and supports reset.",
+      },
+      source: {
+        language: "ts",
+        code: `<button id="delete" type="button" class="demo-button">Delete two messages</button>
+<button id="reset" type="button" class="demo-button">Reset</button>
+<walli-chat style="display:block;height:560px"></walli-chat>
+
+<style>
+  .demo-button {
+    cursor: pointer;
+    border: 1px solid var(--walli-border);
+    border-radius: 999px;
+    background: var(--walli-card);
+    color: var(--walli-card-foreground);
+    padding: 8px 14px;
+    font: 600 13px sans-serif;
+  }
+</style>
+
+<script type="module">
+import "@wallilabs/chat";
+import type { WalliChatElement, WalliChatMessage } from "@wallilabs/chat";
+
+const chat = document.querySelector<WalliChatElement>("walli-chat")!;
+const initialMessages: WalliChatMessage[] = [
+  { id: "api-user-1", role: "user", markdown: "Keep this message." },
+  { id: "api-assistant-1", role: "assistant", markdown: "This reply can be deleted." },
+  { id: "api-user-2", role: "user", markdown: "This message can also be deleted." },
+];
+chat.messages = initialMessages;
+
+document.querySelector("#delete").onclick = () => {
+  const deletedCount = chat.deleteMessages(["api-assistant-1", "api-user-2"]);
+  console.log("Deleted messages:", deletedCount);
+};
+
+document.querySelector("#reset").onclick = () => {
+  chat.messages = initialMessages;
+};
+</script>`,
+      },
+    },
+  },
+};
+
+type EditMessageDemoAction = WalliChatAction<{}, { "edit-block": WalliChatEditActionData }>;
+
+export const EditMessage: Story = {
+  render: () => {
+    let chat: WalliChatElement | undefined;
+    const messages: WalliChatMessage[] = [
+      { id: "edit-user", role: "user", markdown: "Please explain CSS gird." },
+      { id: "edit-assistant", role: "assistant", markdown: "CSS Grid is a layout system." },
+    ];
+    const handleAction = async (action: EditMessageDemoAction) => {
+      switch (action.type) {
+        case "edit":
+          action.edit(action.messageId);
+          break;
+        case "block":
+          if (action.name !== "edit-block" || action.data.action === "cancel") break;
+          action.deleteMessages(
+            action.data.messages.slice(action.data.messageIndex).map((message) => message.id),
+            { maintainHeight: true },
+          );
+          await action.submit(action.markdown);
+          break;
+      }
+    };
+    return html`
+      <div style="height:640px">
+        <walli-chat
+          ${ref((element) => {
+            if (!(element instanceof WalliChatElement)) return;
+            chat = element;
+            chat.actionConfig = { user: { edit: { sort: 2, visible: true } } };
+            chat.messages = messages;
+            chat.onAction = handleAction;
+          })}
+          style="height:100%"
+        >
+          <walli-chat-composer
+            ${ref((element) => {
+              if (!(element instanceof WalliChatComposerElement)) return;
+              element.onSubmit = (markdown) => {
+                chat?.insertMessagesAtBottom([
+                  { id: "edited-user", role: "user", markdown },
+                  { id: "edited-assistant", role: "assistant", markdown: "Updated response." },
+                ]);
+                element.value = "";
+              };
+            })}
+            slot="composer"
+          ></walli-chat-composer>
+        </walli-chat>
+      </div>
+    `;
+  },
+  parameters: {
+    docs: {
+      description: { story: "Enables editing and handles the edit block submission." },
+      source: {
+        language: "ts",
+        code: `import "@wallilabs/chat";
+import type {
+  WalliChatAction,
+  WalliChatComposerElement,
+  WalliChatEditActionData,
+  WalliChatElement,
+} from "@wallilabs/chat";
+
+type EditAction = WalliChatAction<{}, { "edit-block": WalliChatEditActionData }>;
+
+const chat = document.querySelector<WalliChatElement>("walli-chat")!;
+const composer = document.querySelector<WalliChatComposerElement>("walli-chat-composer")!;
+
+chat.messages = [
+  { id: "edit-user", role: "user", markdown: "Please explain CSS gird." },
+  { id: "edit-assistant", role: "assistant", markdown: "CSS Grid is a layout system." },
+];
+chat.actionConfig = {
+  user: { edit: { visible: true, sort: 2 } },
+};
+
+chat.onAction = async (action: EditAction) => {
+  switch (action.type) {
+    case "edit":
+      action.edit(action.messageId);
+      break;
+    case "block":
+      if (action.name !== "edit-block" || action.data.action === "cancel") break;
+      action.deleteMessages(
+        action.data.messages.slice(action.data.messageIndex).map((message) => message.id),
+        { maintainHeight: true },
+      );
+      await action.submit(action.markdown);
+      break;
+  }
+};
+
+composer.onSubmit = async (markdown) => {
+  chat.insertMessagesAtBottom([
+    { id: crypto.randomUUID(), role: "user", markdown },
+  ]);
+  // Start the new assistant response here.
+};`,
+      },
+    },
+  },
+};
+
 export const ScrollControls: Story = {
   parameters: {
     docs: {
@@ -1332,6 +1562,10 @@ export const ScrollControls: Story = {
 
     await userEvent.click(canvasElement.querySelector<HTMLButtonElement>("button:first-of-type")!);
     await waitFor(() => expect(viewport.scrollTop).toBeLessThan(2));
+
+    expect(() => chat.scrollToIndex({ index: -1 })).toThrow(RangeError);
+    expect(() => chat.scrollToIndex({ index: chat.messages.length })).toThrow(RangeError);
+    expect(() => chat.scrollToIndex({ index: 1.5 })).toThrow(RangeError);
   },
 };
 

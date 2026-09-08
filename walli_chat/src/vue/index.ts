@@ -2,6 +2,7 @@ import "../web-components";
 import { defineComponent, h, ref, watchEffect, type CSSProperties, type PropType } from "vue";
 import type {
   WalliChatAction,
+  WalliChatActionApi,
   WalliChatActionComponent,
   WalliChatActionComponentContext,
   WalliChatActionCallback,
@@ -43,6 +44,9 @@ import type {
   WalliChatComposerValueCallback,
   WalliChatEndReachedCallback,
   WalliChatEndReachedInfo,
+  WalliChatDeleteMessages,
+  WalliChatDeleteMessagesOptions,
+  WalliChatEditConfig,
   WalliChatInsertMessagesOptions,
   WalliChatMessage,
   WalliChatMessagePatch,
@@ -154,6 +158,7 @@ export const WalliChat = defineComponent({
     class: String,
     defaultScrollToBottom: { default: true, type: Boolean },
     defaultScrollToIndex: Number,
+    editConfig: Object as PropType<WalliChatEditConfig>,
     loading: { default: false, type: Boolean },
     messages: {
       default: () => [],
@@ -178,6 +183,7 @@ export const WalliChat = defineComponent({
       chat.defaultScrollToBottom = props.defaultScrollToBottom;
       chat.actionConfig = props.actionConfig ?? {};
       chat.defaultScrollToIndex = props.defaultScrollToIndex;
+      chat.editConfig = props.editConfig ?? {};
       chat.messages = props.messages;
       chat.loading = props.loading;
       chat.timeFormatter = props.timeFormatter;
@@ -195,6 +201,8 @@ export const WalliChat = defineComponent({
 
     expose({
       element,
+      deleteMessages: (ids: readonly string[], options?: WalliChatDeleteMessagesOptions) =>
+        element.value?.deleteMessages(ids, options) ?? 0,
       insertMessagesAtTop: (
         messages: readonly WalliChatMessage[],
         options?: WalliChatInsertMessagesOptions,
@@ -241,6 +249,7 @@ export type WalliChatComposerExpose = {
 
 export type WalliChatExpose = {
   readonly element: WalliChatElement | null;
+  deleteMessages: (ids: readonly string[], options?: WalliChatDeleteMessagesOptions) => number;
   insertMessagesAtTop: (
     messages: readonly WalliChatMessage[],
     options?: WalliChatInsertMessagesOptions,
@@ -261,6 +270,7 @@ export type WalliChatExpose = {
 
 export type {
   WalliChatAction,
+  WalliChatActionApi,
   WalliChatActionComponent,
   WalliChatActionComponentContext,
   WalliChatActionCallback,
@@ -294,6 +304,9 @@ export type {
   WalliChatEndReachedInfo,
   WalliChatInsertMessagesOptions,
   WalliChatMessage,
+  WalliChatDeleteMessages,
+  WalliChatDeleteMessagesOptions,
+  WalliChatEditConfig,
   WalliChatMessagePatch,
   WalliChatRemoveMessages,
   WalliChatScrollTarget,

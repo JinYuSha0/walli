@@ -4,6 +4,7 @@ import { createBlockFrameBase } from "../helper";
 import type { BlockFrameBase, CoreBlockDefinition, PreparedBlockBase } from "../types";
 import { BlockShellElement, type BlockRenderLayout } from "../block-shell";
 import type { AnyCustomBlockDefinition, WalliChatBlockContext } from "../block-registry";
+import walliChatUnoCss from "virtual:walli-chat-uno-styles";
 
 export type PreparedCustomBlock = PreparedBlockBase & {
   data: unknown;
@@ -166,8 +167,8 @@ function supportsConstructableStyleSheets(root: ShadowRoot): boolean {
 }
 
 function normalizeStyles(styles: string | readonly string[] | undefined): string {
-  if (styles === undefined) return "";
-  return typeof styles === "string" ? styles : styles.join("\n");
+  if (styles === undefined) return walliChatUnoCss;
+  return `${walliChatUnoCss}\n${typeof styles === "string" ? styles : styles.join("\n")}`;
 }
 
 @customElement("walli-custom-block")
