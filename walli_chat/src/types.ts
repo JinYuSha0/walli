@@ -146,6 +146,10 @@ export type WalliChatEndReachedCallback = (
   info: WalliChatEndReachedInfo,
 ) => void | PromiseLike<void>;
 export type WalliChatInsertMessagesOptions = {
+  /** Defer insertion until all current streams settle, including aborts and errors. */
+  waitForStreaming?: boolean;
+  /** Animate assistant messages once, when they first become visible. */
+  animation?: "slide-in" | false;
   stick?: boolean;
 };
 

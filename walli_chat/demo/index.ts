@@ -189,7 +189,7 @@ async function handleBlockAction(chat: WalliChatElement, action: DemoBlockAction
             showActions: false,
           },
         ],
-        { stick: true },
+        { waitForStreaming: true, stick: true },
       );
       break;
     }
@@ -255,14 +255,17 @@ if (composer) {
     if (!markdown) return;
 
     console.log("submit", { assets, markdown, text });
-    chat?.insertMessagesAtBottom([
-      {
-        id: `demo-user-${crypto.randomUUID()}`,
-        createdAt: Date.now(),
-        markdown,
-        role: "user",
-      },
-    ]);
+    chat?.insertMessagesAtBottom(
+      [
+        {
+          id: `demo-user-${crypto.randomUUID()}`,
+          createdAt: Date.now(),
+          markdown,
+          role: "user",
+        },
+      ],
+      { waitForStreaming: true },
+    );
     composer.value = "";
     return startDemoStreaming({ includeReasoning: true, useBottomPadding: true });
   };
@@ -382,7 +385,7 @@ prependButton.textContent = "顶部插入 3 条";
 applyButtonStyle(prependButton);
 prependButton.addEventListener("click", () => {
   const nextMessages = createTopInsertionBatch();
-  chat?.insertMessagesAtTop(nextMessages);
+  chat?.insertMessagesAtTop(nextMessages, { waitForStreaming: true });
 });
 
 const appendButton = document.createElement("button");
@@ -390,7 +393,24 @@ appendButton.textContent = "尾部插入 3 条";
 applyButtonStyle(appendButton);
 appendButton.addEventListener("click", () => {
   const nextMessages = createBottomInsertionBatch();
-  chat?.insertMessagesAtBottom(nextMessages);
+  chat?.insertMessagesAtBottom(nextMessages, { waitForStreaming: true });
+});
+
+const appendAnimatedButton = document.createElement("button");
+appendAnimatedButton.textContent = "等待流式后动画插入";
+applyButtonStyle(appendAnimatedButton);
+appendAnimatedButton.addEventListener("click", () => {
+  chat?.insertMessagesAtBottom(
+    [
+      {
+        id: `animated-assistant-${crypto.randomUUID()}`,
+        role: "assistant",
+        markdown:
+          "我收到了一条新消息，来补充一点：你可以继续当前对话，我会在这条回复中展示后续更新。",
+      },
+    ],
+    { waitForStreaming: true, animation: "slide-in" },
+  );
 });
 
 const appendWithoutActionsButton = document.createElement("button");
@@ -408,7 +428,7 @@ appendWithoutActionsButton.addEventListener("click", () => {
         showActions: false,
       },
     ],
-    { stick: true },
+    { waitForStreaming: true, stick: true },
   );
   window.setTimeout(() => removeLoadingBlock?.(), 2_000);
 });
@@ -577,6 +597,7 @@ hint.style.lineHeight = "20px";
 controlsContent.append(
   prependButton,
   appendButton,
+  appendAnimatedButton,
   appendWithoutActionsButton,
   themeButton,
   streamButton,

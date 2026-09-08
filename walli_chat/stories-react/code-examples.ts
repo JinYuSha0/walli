@@ -345,35 +345,99 @@ export function Example() {
     </>
   );
 }`,
-  insertMessages: `import { useRef } from "react";
-import { WalliChat, type WalliChatRef } from "@wallilabs/chat/react";
+  insertMessages: `import { useRef, useState } from "react";
+import {
+  WalliChat,
+  type WalliChatRef,
+  type WalliChatMessage,
+} from "@wallilabs/chat/react";
+import "@wallilabs/chat/theme.css";
 
-export function Example({ initialMessages }) {
+const initialMessages: WalliChatMessage[] = Array.from(
+  { length: 20 },
+  (_, i) => ({
+    id: "initial-" + i,
+    role: i % 2 === 0 ? "user" : "assistant",
+    markdown: "Initial message " + (i + 1),
+  }),
+);
+
+export function Example() {
   const chat = useRef<WalliChatRef>(null);
+  const [stick, setStick] = useState(false);
+  const insert = (top: boolean) => {
+    const messages: WalliChatMessage[] = [
+      {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        markdown: top ? "Older message" : "New message",
+      },
+    ];
+    if (top) chat.current?.insertMessagesAtTop(messages, { stick });
+    else chat.current?.insertMessagesAtBottom(messages, { stick });
+  };
   return (
     <>
-      <button
-        onClick={() =>
-          chat.current?.insertMessagesAtTop([
-            { id: crypto.randomUUID(), role: "assistant", markdown: "Older message" },
-          ])
-        }
-      >
-        Insert at top
-      </button>
+      <button onClick={() => insert(true)}>Insert at top</button>
+      <button onClick={() => insert(false)}>Insert at bottom</button>
+      <label>
+        <input
+          type="checkbox"
+          checked={stick}
+          onChange={(e) => setStick(e.target.checked)}
+        />{" "}
+        Stick
+      </label>
       <button
         onClick={() =>
           chat.current?.insertMessagesAtBottom(
-            [{ id: crypto.randomUUID(), role: "user", markdown: "New message" }],
-            { stick: true },
+            [
+              {
+                id: crypto.randomUUID(),
+                role: "assistant",
+                markdown:
+                  "An update has arrived. Here is some additional information for our conversation.",
+              },
+            ],
+            {
+              animation: "slide-in",
+              // Wait for active streams; otherwise insert immediately.
+              waitForStreaming: true,
+              stick: true,
+            },
           )
         }
       >
-        Insert at bottom
+        Insert with animation
       </button>
-      <WalliChat ref={chat} messages={initialMessages} style={{ height: 640 }} />
+      <WalliChat
+        ref={chat}
+        messages={initialMessages}
+        style={{ display: "block", height: 640 }}
+      />
     </>
   );
+}`,
+  responsive: `import { useState } from "react";
+import { WalliChat, type WalliChatProps, type WalliChatMessage } from "@wallilabs/chat/react";
+import "@wallilabs/chat/theme.css";
+
+const messages: WalliChatMessage[] = [
+  { id: "user", role: "user", markdown: "How does responsive layout work?" },
+  { id: "assistant", role: "assistant", markdown: "Switch breakpoints to compare message spacing and bubble widths." },
+];
+export function Example() {
+  const [responsive, setResponsive] = useState<WalliChatProps["responsive"]>("xl");
+  return <>
+    <p>The breakpoint is shared globally. Auto uses the viewport width.</p>
+    <div role="group" aria-label="Responsive breakpoint">
+      {(["auto", "base", "sm", "md", "lg", "xl", "2xl"] as const).map(value => (
+        <button key={value} aria-pressed={(responsive ?? "auto") === value}
+          onClick={() => setResponsive(value === "auto" ? undefined : value)}>{value}</button>
+      ))}
+    </div>
+    <WalliChat responsive={responsive} messages={messages} style={{ display: "block", height: 640 }} />
+  </>;
 }`,
   replaceMessage: `import { useRef } from "react";
 import { WalliChat, type WalliChatRef } from "@wallilabs/chat/react";

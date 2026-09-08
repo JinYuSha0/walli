@@ -31,6 +31,7 @@ registerBlock(noticeBlockDefinition);
 
 type Args = Pick<
   WalliChatElement,
+  | "responsive"
   | "actionConfig"
   | "bottomOcclusionHeight"
   | "defaultScrollToBottom"
@@ -471,6 +472,7 @@ const meta: Meta<Args> = {
     },
   },
   args: {
+    responsive: undefined,
     bottomOcclusionHeight: 8,
     defaultScrollToBottom: true,
     defaultScrollToIndex: undefined,
@@ -480,6 +482,17 @@ const meta: Meta<Args> = {
     intervalSeconds: 0,
   },
   argTypes: {
+    responsive: {
+      control: "select",
+      options: ["auto", "base", "sm", "md", "lg", "xl", "2xl"],
+      mapping: { auto: undefined },
+      description:
+        "Sets the shared global breakpoint. Changing this property updates the global setting and relayouts this chat. Auto uses viewport media queries; other chats use the setting on their next layout.",
+      table: {
+        defaultValue: { summary: "auto" },
+        type: { summary: '"base" | "sm" | "md" | "lg" | "xl" | "2xl" | undefined' },
+      },
+    },
     actionConfig: {
       control: "object",
       description: "Controls which assistant and user message actions are visible.",
@@ -551,6 +564,7 @@ const meta: Meta<Args> = {
     <div style="height:640px;width:100%;background:var(--walli-background)">
       <walli-chat
         style="display:block;height:100%;width:100%"
+        .responsive=${args.responsive}
         .actionConfig=${args.actionConfig ?? {}}
         .bottomOcclusionHeight=${args.bottomOcclusionHeight}
         .defaultScrollToBottom=${args.defaultScrollToBottom}
@@ -1414,30 +1428,93 @@ export const InsertMessages: Story = {
           "Inserts message batches at either edge of the conversation while preserving the current viewport.",
       },
       source: {
-        code: `<button id="prepend">Insert at top</button>
-<button id="append">Insert at bottom</button>
-<label><input id="stick" type="checkbox" /> Stick</label>
-<walli-chat></walli-chat>
+        code: `<button
+  id="prepend"
+  type="button"
+>
+  Insert at top
+</button>
+<button
+  id="append"
+  type="button"
+>
+  Insert at bottom
+</button>
+<label
+  ><input
+    id="stick"
+    type="checkbox"
+  />
+  Stick</label
+>
+<button
+  id="animated"
+  type="button"
+>
+  Insert with animation
+</button>
+<walli-chat style="display: block; height: 640px; width: 100%"></walli-chat>
 
 <script type="module">
   import "@wallilabs/chat";
+  import "@wallilabs/chat/theme.css";
 
   const chat = document.querySelector("walli-chat");
   const stick = document.querySelector("#stick");
-  chat.messages = initialMessages;
+  chat.messages = Array.from({ length: 20 }, (_, index) => ({
+    id: "initial-" + index,
+    role: index % 2 === 0 ? "user" : "assistant",
+    markdown: "Initial message " + (index + 1),
+  }));
 
   document.querySelector("#prepend").onclick = () => {
-    chat.insertMessagesAtTop([
-      { id: crypto.randomUUID(), role: "assistant", markdown: "### Older message" },
-      { id: crypto.randomUUID(), role: "user", markdown: "Loaded at the top." },
-    ], { stick: stick.checked });
+    chat.insertMessagesAtTop(
+      [
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          markdown: "### Older message",
+        },
+        {
+          id: crypto.randomUUID(),
+          role: "user",
+          markdown: "Loaded at the top.",
+        },
+      ],
+      { stick: stick.checked },
+    );
   };
 
   document.querySelector("#append").onclick = () => {
-    chat.insertMessagesAtBottom([
-      { id: crypto.randomUUID(), role: "user", markdown: "A new message." },
-      { id: crypto.randomUUID(), role: "assistant", markdown: "Inserted at the bottom." },
-    ], { stick: stick.checked });
+    chat.insertMessagesAtBottom(
+      [
+        { id: crypto.randomUUID(), role: "user", markdown: "A new message." },
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          markdown: "Inserted at the bottom.",
+        },
+      ],
+      { stick: stick.checked },
+    );
+  };
+
+  document.querySelector("#animated").onclick = () => {
+    chat.insertMessagesAtBottom(
+      [
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          markdown:
+            "An update has arrived. Here is some additional information for our conversation.",
+        },
+      ],
+      {
+        animation: "slide-in",
+        waitForStreaming: true, // If a stream is active, insert after it settles.
+        stick: true,
+      },
+    );
   };
 </script>`,
       },
@@ -1478,6 +1555,80 @@ export const InsertMessages: Story = {
         ),
       ).toBe(true),
     );
+    await assertIncomingInsertion(canvasElement);
+  },
+};
+
+export const Responsive: Story = {
+  args: { responsive: "xl", messages: conversation.slice(0, 2) },
+  render: (args) => renderResponsive(args),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Use the buttons or responsive control to select a breakpoint. This applies to all responsive style values: outer margin, message padding, user bubble padding, and bubble width ratio. The setting is global, not per instance; auto restores viewport detection.",
+      },
+      source: {
+        code: `<div id="breakpoints" role="group" aria-label="Responsive breakpoint">
+  <button type="button" data-value="auto" aria-pressed="false">auto</button>
+  <button type="button" data-value="base" aria-pressed="false">base</button>
+  <button type="button" data-value="sm" aria-pressed="false">sm</button>
+  <button type="button" data-value="md" aria-pressed="false">md</button>
+  <button type="button" data-value="lg" aria-pressed="false">lg</button>
+  <button type="button" data-value="xl" aria-pressed="true">xl</button>
+  <button type="button" data-value="2xl" aria-pressed="false">2xl</button>
+</div>
+<walli-chat responsive="xl" style="display:block;height:640px;width:100%"></walli-chat>
+
+<script type="module">
+  import "@wallilabs/chat";
+  import "@wallilabs/chat/theme.css";
+
+  const chat = document.querySelector("walli-chat");
+  chat.messages = [
+    { id: "user", role: "user", markdown: "How does responsive layout work?" },
+    { id: "assistant", role: "assistant", markdown: "Switch the breakpoint to compare message spacing and bubble widths." },
+  ];
+  const buttons = document.querySelectorAll("#breakpoints button");
+  for (const button of buttons) {
+    button.onclick = () => {
+      // This setting is shared globally by all chats.
+      if (button.dataset.value === "auto") chat.removeAttribute("responsive");
+      else chat.setAttribute("responsive", button.dataset.value);
+      for (const item of buttons) item.setAttribute("aria-pressed", String(item === button));
+    };
+  }
+</script>`,
+        language: "html",
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const chat = await getRenderedChat(canvasElement);
+    const padding = () => {
+      const row = [...chat.renderRoot.querySelectorAll("walli-message")].find(
+        (row) => row.message?.prepared.role === "assistant",
+      );
+      return row?.firstElementChild
+        ? getComputedStyle(row.firstElementChild).paddingLeft
+        : undefined;
+    };
+    try {
+      await waitFor(() => expect(padding()).toBe("22px"));
+      await userEvent.click(
+        canvasElement.querySelector<HTMLButtonElement>('[data-responsive="lg"]')!,
+      );
+      await waitFor(() => expect(padding()).toBe("8px"));
+      await userEvent.click(
+        canvasElement.querySelector<HTMLButtonElement>('[data-responsive="auto"]')!,
+      );
+      await waitFor(() =>
+        expect(padding()).toBe(window.matchMedia("(min-width: 1280px)").matches ? "22px" : "8px"),
+      );
+    } finally {
+      chat.responsive = undefined;
+      await chat.updateComplete;
+    }
   },
 };
 
@@ -2164,6 +2315,72 @@ function renderThemeToggle() {
   `;
 }
 
+function renderResponsive(args: Args) {
+  let chat: WalliChatElement | undefined;
+  return html`
+    <div style="padding:16px;background:var(--walli-background);color:var(--walli-foreground)">
+      <p>Select the shared breakpoint. Auto uses the viewport width.</p>
+      <div
+        data-responsive-buttons
+        role="group"
+        aria-label="Responsive breakpoint"
+        style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px"
+      >
+        ${(["auto", "base", "sm", "md", "lg", "xl", "2xl"] as const).map(
+          (value) => html`
+            <button
+              type="button"
+              data-responsive=${value}
+              aria-pressed=${(args.responsive ?? "auto") === value}
+              style="cursor:pointer;border:1px solid var(--walli-border);border-radius:12px;padding:8px 14px;background:var(--walli-card);color:var(--walli-card-foreground)"
+              @click=${(event: Event) => {
+                if (!chat) return;
+                chat.responsive = value === "auto" ? undefined : value;
+                const button = event.currentTarget as HTMLButtonElement;
+                for (const item of button.parentElement!.querySelectorAll("button"))
+                  item.setAttribute("aria-pressed", String(item === button));
+              }}
+            >
+              ${value}
+            </button>
+          `,
+        )}
+      </div>
+      <walli-chat
+        ${ref((element) => {
+          chat = element as WalliChatElement | undefined;
+        })}
+        .responsive=${args.responsive}
+        .messages=${args.messages}
+        style="display:block;height:640px;width:100%"
+      ></walli-chat>
+    </div>
+  `;
+}
+
+function renderAnimatedInsertButton(getChat: () => WalliChatElement | undefined) {
+  return html`
+    <button
+      type="button"
+      style="cursor:pointer;border:1px solid var(--walli-border);border-radius:12px;background:var(--walli-card);color:var(--walli-card-foreground);padding:8px 14px"
+      @click=${() =>
+        getChat()?.insertMessagesAtBottom(
+          [
+            {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              markdown:
+                "An update has arrived. Here is some additional information for our conversation.",
+            },
+          ],
+          { animation: "slide-in", waitForStreaming: true, stick: true },
+        )}
+    >
+      Insert with animation
+    </button>
+  `;
+}
+
 function renderInsertMessages() {
   let chat: WalliChatElement | undefined;
   let stickInput: HTMLInputElement | undefined;
@@ -2249,6 +2466,7 @@ function renderInsertMessages() {
           Stick
         </label>
       </div>
+      ${renderAnimatedInsertButton(() => chat)}
       <div style="min-height:0;flex:1;border:1px solid var(--walli-border);border-radius:16px">
         <walli-chat
           ${ref((element) => {
@@ -2544,4 +2762,130 @@ export async function mockFullChatTranscription({
   if (signal.aborted) throw signal.reason;
   await new Promise<void>((resolve) => window.setTimeout(resolve, 500));
   return "Please demonstrate the streaming response.";
+}
+
+async function assertIncomingInsertion(canvasElement: HTMLElement): Promise<void> {
+  const chat = canvasElement.querySelector<WalliChatElement>("walli-chat")!;
+  const originalMessages = chat.messages;
+  const intervalSeconds = chat.intervalSeconds;
+  chat.intervalSeconds = 0;
+  chat.messages = [];
+  await chat.updateComplete;
+  let first!: ReadableStreamDefaultController<string>;
+  let second!: ReadableStreamDefaultController<string>;
+  const a = chat.insertStreamingMessageAtBottom(
+    new ReadableStream({
+      start(c) {
+        first = c;
+      },
+    }),
+    { messageId: "incoming-stream-a" },
+  );
+  const b = chat.insertStreamingMessageAtBottom(
+    new ReadableStream({
+      start(c) {
+        second = c;
+      },
+    }),
+    { messageId: "incoming-stream-b" },
+  );
+  const message = (id: string): WalliChatMessage => ({ id, role: "assistant", markdown: id });
+  const options = { waitForStreaming: true, animation: "slide-in" as const, stick: true };
+  const removeFirst = chat.insertMessagesAtBottom([message("incoming-first")], options);
+  const cancel = chat.insertMessagesAtBottom([message("incoming-cancelled")], options);
+  chat.insertMessagesAtBottom([message("incoming-second")], options);
+  cancel();
+  await expect(chat.messages.map((m) => m.id)).toEqual(["incoming-stream-a", "incoming-stream-b"]);
+  first.close();
+  await a.finished;
+  await expect(chat.messages).toHaveLength(2);
+  second.close();
+  await b.finished;
+  await expect(chat.messages.map((m) => m.id)).toEqual([
+    "incoming-stream-a",
+    "incoming-stream-b",
+    "incoming-first",
+    "incoming-second",
+  ]);
+  removeFirst();
+  await expect(chat.messages.some((m) => m.id === "incoming-first")).toBe(false);
+
+  const aborted = chat.insertStreamingMessageAtBottom(new ReadableStream<string>(), {
+    messageId: "incoming-abort",
+  });
+  chat.insertMessagesAtTop([message("incoming-after-abort")], { waitForStreaming: true });
+  aborted.abort();
+  await aborted.finished;
+  await expect(chat.messages[0]?.id).toBe("incoming-after-abort");
+
+  let failed!: ReadableStreamDefaultController<string>;
+  const failing = chat.insertStreamingMessageAtBottom(
+    new ReadableStream({
+      start(c) {
+        failed = c;
+      },
+    }),
+    { messageId: "incoming-failure" },
+  );
+  chat.insertMessagesAtBottom([message("incoming-after-failure")], { waitForStreaming: true });
+  const failure = expect(failing.finished).rejects.toThrow("Incoming stream failed");
+  failed.error(new Error("Incoming stream failed"));
+  await failure;
+  await expect(chat.messages.at(-1)?.id).toBe("incoming-after-failure");
+
+  chat.messages = Array.from({ length: 30 }, (_, i) => message(`incoming-history-${i}`));
+  chat.scrollTo({ top: 0, animated: false });
+  const viewport = chat.renderRoot.querySelector<HTMLElement>(".chat-viewport")!;
+  await waitFor(() => expect(viewport.scrollTop).toBe(0));
+  const calls: string[] = [];
+  const animate = Element.prototype.animate;
+  Element.prototype.animate = function (...args) {
+    const row = this.closest("walli-message");
+    if (row?.message?.prepared.id === "incoming-animated") calls.push(row.message.prepared.id);
+    return animate.apply(this, args);
+  };
+  try {
+    chat.insertMessagesAtBottom([message("incoming-animated")], { animation: "slide-in" });
+    await chat.updateComplete;
+    await expect(calls).toHaveLength(0);
+    chat.scrollTo({ top: 100000, animated: false });
+    await waitFor(() =>
+      expect(chat.renderRoot.querySelectorAll("walli-message").length).toBeGreaterThan(0),
+    );
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      await waitFor(() => expect(calls).toHaveLength(1));
+    }
+    chat.scrollTo({ top: 0, animated: false });
+    await waitFor(() =>
+      expect(
+        [...chat.renderRoot.querySelectorAll("walli-message")].some(
+          (row) => row.message?.prepared.id === "incoming-animated",
+        ),
+      ).toBe(false),
+    );
+    chat.scrollTo({ top: 100000, animated: false });
+    await waitFor(() =>
+      expect(
+        [...chat.renderRoot.querySelectorAll("walli-message")].some(
+          (row) => row.message?.prepared.id === "incoming-animated",
+        ),
+      ).toBe(true),
+    );
+    await expect(calls).toHaveLength(
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 1,
+    );
+  } finally {
+    Element.prototype.animate = animate;
+    chat.messages = [];
+  }
+  await userEvent.click(
+    [...canvasElement.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "Insert with animation",
+    )!,
+  );
+  await waitFor(() => expect(chat.messages).toHaveLength(1));
+  await expect(chat.messages[0].role).toBe("assistant");
+
+  chat.messages = originalMessages;
+  chat.intervalSeconds = intervalSeconds;
 }

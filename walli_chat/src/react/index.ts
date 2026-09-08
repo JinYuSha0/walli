@@ -193,6 +193,7 @@ export const WalliChatComposer = forwardRef<WalliChatComposerRef, WalliChatCompo
 );
 
 export type WalliChatProps = {
+  responsive?: WalliChatElement["responsive"];
   actionConfig?: WalliChatActionConfig;
   bottomOcclusionHeight?: number;
   children?: ReactNode;
@@ -241,6 +242,7 @@ export type WalliChatRef = {
 
 export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function WalliChat(
   {
+    responsive,
     actionConfig,
     bottomOcclusionHeight,
     children,
@@ -279,6 +281,10 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
     messages,
     timeFormatter,
   ]);
+
+  useEffect(() => {
+    if (elementRef.current) elementRef.current.responsive = responsive;
+  }, [responsive]);
 
   useEffect(() => {
     if (elementRef.current) {

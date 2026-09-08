@@ -54,6 +54,7 @@ const preview: Preview = {
               "Scroll Controls",
               "Initial Index",
               "Insert Messages",
+              "Responsive",
               "Replace Message",
               "Delete Messages",
               "Edit Message",

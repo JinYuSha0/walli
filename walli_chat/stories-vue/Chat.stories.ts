@@ -8,7 +8,7 @@ import {
   ThumbsUp,
   type IconNode,
 } from "lucide";
-import { defineComponent, h, nextTick, onMounted, ref, type PropType } from "vue";
+import { defineComponent, h, nextTick, onMounted, ref, watch, type PropType } from "vue";
 import { html } from "lit";
 import {
   WalliChat,
@@ -125,6 +125,14 @@ const meta = {
     docs: { description: { component: "Vue versions of every walli-chat demo." } },
   },
   argTypes: {
+    responsive: {
+      control: "select",
+      options: ["auto", "base", "sm", "md", "lg", "xl", "2xl"],
+      mapping: { auto: undefined },
+      description:
+        "Shared global breakpoint. Auto uses viewport media queries; changing the prop relayouts this chat.",
+    },
+
     actionConfig: {
       control: "object",
       table: {
@@ -270,6 +278,62 @@ const initialMessages: WalliChatMessage[] = Array.from({ length: 20 }, (_, index
       ? `### Initial response #${index}\n\nThis is part of the original conversation.`
       : `Initial user message **#${index}**.`,
 }));
+const ResponsiveDemo = defineComponent({
+  props: { responsive: String as PropType<Args["responsive"]> },
+  setup(props) {
+    const selected = ref(props.responsive);
+    watch(
+      () => props.responsive,
+      (value) => {
+        selected.value = value;
+      },
+    );
+    return () =>
+      frame([
+        h("p", "The breakpoint is shared globally. Auto uses the viewport width."),
+        h(
+          "div",
+          {
+            role: "group",
+            "aria-label": "Responsive breakpoint",
+            style: { display: "flex", flexWrap: "wrap", gap: "8px" },
+          },
+          (["auto", "base", "sm", "md", "lg", "xl", "2xl"] as const).map((value) =>
+            h(
+              "button",
+              {
+                style: buttonStyle,
+                "aria-pressed": (selected.value ?? "auto") === value,
+                onClick: () => {
+                  selected.value = value === "auto" ? undefined : value;
+                },
+              },
+              value,
+            ),
+          ),
+        ),
+        panel(
+          h(WalliChat, { responsive: selected.value, messages: conversation.slice(0, 2), style }),
+        ),
+      ]);
+  },
+});
+
+const animatedInsertButton = (getChat: () => WalliChatExpose | undefined) =>
+  button("Insert with animation", () => {
+    getChat()?.insertMessagesAtBottom(
+      [
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          markdown:
+            "An update has arrived. Here is some additional information for our conversation.",
+        },
+      ],
+      { animation: "slide-in", waitForStreaming: true, stick: true },
+    );
+  });
+
 const InsertMessagesDemo = component("InsertMessagesDemo", () => {
   const chat = ref<WalliChatExpose>();
   const batch = ref(0);
@@ -324,6 +388,7 @@ const InsertMessagesDemo = component("InsertMessagesDemo", () => {
           ],
         ),
       ]),
+      animatedInsertButton(() => chat.value),
       panel(h(WalliChat, { ref: chat, messages: initialMessages, style })),
     ]);
 });
@@ -833,34 +898,90 @@ const messages: WalliChatMessage[] = Array.from(
 
 const insertMessagesCode = `<script setup lang="ts">
 import { ref } from "vue";
-import { WalliChat } from "@wallilabs/chat/vue";
+import {
+  WalliChat,
+  type WalliChatExpose,
+  type WalliChatMessage,
+} from "@wallilabs/chat/vue";
+import "@wallilabs/chat/theme.css";
 
-const chat = ref();
+const chat = ref<WalliChatExpose>();
 const stick = ref(false);
-let batch = 0;
+const initialMessages: WalliChatMessage[] = Array.from(
+  { length: 20 },
+  (_, i) => ({
+    id: "initial-" + i,
+    role: i % 2 === 0 ? "user" : "assistant",
+    markdown: "Initial message " + (i + 1),
+  }),
+);
 
-function insertAtTop() {
-  batch += 1;
-  chat.value.insertMessagesAtTop(
-    [{ id: \`top-\${batch}\`, role: "assistant", markdown: "Older message" }],
-    { stick: stick.value },
-  );
+function insert(top: boolean) {
+  const messages: WalliChatMessage[] = [
+    {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      markdown: top ? "Older message" : "New message",
+    },
+  ];
+  if (top) chat.value?.insertMessagesAtTop(messages, { stick: stick.value });
+  else chat.value?.insertMessagesAtBottom(messages, { stick: stick.value });
 }
 
-function insertAtBottom() {
-  batch += 1;
-  chat.value.insertMessagesAtBottom(
-    [{ id: \`bottom-\${batch}\`, role: "user", markdown: "New message" }],
-    { stick: stick.value },
+function insertAnimated() {
+  chat.value?.insertMessagesAtBottom(
+    [
+      {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        markdown:
+          "An update has arrived. Here is some additional information for our conversation.",
+      },
+    ],
+    { animation: "slide-in", waitForStreaming: true, stick: true },
   );
+  // If a stream is active, insertion waits until it settles.
 }
 </script>
 
 <template>
-  <button @click="insertAtTop">Insert at top</button>
-  <button @click="insertAtBottom">Insert at bottom</button>
-  <label><input v-model="stick" type="checkbox" /> Stick</label>
-  <WalliChat ref="chat" :messages="initialMessages" style="height: 640px" />
+  <button @click="insert(true)">Insert at top</button>
+  <button @click="insert(false)">Insert at bottom</button>
+  <label
+    ><input
+      v-model="stick"
+      type="checkbox"
+    />
+    Stick</label
+  >
+  <button @click="insertAnimated">Insert with animation</button>
+  <WalliChat
+    ref="chat"
+    :messages="initialMessages"
+    style="display: block; height: 640px"
+  />
+</template>`;
+
+const responsiveCode = `<script setup lang="ts">
+import { ref } from "vue";
+import { WalliChat, type WalliChatMessage } from "@wallilabs/chat/vue";
+import "@wallilabs/chat/theme.css";
+
+const options = ["auto", "base", "sm", "md", "lg", "xl", "2xl"] as const;
+const responsive = ref<InstanceType<typeof WalliChat>["$props"]["responsive"]>("xl");
+const messages: WalliChatMessage[] = [
+  { id: "user", role: "user", markdown: "How does responsive layout work?" },
+  { id: "assistant", role: "assistant", markdown: "Switch breakpoints to compare message spacing and bubble widths." },
+];
+</script>
+
+<template>
+  <p>The breakpoint is shared globally. Auto uses the viewport width.</p>
+  <div role="group" aria-label="Responsive breakpoint">
+    <button v-for="value in options" :key="value" :aria-pressed="(responsive ?? 'auto') === value"
+      @click="responsive = value === 'auto' ? undefined : value">{{ value }}</button>
+  </div>
+  <WalliChat :responsive="responsive" :messages="messages" style="display:block;height:640px" />
 </template>`;
 
 const initialIndexCode = `<script setup lang="ts">
@@ -1230,6 +1351,16 @@ export const InitialIndex: Story = {
   render: render(InitialIndexDemo),
   parameters: source(initialIndexCode),
 };
+export const Responsive: Story = {
+  args: { responsive: "xl" },
+  render: (args) => ({
+    components: { ResponsiveDemo },
+    setup: () => ({ args }),
+    template: '<ResponsiveDemo :responsive="args.responsive" />',
+  }),
+  parameters: source(responsiveCode),
+};
+
 export const InsertMessages: Story = {
   render: render(InsertMessagesDemo),
   parameters: source(insertMessagesCode),

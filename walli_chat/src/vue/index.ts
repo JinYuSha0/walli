@@ -153,6 +153,7 @@ export const WalliChat = defineComponent({
   name: "WalliChat",
   inheritAttrs: false,
   props: {
+    responsive: String as PropType<WalliChatElement["responsive"]>,
     actionConfig: Object as PropType<WalliChatActionConfig>,
     bottomOcclusionHeight: Number,
     class: String,
@@ -180,6 +181,7 @@ export const WalliChat = defineComponent({
     watchEffect(() => {
       const chat = element.value;
       if (!chat) return;
+      chat.responsive = props.responsive;
       chat.defaultScrollToBottom = props.defaultScrollToBottom;
       chat.actionConfig = props.actionConfig ?? {};
       chat.defaultScrollToIndex = props.defaultScrollToIndex;

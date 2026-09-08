@@ -130,6 +130,8 @@ export class WalliChatElement extends LitElement {
   private _messages: readonly WalliChatMessage[] = [];
   private readonly blockStates = new Map<string, WalliChatMessageBlockState>();
   private preparedMessages: PreparedChatMessage[] = [];
+  private readonly pendingInsertions = new Set<() => void>();
+  private readonly pendingEntranceAnimations = new Set<string>();
   private readonly messageLayoutCache: MessageLayoutCache = new Map();
   private topInsertedMessageGroups: WalliChatMessage[][] = [];
   private bottomInsertedMessageGroups: WalliChatMessage[][] = [];
@@ -305,38 +307,71 @@ export class WalliChatElement extends LitElement {
     messages: readonly WalliChatMessage[],
     options: WalliChatInsertMessagesOptions = {},
   ): WalliChatRemoveMessages {
-    if (messages.length === 0) return () => undefined;
-
-    const insertedMessages = [...messages];
-    this.topInsertedMessageGroups.unshift(insertedMessages);
-    if (options.stick) {
-      this.pendingScrollRequest = { animated: false, target: "top" };
-    }
-    this.applyMessagesInsertion("top", [...insertedMessages, ...this._messages], this._messages);
-    if (options.stick) this.scheduleScrollRequest();
-    return this.createInsertedMessagesRemoval("top", insertedMessages);
+    return this.insertMessages("top", messages, options);
   }
 
   insertMessagesAtBottom(
     messages: readonly WalliChatMessage[],
     options: WalliChatInsertMessagesOptions = {},
   ): WalliChatRemoveMessages {
+    return this.insertMessages("bottom", messages, options);
+  }
+
+  private insertMessages(
+    edge: "top" | "bottom",
+    messages: readonly WalliChatMessage[],
+    options: WalliChatInsertMessagesOptions,
+  ): WalliChatRemoveMessages {
     if (messages.length === 0) return () => undefined;
+    if (options.waitForStreaming && this.activeStreamingMessageCount > 0) {
+      const snapshot = messages.map((message) => ({ ...message }));
+      const queuedOptions = { ...options };
+      return this.deferInsertion(() => this.insertMessages(edge, snapshot, queuedOptions));
+    }
+
+    if (options.animation === "slide-in") {
+      for (const message of messages) {
+        if (message.role === "assistant") this.pendingEntranceAnimations.add(message.id);
+      }
+    }
 
     const insertedAt = Date.now();
-    const insertedMessages = messages.map((message) => ({
-      ...message,
-      createdAt: message.createdAt ?? insertedAt,
-    }));
-    this.bottomInsertedMessageGroups.push(insertedMessages);
+    const insertedMessages =
+      edge === "top"
+        ? [...messages]
+        : messages.map((message) => ({
+            ...message,
+            createdAt: message.createdAt ?? insertedAt,
+          }));
+    if (edge === "top") this.topInsertedMessageGroups.unshift(insertedMessages);
+    else this.bottomInsertedMessageGroups.push(insertedMessages);
+
     if (options.stick) {
-      this.isScrollingToBottom = true;
-      this.isAtBottom = true;
-      this.pendingScrollRequest = { animated: false, target: "bottom" };
+      if (edge === "bottom") {
+        this.isScrollingToBottom = true;
+        this.isAtBottom = true;
+      }
+      this.pendingScrollRequest = { animated: false, target: edge };
     }
-    this.applyMessagesInsertion("bottom", [...this._messages, ...insertedMessages], this._messages);
+    const nextMessages =
+      edge === "top"
+        ? [...insertedMessages, ...this._messages]
+        : [...this._messages, ...insertedMessages];
+    this.applyMessagesInsertion(edge, nextMessages, this._messages);
     if (options.stick) this.scheduleScrollRequest();
-    return this.createInsertedMessagesRemoval("bottom", insertedMessages);
+    return this.createInsertedMessagesRemoval(edge, insertedMessages);
+  }
+
+  private deferInsertion(insert: () => WalliChatRemoveMessages): WalliChatRemoveMessages {
+    let remove: WalliChatRemoveMessages | undefined;
+    const pending = () => {
+      remove = insert();
+    };
+    this.pendingInsertions.add(pending);
+    return () => {
+      this.pendingInsertions.delete(pending);
+      remove?.();
+    };
   }
 
   replaceMessage(id: string, patch: WalliChatMessagePatch): boolean {
@@ -526,6 +561,11 @@ export class WalliChatElement extends LitElement {
       parser,
     ).finally(() => {
       this.activeStreamingMessageCount--;
+      if (this.activeStreamingMessageCount === 0) {
+        const pending = [...this.pendingInsertions];
+        this.pendingInsertions.clear();
+        for (const insert of pending) insert();
+      }
       this.scheduleProjection();
     });
     return {
@@ -1085,6 +1125,9 @@ export class WalliChatElement extends LitElement {
 
   private pruneMessageState(messages: readonly WalliChatMessage[]): void {
     const messageIds = new Set(messages.map((message) => message.id));
+    for (const messageId of this.pendingEntranceAnimations) {
+      if (!messageIds.has(messageId)) this.pendingEntranceAnimations.delete(messageId);
+    }
     for (const messageId of this.blockStates.keys()) {
       if (!messageIds.has(messageId)) this.blockStates.delete(messageId);
     }
@@ -1612,6 +1655,7 @@ export class WalliChatElement extends LitElement {
           element.dataset.index = String(index);
           const message = frame.messages[index]!;
           element.update(message, blockContext);
+          this.animateInsertedMessage(element);
         }
       }
       return;
@@ -1640,6 +1684,7 @@ export class WalliChatElement extends LitElement {
         if (previousElement === null) canvas.insertBefore(element, canvas.firstChild);
         else previousElement.after(element);
       }
+      this.animateInsertedMessage(element);
       previousElement = element;
     }
     for (const element of elementsByMessageId.values()) element.remove();
@@ -1647,6 +1692,19 @@ export class WalliChatElement extends LitElement {
     this.mountedMessageElements = nextMountedElements;
     this.mountedStart = start;
     this.mountedEnd = end;
+  }
+
+  private animateInsertedMessage(element: WalliMessageElement): void {
+    const id = element.message?.prepared.id;
+    if (id === undefined || !this.pendingEntranceAnimations.delete(id)) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    element.firstElementChild?.animate(
+      [
+        { transform: "translateX(-32px)", opacity: 0 },
+        { transform: "translateX(0)", opacity: 1 },
+      ],
+      { duration: 600, delay: 300, easing: "ease-in-out", fill: "backwards" },
+    );
   }
 
   private applyMessagesInsertion(

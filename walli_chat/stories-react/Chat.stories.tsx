@@ -74,6 +74,14 @@ const meta = {
     docs: { description: { component: "React versions of every walli-chat demo." } },
   },
   argTypes: {
+    responsive: {
+      control: "select",
+      options: ["auto", "base", "sm", "md", "lg", "xl", "2xl"],
+      mapping: { auto: undefined },
+      description:
+        "Shared global breakpoint. Auto uses viewport media queries; changing the prop relayouts this chat.",
+    },
+
     actionConfig: {
       control: "object",
       table: {
@@ -230,6 +238,12 @@ export const InitialIndex: Story = {
   render: () => <InitialIndexDemo />,
   parameters: source(exampleSources.initialIndex),
 };
+export const Responsive: Story = {
+  args: { responsive: "xl" },
+  render: (args) => <ResponsiveDemo responsive={args.responsive} />,
+  parameters: source(exampleSources.responsive),
+};
+
 export const InsertMessages: Story = {
   render: () => <InsertMessagesDemo />,
   parameters: source(exampleSources.insertMessages),
@@ -396,6 +410,58 @@ const initialInsertMessages = Array.from({ length: 20 }, (_, index): WalliChatMe
       : `### Initial response #${index}\n\nThis is part of the original conversation.`,
 }));
 
+function ResponsiveDemo({ responsive }: Pick<Args, "responsive">) {
+  const [selected, setSelected] = useState(responsive);
+  useEffect(() => setSelected(responsive), [responsive]);
+  return (
+    <DemoFrame>
+      <p>The breakpoint is shared globally. Auto uses the viewport width.</p>
+      <div
+        role="group"
+        aria-label="Responsive breakpoint"
+        style={{ display: "flex", flexWrap: "wrap", gap: 8 }}
+      >
+        {(["auto", "base", "sm", "md", "lg", "xl", "2xl"] as const).map((value) => (
+          <button
+            key={value}
+            style={buttonStyle}
+            aria-pressed={(selected ?? "auto") === value}
+            onClick={() => setSelected(value === "auto" ? undefined : value)}
+          >
+            {value}
+          </button>
+        ))}
+      </div>
+      <ChatPanel>
+        <WalliChat responsive={selected} messages={conversation.slice(0, 2)} style={chatStyle} />
+      </ChatPanel>
+    </DemoFrame>
+  );
+}
+
+function AnimatedInsertButton({ chat }: { chat: { current: WalliChatRef | null } }) {
+  return (
+    <button
+      style={buttonStyle}
+      onClick={() =>
+        chat.current?.insertMessagesAtBottom(
+          [
+            {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              markdown:
+                "An update has arrived. Here is some additional information for our conversation.",
+            },
+          ],
+          { animation: "slide-in", waitForStreaming: true, stick: true },
+        )
+      }
+    >
+      Insert with animation
+    </button>
+  );
+}
+
 function InsertMessagesDemo() {
   const chat = useRef<WalliChatRef>(null);
   const batch = useRef(0);
@@ -458,6 +524,7 @@ function InsertMessagesDemo() {
           Stick
         </label>
       </div>
+      <AnimatedInsertButton chat={chat} />
       <ChatPanel>
         <WalliChat ref={chat} messages={initialInsertMessages} style={chatStyle} />
       </ChatPanel>

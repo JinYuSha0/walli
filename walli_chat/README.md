@@ -135,6 +135,23 @@ All chats share this setting. Changing `responsive` updates the global breakpoin
 and relayouts that chat. Removing the attribute restores automatic viewport detection.
 Other chats use the new global setting on their next layout; there is no global subscription.
 
+## Insert incoming messages
+
+```ts
+const remove = chat.insertMessagesAtBottom(incomingMessages, {
+  waitForStreaming: true,
+  animation: "slide-in",
+  stick: true,
+});
+```
+
+Both insertion methods accept these optional settings. `waitForStreaming` queues
+messages until all active streams finish, abort, or fail. Batches are processed in
+arrival order. Calling the returned `remove()` before insertion cancels that batch.
+`animation: "slide-in"` slides assistant messages in from the left on their first
+visible render only, including messages first revealed by scrolling. It respects
+reduced-motion preferences. Without these options, insertion is immediate with no animation.
+
 ## License
 
 [MIT](./LICENSE) © 2026 JinYuSha0
