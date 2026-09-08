@@ -333,6 +333,43 @@ export const ActionMenuKeyboardDismissal: Story = {
   },
 };
 
+export const PasteImages: Story = {
+  play: async ({ canvasElement }) => {
+    const { composer, textarea } = await getComposerParts(canvasElement);
+    const clipboardData = new DataTransfer();
+    const image = new File(["image"], "pasted.png", { type: "image/png" });
+    clipboardData.items.add(image);
+    clipboardData.items.add(new File(["text"], "notes.txt", { type: "text/plain" }));
+    const paste = (data: DataTransfer) => {
+      const event = new ClipboardEvent("paste", { clipboardData: data, cancelable: true });
+      textarea.dispatchEvent(event);
+      return event;
+    };
+
+    const originalUpload = composer.onUploadImages;
+    composer.onUploadImages = undefined;
+    await expect(paste(clipboardData).defaultPrevented).toBe(false);
+
+    const upload = fn<WalliChatComposerUploadImagesCallback>((files, setProgress, setResult) => {
+      for (const file of files) {
+        setProgress(file, 50);
+        setResult(file, { url: "/demo-landscape-coast.jpg" });
+      }
+    });
+    composer.onUploadImages = upload;
+    const textData = new DataTransfer();
+    textData.setData("text/plain", "Hello Walli");
+    await expect(paste(textData).defaultPrevented).toBe(false);
+    await expect(upload).not.toHaveBeenCalled();
+
+    await expect(paste(clipboardData).defaultPrevented).toBe(true);
+    await expect(upload).toHaveBeenCalledWith([image], expect.any(Function), expect.any(Function));
+    await composer.updateComplete;
+    await expect(getSendButton(composer)).toBeEnabled();
+    composer.onUploadImages = originalUpload;
+  },
+};
+
 export const WithTranscription: Story = {
   play: async ({ canvasElement }) => {
     const { composer } = await getComposerParts(canvasElement);

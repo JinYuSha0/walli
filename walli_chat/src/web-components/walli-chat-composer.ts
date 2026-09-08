@@ -543,10 +543,24 @@ export class WalliChatComposerElement extends LitElement {
     this.fileInputElement?.click();
   }
 
-  private async handleFiles(event: Event): Promise<void> {
+  private handlePaste(event: ClipboardEvent): void {
+    if (this.disabled || !this.onUploadImages) return;
+    const files = [...(event.clipboardData?.files ?? [])].filter((file) =>
+      file.type.startsWith("image/"),
+    );
+    if (files.length === 0) return;
+    event.preventDefault();
+    void this.uploadFiles(files);
+  }
+
+  private handleFiles(event: Event): void {
     const input = event.currentTarget as HTMLInputElement;
     const files = [...(input.files ?? [])];
     input.value = "";
+    void this.uploadFiles(files);
+  }
+
+  private async uploadFiles(files: File[]): Promise<void> {
     if (files.length === 0 || !this.onUploadImages) return;
     this.menuOpen = false;
 
@@ -793,6 +807,7 @@ export class WalliChatComposerElement extends LitElement {
           data-1p-ignore="true"
           aria-label=${this.placeholder}
           @input=${this.handleInput}
+          @paste=${this.handlePaste}
           @keydown=${this.handleKeyDown}
         ></textarea>
 
