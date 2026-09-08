@@ -230,7 +230,7 @@ function materializeTableCells(
       const width = metrics.columnWidths[columnIndex]!;
       const cell = row[columnIndex];
       if (cell !== undefined) {
-        cells.push(materializeTableCell(cell, metrics, rowIndex, columnIndex, width, x, y));
+        cells.push(materializeTableCell(cell, metrics, rowIndex, width, x, y));
       }
       x += width;
     }
@@ -249,8 +249,8 @@ function measureNaturalColumnWidths(rows: PreparedTableCell[][], columnCount: nu
       if (cell === undefined) continue;
       const width =
         measureRichInlineStats(cell.flow, Number.MAX_SAFE_INTEGER).maxLineWidth +
-        getTableCellPaddingStart(columnIndex) +
-        getTableCellPaddingEnd(columnIndex, columnCount);
+        getTableBlockStyle("paddingInlineStart") +
+        getTableBlockStyle("paddingInlineEnd");
       widths[columnIndex] = Math.max(widths[columnIndex]!, width);
     }
   }
@@ -284,7 +284,7 @@ function measureTableRowHeight(
     const lineWidth =
       rowIndex === 0
         ? Number.MAX_SAFE_INTEGER
-        : getTableCellContentWidth(columnWidths[columnIndex]!, columnIndex, columnCount);
+        : getTableCellContentWidth(columnWidths[columnIndex]!);
     const { lineCount } = measureRichInlineStats(cell.flow, lineWidth);
     height = Math.max(
       height,
@@ -298,13 +298,12 @@ function materializeTableCell(
   cell: PreparedTableCell,
   metrics: TableMetrics,
   rowIndex: number,
-  columnIndex: number,
   width: number,
   x: number,
   y: number,
 ): TableCellLayout {
-  const paddingStart = getTableCellPaddingStart(columnIndex);
-  const paddingEnd = getTableCellPaddingEnd(columnIndex, metrics.columnWidths.length);
+  const paddingStart = getTableBlockStyle("paddingInlineStart");
+  const paddingEnd = getTableBlockStyle("paddingInlineEnd");
   const lineWidth =
     rowIndex === 0 || !metrics.shouldWrap
       ? Number.MAX_SAFE_INTEGER
@@ -350,21 +349,11 @@ function materializeTableCellLines(
   return lines;
 }
 
-function getTableCellContentWidth(width: number, columnIndex: number, columnCount: number): number {
+function getTableCellContentWidth(width: number): number {
   return Math.max(
     1,
-    width -
-      getTableCellPaddingStart(columnIndex) -
-      getTableCellPaddingEnd(columnIndex, columnCount),
+    width - getTableBlockStyle("paddingInlineStart") - getTableBlockStyle("paddingInlineEnd"),
   );
-}
-
-function getTableCellPaddingStart(columnIndex: number): number {
-  return columnIndex === 0 ? 0 : getTableBlockStyle("paddingInlineStart");
-}
-
-function getTableCellPaddingEnd(columnIndex: number, columnCount: number): number {
-  return columnIndex === columnCount - 1 ? 0 : getTableBlockStyle("paddingInlineEnd");
 }
 
 function buildTableCell(

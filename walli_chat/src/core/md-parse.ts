@@ -11,7 +11,11 @@ import {
   parseMarkdownImageSrc,
 } from "./helper";
 import { getCommonStyle, inlinePiece } from "./styles";
-import { resolveBuiltInBlockDefinition, resolveCustomBlockToken } from "./block-registry";
+import {
+  resolveBuiltInBlockDefinition,
+  resolveCustomBlockToken,
+  resolveRoleBlockDefinition,
+} from "./block-registry";
 import { getSpace } from "./styles/config";
 import type { InlineVariant } from "./blocks/inline-block";
 
@@ -39,6 +43,16 @@ export function parseMarkdownBlocks(
   return mergeAssetsGroups(parseBlockTokens(tokens, { listDepth: 0, quoteDepth: 0, role }));
 }
 
+export function prepareRoleMessageBlock(
+  markdown: string,
+  role: WalliChatMessageRole,
+): PreparedBlock[] | undefined {
+  const definition = resolveRoleBlockDefinition(role);
+  if (!definition) return undefined;
+  const base = createBlockBase({ role, listDepth: 0, quoteDepth: 0 });
+  return [resolveBuiltInBlockDefinition("custom", role).prepare(markdown, definition, base)];
+}
+
 export class StreamingMarkdownParser {
   private readonly role: WalliChatMessageRole;
 
@@ -49,6 +63,8 @@ export class StreamingMarkdownParser {
   private stableTokenKeys: string[] = [];
 
   parse(markdown: string): PreparedBlock[] {
+    const roleBlocks = prepareRoleMessageBlock(remend(markdown), this.role);
+    if (roleBlocks) return roleBlocks;
     const tokens = lexMarkdown(remend(markdown), this.role);
     const stableTokenCount = Math.max(0, tokens.length - 1);
     const reusableCount = Math.min(stableTokenCount, this.stableTokenKeys.length);

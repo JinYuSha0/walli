@@ -324,3 +324,7 @@ export type {
 
 export { createSystemMessage, systemBlockDefinition } from "../core/blocks/system-block";
 export { builtInBlocks, registerBlock };
+
+export { prepareMarkdownContent } from "../core";
+
+export type { WalliChatRoleBlockDefinition } from "../core/block-registry";

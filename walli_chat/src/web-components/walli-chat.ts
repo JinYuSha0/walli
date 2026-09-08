@@ -793,6 +793,7 @@ export class WalliChatElement extends LitElement {
     message.markdown = markdown;
     this.preparedMessages[index] = {
       blocks: parser.parse(markdown),
+      meta: message.meta,
       createdAt: message.createdAt,
       markdown,
       id: message.id,

@@ -59,6 +59,7 @@ export type WalliChatScrollState = {
 };
 
 export type WalliChatBlockContext = WalliChatBlockState & {
+  meta?: unknown;
   actionConfig: WalliChatActionConfig;
   blockStates: Map<string, WalliChatMessageBlockState>;
   action: (action: WalliChatCustomBlockAction) => Promise<boolean>;
@@ -81,6 +82,7 @@ export type WalliChatBlockContext = WalliChatBlockState & {
 };
 
 export type WalliChatTokenizedBlockRenderContext<T> = {
+  meta?: unknown;
   role: WalliChatMessageRole;
   contentInsetX: number;
   ctx: WalliChatBlockContext;
@@ -123,6 +125,7 @@ export type WalliChatTokenizedBlockDefinition<
 > = {
   name: string;
   role?: WalliChatMessageRole;
+  meta?: unknown;
   marginBottom?: number;
   marginTop?: number;
   measure: (data: Prepared, context: WalliChatBlockMeasureContext) => WalliChatBlockMetrics;
@@ -132,7 +135,18 @@ export type WalliChatTokenizedBlockDefinition<
 } & PrepareStage<Input, Prepared> &
   MaterializeStage<Prepared, Materialized>;
 
-export type AnyCustomBlockDefinition = WalliChatTokenizedBlockDefinition<unknown, unknown, unknown>;
+export type WalliChatRoleBlockDefinition<Prepared = string, Materialized = Prepared> = Omit<
+  WalliChatTokenizedBlockDefinition<string, Prepared, Materialized>,
+  "tokenizer" | "role"
+> & {
+  scope: "message";
+  role: WalliChatMessageRole;
+};
+
+export type AnyCustomBlockDefinition = Omit<
+  WalliChatTokenizedBlockDefinition<unknown, unknown, unknown>,
+  "tokenizer"
+>;
 
 type ScopedDefinitions<T> = Map<string, Map<WalliChatMessageRole | undefined, { definition: T }[]>>;
 
@@ -168,7 +182,16 @@ function registerDefinition<T>(
   };
 }
 
-const definitions: ScopedDefinitions<AnyCustomBlockDefinition> = new Map();
+const definitions: ScopedDefinitions<WalliChatTokenizedBlockDefinition<unknown, unknown, unknown>> =
+  new Map();
+const roleDefinitions: ScopedDefinitions<AnyCustomBlockDefinition> = new Map();
+
+export function resolveRoleBlockDefinition(
+  role: WalliChatMessageRole,
+): AnyCustomBlockDefinition | undefined {
+  return resolveDefinition(roleDefinitions, "message", role);
+}
+
 const installedTokenizerNames = new Set<string>();
 const tokenTypePrefix = "walli-custom-block-";
 
@@ -242,20 +265,34 @@ export function registerBlock<Name extends WalliChatBlockName>(
 export function registerBlock<Input, Prepared = Input, Materialized = Prepared>(
   definition: WalliChatTokenizedBlockDefinition<Input, Prepared, Materialized>,
 ): WalliChatBlockRegistration;
+export function registerBlock<Prepared = string, Materialized = Prepared>(
+  definition: WalliChatRoleBlockDefinition<Prepared, Materialized>,
+): WalliChatBlockRegistration;
 export function registerBlock(
-  definition: WalliChatBlockDefinition | WalliChatTokenizedBlockDefinition,
+  definition:
+    WalliChatBlockDefinition | WalliChatTokenizedBlockDefinition | WalliChatRoleBlockDefinition,
 ): WalliChatBlockRegistration {
   const name = definition.name.trim();
   if (name.length === 0) throw new Error("Block name cannot be empty");
   const role = definition.role?.trim();
   if (role === "") throw new Error("Block role cannot be empty");
 
+  if ("scope" in definition && definition.scope === "message") {
+    if (!role) throw new Error("Message blocks require a role");
+    return registerDefinition(
+      roleDefinitions,
+      "message",
+      role,
+      definition as AnyCustomBlockDefinition,
+    );
+  }
+
   if ("tokenizer" in definition) {
     const registration = registerDefinition(
       definitions,
       name,
       role,
-      definition as AnyCustomBlockDefinition,
+      definition as WalliChatTokenizedBlockDefinition<unknown, unknown, unknown>,
     );
 
     if (!installedTokenizerNames.has(name)) {

@@ -88,6 +88,7 @@ export type PreparedBlock =
   | PreparedCustomBlock;
 
 export type PreparedChatMessage = {
+  meta?: unknown;
   blocks: PreparedBlock[];
   bottomPaddingHeight?: number;
   createdAt?: number;

@@ -22,3 +22,4 @@ export {
   type NoticeBlockData,
   type NoticeBlockVariant,
 } from "./notice-block.js";
+export { peopleBlockDefinition, type PeopleBlockMeta } from "./people-block.js";

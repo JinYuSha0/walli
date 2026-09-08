@@ -1,4 +1,8 @@
-import { parseInlineMarkdownBlocks, parseMarkdownBlocks } from "./md-parse";
+import {
+  parseInlineMarkdownBlocks,
+  parseMarkdownBlocks,
+  prepareRoleMessageBlock,
+} from "./md-parse";
 import type {
   BlockFrame,
   BlockLayout,
@@ -10,13 +14,15 @@ import type {
 } from "./types";
 import { getCommonStyle } from "./styles";
 import {
-  materializeMessageBlockLayout,
-  measureMessageBlockFrame,
   resolveBuiltInBlockDefinition,
+  measureMessageBlockFrame,
+  materializeMessageBlockLayout,
+  renderMessageBlockTemplate,
+  type WalliChatBlockContext,
 } from "./block-registry";
 import { createSystemMessage } from "./blocks/system-block";
 import { formatTimeSystemMessage } from "./helper";
-import type { WalliChatMessage, WalliChatTimeFormatter } from "../types";
+import type { WalliChatMessage, WalliChatMessageRole, WalliChatTimeFormatter } from "../types";
 
 type TimeSystemMessageOptions = {
   formatter?: WalliChatTimeFormatter;
@@ -37,22 +43,25 @@ export function createPreparedChatMessages(
   options: { bottomPaddingHeight?: number; streaming?: boolean } = {},
 ): PreparedChatMessage[] {
   return messages.map((seed) => {
-    let blocks: PreparedBlock[];
-    switch (seed.role) {
-      case "system":
-        blocks = parseInlineMarkdownBlocks(seed.markdown, "body", seed.role);
-        break;
-      case "user":
-        blocks = groupUserMessageAssets(
-          parseMarkdownBlocks(seed.markdown, options.streaming, seed.role),
-        );
-        break;
-      default:
-        blocks = parseMarkdownBlocks(seed.markdown, options.streaming, seed.role);
+    let blocks = prepareRoleMessageBlock(seed.markdown, seed.role);
+    if (!blocks) {
+      switch (seed.role) {
+        case "system":
+          blocks = parseInlineMarkdownBlocks(seed.markdown, "body", seed.role);
+          break;
+        case "user":
+          blocks = groupUserMessageAssets(
+            parseMarkdownBlocks(seed.markdown, options.streaming, seed.role),
+          );
+          break;
+        default:
+          blocks = parseMarkdownBlocks(seed.markdown, options.streaming, seed.role);
+      }
     }
 
     return {
       blocks,
+      meta: seed.meta,
       bottomPaddingHeight: options.bottomPaddingHeight,
       createdAt: seed.createdAt,
       markdown: seed.markdown,
@@ -199,6 +208,55 @@ export function getBlockUsedWidth(block: BlockFrame | BlockLayout): number {
   }
 }
 
+function layoutBlocks(prepared: readonly PreparedBlock[], width: number, top = 0) {
+  let y = top;
+  let usedWidth = 0;
+  const blocks = prepared.map((block) => {
+    y += block.marginTop;
+    const frame = measureMessageBlockFrame(block, width, y);
+    y += frame.height;
+    usedWidth = Math.max(usedWidth, getBlockUsedWidth(frame));
+    return frame;
+  });
+  return { blocks, height: y - top, usedWidth };
+}
+
+function materializeBlocks(
+  prepared: readonly PreparedBlock[],
+  frames: readonly BlockFrame[],
+  width: number,
+) {
+  let hasCustomBlock = false;
+  const blocks = prepared.map((block, index) => {
+    if (block.kind === "custom") hasCustomBlock = true;
+    return materializeMessageBlockLayout(block, frames[index]!, width);
+  });
+  return { blocks, hasCustomBlock };
+}
+
+/** Reuse the chat Markdown pipeline inside a custom block. */
+export function prepareMarkdownContent(
+  markdown: string,
+  options: { role?: WalliChatMessageRole } = {},
+) {
+  const role = options.role ?? "assistant";
+  const blocks = parseMarkdownBlocks(markdown, false, role);
+  return {
+    layout(availableWidth: number) {
+      const width = Math.max(1, availableWidth);
+      const frame = layoutBlocks(blocks, width);
+      return {
+        height: frame.height,
+        width: Math.min(width, Math.max(1, frame.usedWidth)),
+        render(ctx: WalliChatBlockContext, messageId: string) {
+          const layouts = materializeBlocks(blocks, frame.blocks, width).blocks;
+          return layouts.map((block) => renderMessageBlockTemplate(block, 0, ctx, messageId, role));
+        },
+      };
+    },
+  };
+}
+
 function getMessageGap(message: PreparedChatMessage | undefined): number {
   switch (message?.role) {
     case undefined:
@@ -220,20 +278,12 @@ function layoutMessageFrame(
   const bubblePaddingY = isSystem
     ? getCommonStyle("systemBubblePaddingY")
     : getCommonStyle("bubblePaddingY");
-  let y = bubblePaddingY;
-  const blocks: BlockFrame[] = [];
-  let usedContentWidth = 0;
-
-  for (let index = 0; index < preparedMessage.blocks.length; index++) {
-    const block = preparedMessage.blocks[index]!;
-    y += block.marginTop;
-    const blockFrame = measureMessageBlockFrame(block, maxContentWidth, y);
-    blocks.push(blockFrame);
-    y += blockFrame.height;
-    usedContentWidth = Math.max(usedContentWidth, getBlockUsedWidth(blockFrame));
-  }
-
-  const bubbleHeight = y + bubblePaddingY;
+  const {
+    blocks,
+    height,
+    usedWidth: usedContentWidth,
+  } = layoutBlocks(preparedMessage.blocks, maxContentWidth, bubblePaddingY);
+  const bubbleHeight = height + bubblePaddingY * 2;
   let actionHeight = 0;
   if (!preparedMessage.streaming && preparedMessage.showActions) {
     switch (preparedMessage.role) {
@@ -295,16 +345,11 @@ export function materializeMessageBlocks(message: ChatMessageInstance): {
   blocks: BlockLayout[];
   hasCustomBlock: boolean;
 } {
-  let hasCustomBlock = false;
-  const blocks = message.prepared.blocks.map((block, index) => {
-    if (block.kind === "custom") hasCustomBlock = true;
-    return materializeMessageBlockLayout(
-      block,
-      message.frame.blocks[index]!,
-      message.frame.layoutContentWidth,
-    );
-  });
-  return { blocks, hasCustomBlock };
+  return materializeBlocks(
+    message.prepared.blocks,
+    message.frame.blocks,
+    message.frame.layoutContentWidth,
+  );
 }
 
 export function findVisibleRange(

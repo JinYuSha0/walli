@@ -231,14 +231,7 @@ export type WalliChatRef = {
   replaceMessage: (id: string, patch: WalliChatMessagePatch) => boolean;
   scrollTo: (options: WalliChatScrollToOptions) => void;
   scrollToIndex: (options: WalliChatScrollToIndexOptions) => void;
-  registerBlock: {
-    <Name extends WalliChatBlockName>(
-      definition: WalliChatBlockDefinition<Name>,
-    ): WalliChatBlockRegistration;
-    <Input, Prepared = Input, Materialized = Prepared>(
-      definition: WalliChatTokenizedBlockDefinition<Input, Prepared, Materialized>,
-    ): WalliChatBlockRegistration;
-  };
+  registerBlock: typeof registerBlock;
 };
 
 export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function WalliChat(
@@ -339,9 +332,7 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
       scrollToIndex(options) {
         elementRef.current?.scrollToIndex(options);
       },
-      registerBlock(definition: WalliChatBlockDefinition | WalliChatTokenizedBlockDefinition) {
-        return registerBlock(definition as WalliChatBlockDefinition);
-      },
+      registerBlock,
     }),
     [],
   );
@@ -411,3 +402,7 @@ export type {
 
 export { createSystemMessage, systemBlockDefinition } from "../core/blocks/system-block";
 export { builtInBlocks, registerBlock };
+
+export { prepareMarkdownContent } from "../core";
+
+export type { WalliChatRoleBlockDefinition } from "../core/block-registry";

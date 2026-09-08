@@ -33,3 +33,6 @@ export {
   type WalliChatTokenizedBlockDefinition,
   type WalliChatTokenizedBlockRenderContext,
 } from "./core/block-registry";
+export { prepareMarkdownContent } from "./core";
+
+export type { WalliChatRoleBlockDefinition } from "./core/block-registry";

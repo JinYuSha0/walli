@@ -125,6 +125,7 @@ class WalliCustomBlockContentElement extends HTMLElement {
     render(
       layout.definition.render({
         role: layout.role,
+        meta: layout.ctx.meta ?? layout.definition.meta,
         contentInsetX: 0,
         ctx: layout.ctx,
         data: layout.data,

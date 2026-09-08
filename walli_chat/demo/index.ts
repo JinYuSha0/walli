@@ -15,6 +15,7 @@ import {
   createConfirmationCardMarkdown,
   createNoticeMarkdown,
   noticeBlockDefinition,
+  peopleBlockDefinition,
   recommendedRepliesBlockDefinition,
   type ConfirmationCardField,
   type ConfirmationCardData,
@@ -43,13 +44,14 @@ function fillIcon(icon: IconNode): IconNode {
 }
 
 registerBlock(noticeBlockDefinition);
+registerBlock(peopleBlockDefinition);
 registerBlock(recommendedRepliesBlockDefinition);
 registerBlock(confirmationCardBlockDefinition);
 
 const chat = document.querySelector<WalliChatElement>("walli-chat");
 const composer = document.querySelector<WalliChatComposerElement>("walli-chat-composer");
 let activeStreamingHandle: WalliChatStreamingHandle | null = null;
-const demoMessages = getDemoMessages().map((message, index) => ({
+const demoMessages: WalliChatMessage[] = getDemoMessages().map((message, index) => ({
   ...message,
   id: `demo-${index}`,
 }));

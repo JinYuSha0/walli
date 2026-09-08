@@ -108,10 +108,11 @@ The equivalent Markdown is:
 
 ```md
 :::recommended-replies
+
 - Tell me more
 - Give me an example
 - What should I do next?
-:::
+  :::
 ```
 
 An empty block uses `defaultRecommendedReplies`. Clicking a reply calls the chat composer's `onSubmit` callback. Replies are disabled while the chat is streaming.
@@ -180,3 +181,36 @@ const error = createNoticeMarkdown({ variant: "error", text: "Submission failed.
 ## License
 
 [MIT](./LICENSE) © 2026 JinYuSha0
+
+## People messages
+
+`peopleBlockDefinition` renders plain text for `role: "people"` with a 36px avatar, nickname, and a content-sized bubble. Register default identity information in the block's `meta`:
+
+```ts
+import { registerBlock } from "@wallilabs/chat";
+import { peopleBlockDefinition } from "@wallilabs/chat-blocks";
+
+registerBlock({
+  ...peopleBlockDefinition,
+  meta: { avatarUrl: "/avatar.jpg", nickname: "guangzhi" },
+});
+
+const chat = document.createElement("walli-chat");
+chat.style.cssText = "display:block;height:400px";
+chat.messages = [
+  { id: "person-1", role: "people", markdown: "Working towards the same goal." },
+  {
+    id: "person-2",
+    role: "people",
+    markdown: "Together!",
+    meta: { avatarUrl: "/alex.jpg", nickname: "Alex" },
+  },
+];
+document.body.append(chat);
+```
+
+Message `meta` replaces the block's default `meta` when provided. Custom block renderers receive the resolved value as `render({ meta })`. People messages support the same Markdown blocks as assistant messages, including headings, lists, quotes, links, code, tables, images, and registered custom blocks. Customize bubble colors with `--walli-people-background` and `--walli-people-color`.
+
+People is registered as a role-level message wrapper (`scope: "message", role: "people"`), rather than a Markdown tokenizer. The wrapper is selected once per message; its body uses `prepareMarkdownContent(markdown, { role: "people" })`. Markdown and nested custom blocks still resolve their role-specific definitions normally.
+
+Set message `meta.showBubble` to `false` to hide the people bubble background and pointer while keeping the avatar, nickname, and Markdown content. It defaults to `true` and can also be configured in the registered default meta.

@@ -135,6 +135,7 @@ export class WalliMessageElement extends HTMLElement {
     if (context === undefined) return undefined;
     return {
       ...context,
+      meta: message.prepared.meta,
       requestRender: () => {
         context.requestRender(message.prepared.id);
       },
