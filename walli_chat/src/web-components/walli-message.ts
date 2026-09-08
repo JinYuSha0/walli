@@ -45,7 +45,7 @@ export class WalliMessageElement extends HTMLElement {
 
   private renderLayout(message: ChatMessageInstance, blocks: BlockLayout[]): TemplateResult {
     const blockContext = this.createMessageBlockContext(message);
-    if (message.frame.role === "system") {
+    if (message.prepared.role === "system") {
       return html`<div
         class="absolute left-0 w-full"
         style=${`top:${message.top}px;height:${message.frame.totalHeight}px;`}
@@ -57,13 +57,16 @@ export class WalliMessageElement extends HTMLElement {
             Math.max(0, (message.frame.frameWidth - getBlockUsedWidth(block)) / 2),
             block.kind === "custom" ? blockContext : undefined,
             block.kind === "custom" ? message.prepared.id : undefined,
+            message.prepared.role,
           ),
         )}
       </div>`;
     }
 
     const assetsGroups =
-      message.frame.role === "user" ? blocks.filter((block) => block.kind === "assetsGroup") : [];
+      message.prepared.role === "user"
+        ? blocks.filter((block) => block.kind === "assetsGroup")
+        : [];
     const hasAssets = assetsGroups.length > 0;
     const textBlocks = hasAssets ? blocks.filter((block) => block.kind !== "assetsGroup") : [];
     const textBubbleStyle = getTextBubbleStyle(message.frame, textBlocks);
@@ -73,8 +76,9 @@ export class WalliMessageElement extends HTMLElement {
     return html`<div
       class=${clsx({
         "group absolute left-0 flex w-full box-border justify-start":
-          message.frame.role === "assistant",
-        "group absolute left-0 flex w-full box-border justify-end": message.frame.role === "user",
+          message.prepared.role !== "user",
+        "group absolute left-0 flex w-full box-border justify-end":
+          message.prepared.role === "user",
       })}
       style=${`top:${message.top}px; height:${message.frame.totalHeight}px; padding-inline:${getCommonStyle("messageSidePadding")}px; padding-top:${message.frame.paddingTop}px;`}
     >
@@ -85,12 +89,12 @@ export class WalliMessageElement extends HTMLElement {
         <div
           class=${clsx({
             "message-bubble relative max-w-full flex-none rounded-none text-foreground":
-              message.frame.role === "assistant",
+              message.prepared.role !== "user",
             "message-bubble relative max-w-full flex-none rounded-2xl text-secondary-foreground shadow-lg":
-              message.frame.role === "user",
+              message.prepared.role === "user",
             "bg-transparent shadow-none": hasAssets,
           })}
-          style=${`width:${message.frame.frameWidth}px;height:${message.frame.bubbleHeight}px;${message.frame.role === "user" && !hasAssets ? "background-color:var(--user-message-background,var(--walli-user-message-background));" : ""}`}
+          style=${`width:${message.frame.frameWidth}px;height:${message.frame.bubbleHeight}px;${message.prepared.role === "user" && !hasAssets ? "background-color:var(--user-message-background,var(--walli-user-message-background));" : ""}`}
         >
           ${
             textBubbleStyle
@@ -103,15 +107,16 @@ export class WalliMessageElement extends HTMLElement {
               block.kind === "assetsGroup" ? 0 : textContentInset,
               block.kind === "custom" ? blockContext : undefined,
               block.kind === "custom" ? message.prepared.id : undefined,
+              message.prepared.role,
             ),
           )}
         </div>
         ${
-          message.prepared.streaming || !message.prepared.showActions
+          message.frame.actionHeight === 0
             ? null
             : html`<walli-message-actions
                 .context=${messageActionContext}
-                .variant=${message.frame.role}
+                .variant=${message.prepared.role}
               ></walli-message-actions>`
         }
       </div>

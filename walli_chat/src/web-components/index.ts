@@ -48,6 +48,7 @@ export type {
   WalliChatEditActionData,
   WalliChatEditConfig,
   WalliChatMessage,
+  WalliChatMessageRole,
   WalliChatMessageType,
   WalliChatEndReachedCallback,
   WalliChatEndReachedInfo,

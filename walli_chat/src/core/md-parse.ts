@@ -1,4 +1,5 @@
-import { marked, type Token, type Tokens } from "marked";
+import type { WalliChatMessageRole } from "../types";
+import { marked, type Token, type Tokens, type MarkedOptions } from "marked";
 import remend from "remend";
 import type { ParseContext, PreparedBlock } from "./types";
 import "./blocks/index";
@@ -17,26 +18,38 @@ import type { InlineVariant } from "./blocks/inline-block";
 export function parseInlineMarkdownBlocks(
   markdown: string,
   variant: InlineVariant = "body",
+  role: WalliChatMessageRole = "assistant",
 ): PreparedBlock[] {
-  return resolveBuiltInBlockDefinition("inline").prepare(
-    marked.Lexer.lexInline(markdown),
-    variant,
-    { listDepth: 0, quoteDepth: 0 },
-  );
+  const tokens = lexMarkdown(markdown, role);
+  if (tokens.some((token) => resolveCustomBlockToken(token, role))) {
+    return parseBlockTokens(tokens, { listDepth: 0, quoteDepth: 0, role, inlineVariant: variant });
+  }
+  return resolveBuiltInBlockDefinition("inline", role)
+    .prepare(marked.Lexer.lexInline(markdown), variant, { listDepth: 0, quoteDepth: 0, role })
+    .map((block) => ({ ...block, role }));
 }
 
-export function parseMarkdownBlocks(markdown: string, streaming = false): PreparedBlock[] {
+export function parseMarkdownBlocks(
+  markdown: string,
+  streaming = false,
+  role: WalliChatMessageRole = "assistant",
+): PreparedBlock[] {
   const source = streaming ? remend(markdown) : markdown;
-  const tokens = lexMarkdown(source);
-  return mergeAssetsGroups(parseBlockTokens(tokens, { listDepth: 0, quoteDepth: 0 }));
+  const tokens = lexMarkdown(source, role);
+  return mergeAssetsGroups(parseBlockTokens(tokens, { listDepth: 0, quoteDepth: 0, role }));
 }
 
 export class StreamingMarkdownParser {
+  private readonly role: WalliChatMessageRole;
+
+  constructor(role: WalliChatMessageRole = "assistant") {
+    this.role = role;
+  }
   private stableBlocks: PreparedBlock[] = [];
   private stableTokenKeys: string[] = [];
 
   parse(markdown: string): PreparedBlock[] {
-    const tokens = lexMarkdown(remend(markdown));
+    const tokens = lexMarkdown(remend(markdown), this.role);
     const stableTokenCount = Math.max(0, tokens.length - 1);
     const reusableCount = Math.min(stableTokenCount, this.stableTokenKeys.length);
 
@@ -52,7 +65,7 @@ export class StreamingMarkdownParser {
     for (let index = this.stableTokenKeys.length; index < tokens.length; index++) {
       blocks = parseBlockTokens(
         tokens.slice(index, index + 1),
-        { listDepth: 0, quoteDepth: 0 },
+        { listDepth: 0, quoteDepth: 0, role: this.role },
         blocks,
       );
       if (index < stableTokenCount) {
@@ -77,8 +90,12 @@ function mergeAssetsGroups(blocks: readonly PreparedBlock[]): PreparedBlock[] {
   return grouped;
 }
 
-function lexMarkdown(markdown: string): Token[] {
-  return marked.lexer(markdown, { ...marked.defaults, gfm: true });
+function lexMarkdown(markdown: string, role: WalliChatMessageRole): Token[] {
+  return marked.lexer(markdown, {
+    ...marked.defaults,
+    gfm: true,
+    walliRole: role,
+  } as MarkedOptions & { walliRole: WalliChatMessageRole });
 }
 
 function tokenKey(token: Token): string {
@@ -90,24 +107,25 @@ export function parseBlockTokens(
   ctx: ParseContext,
   blocks: PreparedBlock[] = [],
 ): PreparedBlock[] {
-  const code = resolveBuiltInBlockDefinition("code");
-  const custom = resolveBuiltInBlockDefinition("custom");
-  const image = resolveBuiltInBlockDefinition("image");
-  const inline = resolveBuiltInBlockDefinition("inline");
-  const rule = resolveBuiltInBlockDefinition("rule");
-  const table = resolveBuiltInBlockDefinition("table");
+  const code = resolveBuiltInBlockDefinition("code", ctx.role);
+  const custom = resolveBuiltInBlockDefinition("custom", ctx.role);
+  const image = resolveBuiltInBlockDefinition("image", ctx.role);
+  const inline = resolveBuiltInBlockDefinition("inline", ctx.role);
+  const rule = resolveBuiltInBlockDefinition("rule", ctx.role);
+  const table = resolveBuiltInBlockDefinition("table", ctx.role);
 
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index];
 
     if (!token) continue;
 
-    const customBlock = resolveCustomBlockToken(token);
+    const customBlock = resolveCustomBlockToken(token, ctx.role);
     if (customBlock) {
       appendBlockGroup(
         blocks,
         [
           custom.prepare(customBlock.data, customBlock.definition, {
+            role: ctx.role,
             contentLeft: 0,
             marginTop: 0,
             markerClassName: null,
@@ -137,7 +155,7 @@ export function parseBlockTokens(
         } else {
           appendBlockGroup(
             blocks,
-            inline.prepare(token.tokens ?? [], "body", ctx),
+            inline.prepare(token.tokens ?? [], ctx.inlineVariant ?? "body", ctx),
             getCommonStyle("blockGap"),
           );
         }
@@ -147,7 +165,7 @@ export function parseBlockTokens(
       case "heading": {
         appendBlockGroup(
           blocks,
-          inline.prepare(token.tokens ?? [], headingVariant(token.depth), ctx),
+          inline.prepare(token.tokens ?? [], ctx.inlineVariant ?? headingVariant(token.depth), ctx),
           getCommonStyle("headingGap"),
         );
         continue;
@@ -175,6 +193,7 @@ export function parseBlockTokens(
         appendBlockGroup(
           blocks,
           parseBlockTokens(token.tokens ?? [], {
+            ...ctx,
             listDepth: ctx.listDepth,
             quoteDepth: ctx.quoteDepth + 1,
           }),
@@ -220,7 +239,7 @@ export function parseBlockTokens(
         if (Array.isArray(token.tokens) && token.tokens.length > 0) {
           appendBlockGroup(
             blocks,
-            inline.prepare(token.tokens, "body", ctx),
+            inline.prepare(token.tokens, ctx.inlineVariant ?? "body", ctx),
             getCommonStyle("blockGap"),
           );
         } else {
@@ -246,7 +265,7 @@ export function parseBlockTokens(
     }
   }
 
-  return blocks;
+  return blocks.map((block) => (block.role === ctx.role ? block : { ...block, role: ctx.role }));
 }
 
 const listMarkerClassName = inlinePiece.mark().className;
@@ -258,7 +277,11 @@ function buildPlainTextBlocks(
 ): PreparedBlock[] {
   if (text.length === 0) return [];
   const token = { raw: text, text, type: "text" } as Token;
-  return resolveBuiltInBlockDefinition("inline").prepare([token], variant, ctx);
+  return resolveBuiltInBlockDefinition("inline", ctx.role).prepare(
+    [token],
+    ctx.inlineVariant ?? variant,
+    ctx,
+  );
 }
 
 function buildFileBlock(
@@ -273,7 +296,7 @@ function buildFileBlock(
   const name = token.text.trim();
   if (src === undefined || !isFileName(name)) return null;
 
-  return resolveBuiltInBlockDefinition("assetsGroup").prepare(
+  return resolveBuiltInBlockDefinition("assetsGroup", ctx.role).prepare(
     [{ name, src, type: "file" }],
     createBlockBase(ctx),
   );
@@ -329,6 +352,7 @@ function isFileName(name: string): boolean {
 function buildListBlocks(token: Tokens.List, ctx: ParseContext): PreparedBlock[] {
   const blocks: PreparedBlock[] = [];
   const itemCtx: ParseContext = {
+    ...ctx,
     listDepth: ctx.listDepth + 1,
     quoteDepth: ctx.quoteDepth,
   };

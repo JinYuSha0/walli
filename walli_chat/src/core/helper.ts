@@ -95,6 +95,7 @@ export function createBlockBase(ctx: ParseContext): PreparedBlockBase {
 
   return {
     contentLeft,
+    role: ctx.role,
     marginTop: 0,
     markerClassName: null,
     markerLeft: null,

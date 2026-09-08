@@ -19,11 +19,7 @@ npm install @wallilabs/chat@alpha
 ```ts
 import "@wallilabs/chat";
 import "@wallilabs/chat/theme.css";
-import type {
-  WalliChatComposerElement,
-  WalliChatElement,
-  WalliChatMessage,
-} from "@wallilabs/chat";
+import type { WalliChatComposerElement, WalliChatElement, WalliChatMessage } from "@wallilabs/chat";
 
 const chat = document.querySelector<WalliChatElement>("walli-chat")!;
 const composer = document.querySelector<WalliChatComposerElement>("walli-chat-composer")!;
@@ -34,10 +30,7 @@ const messages: WalliChatMessage[] = [
 
 chat.messages = messages;
 composer.onSubmit = async (markdown) => {
-  chat.messages = [
-    ...chat.messages,
-    { id: crypto.randomUUID(), role: "user", markdown },
-  ];
+  chat.messages = [...chat.messages, { id: crypto.randomUUID(), role: "user", markdown }];
 };
 ```
 
@@ -51,11 +44,7 @@ composer.onSubmit = async (markdown) => {
 
 ```tsx
 import { useState } from "react";
-import {
-  WalliChat,
-  WalliChatComposer,
-  type WalliChatMessage,
-} from "@wallilabs/chat/react";
+import { WalliChat, WalliChatComposer, type WalliChatMessage } from "@wallilabs/chat/react";
 import "@wallilabs/chat/theme.css";
 
 export function App() {
@@ -88,11 +77,7 @@ export function App() {
 ```vue
 <script setup lang="ts">
 import { ref } from "vue";
-import {
-  WalliChat,
-  WalliChatComposer,
-  type WalliChatMessage,
-} from "@wallilabs/chat/vue";
+import { WalliChat, WalliChatComposer, type WalliChatMessage } from "@wallilabs/chat/vue";
 import "@wallilabs/chat/theme.css";
 
 const value = ref("");
@@ -101,21 +86,14 @@ const messages = ref<WalliChatMessage[]>([
 ]);
 
 function handleSubmit(markdown: string) {
-  messages.value = [
-    ...messages.value,
-    { id: crypto.randomUUID(), role: "user", markdown },
-  ];
+  messages.value = [...messages.value, { id: crypto.randomUUID(), role: "user", markdown }];
   value.value = "";
 }
 </script>
 
 <template>
   <WalliChat :messages="messages" style="height: 640px">
-    <WalliChatComposer
-      v-model:value="value"
-      slot="composer"
-      :on-submit="handleSubmit"
-    />
+    <WalliChatComposer v-model:value="value" slot="composer" :on-submit="handleSubmit" />
   </WalliChat>
 </template>
 ```
@@ -155,3 +133,55 @@ reduced-motion preferences. Without these options, insertion is immediate with n
 ## License
 
 [MIT](./LICENSE) © 2026 JinYuSha0
+
+## Blocks by message role
+
+`registerBlock` accepts an optional `role`: `assistant`, `system`, `user`, or any custom name. A role-specific registration takes precedence over the same block's shared registration (without `role`). Custom message roles keep their original role and use the default left-aligned layout. Built-in action buttons apply only to assistant/user messages; slide-in insertion animations apply only to assistant messages.
+
+```ts
+import { registerBlock, type WalliChatElement } from "@wallilabs/chat";
+import { noticeBlockDefinition, createNoticeMarkdown } from "@wallilabs/chat-blocks";
+
+registerBlock(noticeBlockDefinition);
+const registration = registerBlock({
+  ...noticeBlockDefinition,
+  role: "tool",
+  render(context) {
+    // context.role contains the actual message role.
+    return noticeBlockDefinition.render(context);
+  },
+});
+
+const chat = document.querySelector<WalliChatElement>("walli-chat")!;
+chat.messages = [
+  {
+    id: "tool-result",
+    role: "tool",
+    markdown: createNoticeMarkdown({ text: "Tool finished", variant: "success" }),
+  },
+];
+
+// Call registration.unregister() when this override is no longer needed.
+```
+
+Register blocks before assigning messages. Tokenization, preparation, measurement, and rendering use the matching role registration; measurement, materialization, and render contexts expose the actual `role`. Unregistering restores the previous registration or shared fallback for subsequent parsing. Built-in blocks are registered internally through the same `registerBlock` API and support role-specific overrides too.
+
+Streaming insertion accepts `role` in its options, for example `chat.insertStreamingMessageAtBottom(stream, { role: "tool" })`. The default remains `assistant`. The same registration API and message types are available from the React and Vue entry points.
+
+### Default system block
+
+`systemBlockDefinition` is the default `{ name: "inline", role: "system" }` registration. It owns the system text style and uses the same preparation, measurement, and rendering pipeline as other blocks. It is exported from the main, React, and Vue entry points.
+
+```ts
+import { registerBlock, systemBlockDefinition } from "@wallilabs/chat";
+import { html } from "lit";
+
+registerBlock({
+  ...systemBlockDefinition,
+  render(context) {
+    return html`<div class="my-system-message">${systemBlockDefinition.render(context)}</div>`;
+  },
+});
+```
+
+Defaults are registered centrally in `core/blocks/index.ts` through `registerBlock`. Register application overrides after importing the library and before assigning messages. Later registrations override earlier ones for the same name and role; `unregister()` restores the previous definition. The message container still controls system alignment and link actions.

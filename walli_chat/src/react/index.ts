@@ -38,6 +38,7 @@ import {
 } from "../core/block-registry";
 import type {
   WalliChatMessage,
+  WalliChatMessageRole,
   WalliChatEndReachedCallback,
   WalliChatEndReachedInfo,
   WalliChatComposerActionCallback,
@@ -392,6 +393,7 @@ export type {
   WalliChatEndReachedCallback,
   WalliChatEndReachedInfo,
   WalliChatMessage,
+  WalliChatMessageRole,
   WalliChatDeleteMessages,
   WalliChatDeleteMessagesOptions,
   WalliChatEditConfig,
@@ -407,5 +409,5 @@ export type {
   WalliChatTimeFormatter,
 };
 
-export { createSystemMessage } from "../core/blocks/system-block";
+export { createSystemMessage, systemBlockDefinition } from "../core/blocks/system-block";
 export { builtInBlocks, registerBlock };

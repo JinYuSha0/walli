@@ -37,12 +37,22 @@ export function createPreparedChatMessages(
   options: { bottomPaddingHeight?: number; streaming?: boolean } = {},
 ): PreparedChatMessage[] {
   return messages.map((seed) => {
-    const blocks =
-      seed.role === "system"
-        ? parseInlineMarkdownBlocks(seed.markdown, "system")
-        : parseMarkdownBlocks(seed.markdown, options.streaming);
+    let blocks: PreparedBlock[];
+    switch (seed.role) {
+      case "system":
+        blocks = parseInlineMarkdownBlocks(seed.markdown, "body", seed.role);
+        break;
+      case "user":
+        blocks = groupUserMessageAssets(
+          parseMarkdownBlocks(seed.markdown, options.streaming, seed.role),
+        );
+        break;
+      default:
+        blocks = parseMarkdownBlocks(seed.markdown, options.streaming, seed.role);
+    }
+
     return {
-      blocks: seed.role === "user" ? groupUserMessageAssets(blocks) : blocks,
+      blocks,
       bottomPaddingHeight: options.bottomPaddingHeight,
       createdAt: seed.createdAt,
       markdown: seed.markdown,
@@ -55,7 +65,7 @@ export function createPreparedChatMessages(
 }
 
 function groupUserMessageAssets(blocks: readonly PreparedBlock[]): PreparedBlock[] {
-  const assetsGroup = resolveBuiltInBlockDefinition("assetsGroup");
+  const assetsGroup = resolveBuiltInBlockDefinition("assetsGroup", "user");
   const grouped: PreparedBlock[] = [];
   for (let index = 0; index < blocks.length; index++) {
     const block = blocks[index]!;
@@ -131,10 +141,7 @@ export function buildConversationFrame(
       top,
     };
     messages.push(message);
-    y = bottom;
-    if (preparedMessage.role === "assistant") {
-      y += getCommonStyle("messageGap");
-    }
+    y = bottom + getMessageGap(preparedMessage);
     return message;
   };
 
@@ -149,7 +156,7 @@ export function buildConversationFrame(
       layoutCache,
     );
     if (systemMessage !== undefined) {
-      if (previousMessage?.role === "assistant") y -= getCommonStyle("messageGap");
+      y -= getMessageGap(previousMessage);
       appendMessage(systemMessage);
     }
     const message = appendMessage(preparedMessage);
@@ -162,11 +169,10 @@ export function buildConversationFrame(
   for (const id of layoutCache.keys()) {
     if (!messageIds.has(id)) layoutCache.delete(id);
   }
-  const trailingMessageGap = lastMessage?.role === "assistant" ? getCommonStyle("messageGap") : 0;
   const totalHeight =
     messages.length === 0
       ? chatTopPadding + chatBottomPadding
-      : y - trailingMessageGap + chatBottomPadding;
+      : y - getMessageGap(lastMessage) + chatBottomPadding;
 
   return {
     bottomOcclusionHeight,
@@ -190,6 +196,17 @@ export function getBlockUsedWidth(block: BlockFrame | BlockLayout): number {
     case "table":
     case "custom":
       return block.contentLeft + block.width;
+  }
+}
+
+function getMessageGap(message: PreparedChatMessage | undefined): number {
+  switch (message?.role) {
+    case undefined:
+    case "user":
+    case "system":
+      return 0;
+    default:
+      return getCommonStyle("messageGap");
   }
 }
 
@@ -217,12 +234,17 @@ function layoutMessageFrame(
   }
 
   const bubbleHeight = y + bubblePaddingY;
-  const actionHeight =
-    isSystem || preparedMessage.streaming || !preparedMessage.showActions
-      ? 0
-      : preparedMessage.role === "assistant"
-        ? getCommonStyle("assistantMessageActionHeight")
-        : getCommonStyle("userMessageActionHeight");
+  let actionHeight = 0;
+  if (!preparedMessage.streaming && preparedMessage.showActions) {
+    switch (preparedMessage.role) {
+      case "assistant":
+        actionHeight = getCommonStyle("assistantMessageActionHeight");
+        break;
+      case "user":
+        actionHeight = getCommonStyle("userMessageActionHeight");
+        break;
+    }
+  }
   const paddingTop = preparedMessage.role === "user" ? getCommonStyle("userMessagePaddingTop") : 0;
   const frameWidth =
     preparedMessage.role === "user"
@@ -235,7 +257,6 @@ function layoutMessageFrame(
     contentInsetX,
     frameWidth,
     layoutContentWidth: maxContentWidth,
-    role: preparedMessage.role,
     totalHeight: bubbleHeight + paddingTop + actionHeight,
     paddingTop,
   };

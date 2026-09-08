@@ -6,6 +6,7 @@ export {
   editBlockDefinition,
   imageBlockDefinition,
   inlineBlockDefinition,
+  systemBlockDefinition,
   ruleBlockDefinition,
   tableBlockDefinition,
   startBlockDefinition,

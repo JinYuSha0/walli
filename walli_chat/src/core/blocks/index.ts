@@ -13,6 +13,7 @@ import {
   startBlockDefinition,
   toolCallBlockDefinition,
 } from "./stream-block";
+import { systemBlockDefinition } from "./system-block";
 import { tableBlockDefinition } from "./table-block";
 
 registerBlock(assetsGroupBlockDefinition);
@@ -21,6 +22,7 @@ registerBlock(customBlockDefinition);
 registerBlock(editBlockDefinition);
 registerBlock(imageBlockDefinition);
 registerBlock(inlineBlockDefinition);
+registerBlock(systemBlockDefinition);
 registerBlock(ruleBlockDefinition);
 registerBlock(tableBlockDefinition);
 registerBlock(loadingBlockDefinition);
@@ -42,4 +44,4 @@ export { startBlockDefinition };
 export { reasoningBlockDefinition };
 export { errorBlockDefinition };
 export { toolCallBlockDefinition };
-export { createSystemMessage } from "./system-block";
+export { createSystemMessage, systemBlockDefinition } from "./system-block";

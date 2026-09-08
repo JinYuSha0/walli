@@ -1,3 +1,4 @@
+import type { WalliChatMessageRole } from "../../types";
 import { html, render, type TemplateResult } from "lit";
 import { customElement } from "lit/decorators.js";
 import { createBlockFrameBase } from "../helper";
@@ -12,6 +13,7 @@ export type PreparedCustomBlock = PreparedBlockBase & {
   kind: "custom";
 };
 export type CustomBlockLayout = {
+  role: WalliChatMessageRole;
   contentLeft: number;
   data: unknown;
   definition: AnyCustomBlockDefinition;
@@ -40,8 +42,8 @@ export const customBlockDefinition = {
       kind: "custom" as const,
     };
   },
-  measure(block, { availableWidth, top }) {
-    const metrics = block.definition.measure(block.data, { availableWidth });
+  measure(block, { availableWidth, top, role }) {
+    const metrics = block.definition.measure(block.data, { availableWidth, role });
     if (!Number.isFinite(metrics.height) || metrics.height < 0) {
       throw new Error(`Custom block "${block.definition.name}" returned an invalid height`);
     }
@@ -57,11 +59,13 @@ export const customBlockDefinition = {
   },
   materialize(block, frame) {
     return {
+      role: block.role ?? "assistant",
       contentLeft: frame.contentLeft,
       data:
         block.definition.materialize === undefined
           ? block.data
           : block.definition.materialize(block.data, {
+              role: block.role ?? "assistant",
               height: frame.height,
               width: frame.width,
             }),
@@ -83,6 +87,7 @@ export const customBlockDefinition = {
 } satisfies CoreBlockDefinition<"custom">;
 
 type CustomBlockContentLayout = {
+  role: WalliChatMessageRole;
   ctx: WalliChatBlockContext;
   data: unknown;
   definition: AnyCustomBlockDefinition;
@@ -119,6 +124,7 @@ class WalliCustomBlockContentElement extends HTMLElement {
 
     render(
       layout.definition.render({
+        role: layout.role,
         contentInsetX: 0,
         ctx: layout.ctx,
         data: layout.data,
@@ -193,6 +199,7 @@ class WalliCustomBlockElement extends BlockShellElement<CustomBlockLayout> {
       style=${`left:${contentInsetX + block.contentLeft}px;top:0;width:${block.width}px;height:${block.height}px;`}
       .layout=${{
         ctx,
+        role: block.role,
         data: block.data,
         definition: block.definition,
         height: block.height,

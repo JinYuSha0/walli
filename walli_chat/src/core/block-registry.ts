@@ -6,6 +6,7 @@ import type {
   WalliChatCustomBlockAction,
   WalliChatInsertMessagesOptions,
   WalliChatMessage,
+  WalliChatMessageRole,
   WalliChatRemoveMessages,
   WalliChatScrollToIndexOptions,
   WalliChatScrollToOptions,
@@ -13,6 +14,7 @@ import type {
 import type { IconNode } from "lucide";
 
 export type WalliChatBlockMeasureContext = {
+  role: WalliChatMessageRole;
   availableWidth: number;
 };
 
@@ -22,6 +24,7 @@ export type WalliChatBlockMetrics = {
 };
 
 export type WalliChatBlockMaterializeContext = {
+  role: WalliChatMessageRole;
   height: number;
   width: number;
 };
@@ -78,6 +81,7 @@ export type WalliChatBlockContext = WalliChatBlockState & {
 };
 
 export type WalliChatTokenizedBlockRenderContext<T> = {
+  role: WalliChatMessageRole;
   contentInsetX: number;
   ctx: WalliChatBlockContext;
   data: T;
@@ -118,6 +122,7 @@ export type WalliChatTokenizedBlockDefinition<
   Materialized = Prepared,
 > = {
   name: string;
+  role?: WalliChatMessageRole;
   marginBottom?: number;
   marginTop?: number;
   measure: (data: Prepared, context: WalliChatBlockMeasureContext) => WalliChatBlockMetrics;
@@ -129,15 +134,50 @@ export type WalliChatTokenizedBlockDefinition<
 
 export type AnyCustomBlockDefinition = WalliChatTokenizedBlockDefinition<unknown, unknown, unknown>;
 
-const definitions = new Map<string, AnyCustomBlockDefinition>();
+type ScopedDefinitions<T> = Map<string, Map<WalliChatMessageRole | undefined, { definition: T }[]>>;
+
+function resolveDefinition<T>(
+  definitions: ScopedDefinitions<T>,
+  name: string,
+  role?: WalliChatMessageRole,
+): T | undefined {
+  const scopes = definitions.get(name);
+  return (scopes?.get(role)?.at(-1) ?? scopes?.get(undefined)?.at(-1))?.definition;
+}
+
+function registerDefinition<T>(
+  definitions: ScopedDefinitions<T>,
+  name: string,
+  role: WalliChatMessageRole | undefined,
+  definition: T,
+): WalliChatBlockRegistration {
+  let scopes = definitions.get(name);
+  if (!scopes) definitions.set(name, (scopes = new Map()));
+  let entries = scopes.get(role);
+  if (!entries) scopes.set(role, (entries = []));
+  const entry = { definition };
+  entries.push(entry);
+  return {
+    unregister() {
+      const index = entries.indexOf(entry);
+      if (index < 0) return;
+      entries.splice(index, 1);
+      if (entries.length === 0) scopes.delete(role);
+      if (scopes.size === 0) definitions.delete(name);
+    },
+  };
+}
+
+const definitions: ScopedDefinitions<AnyCustomBlockDefinition> = new Map();
 const installedTokenizerNames = new Set<string>();
 const tokenTypePrefix = "walli-custom-block-";
 
 export function resolveCustomBlockToken(
   token: Token,
+  role?: WalliChatMessageRole,
 ): { data: unknown; definition: AnyCustomBlockDefinition } | null {
   if (!token.type.startsWith(tokenTypePrefix)) return null;
-  const definition = definitions.get(token.type.slice(tokenTypePrefix.length));
+  const definition = resolveDefinition(definitions, token.type.slice(tokenTypePrefix.length), role);
   if (!definition) return null;
   const data = (token as Token & { walliCustomBlockData?: unknown }).walliCustomBlockData;
   return { data, definition };
@@ -171,12 +211,13 @@ type BuiltInBlockLayoutMap = {
 };
 
 export type WalliChatBlockRenderContext<Name extends WalliChatBlockName = WalliChatBlockName> = {
+  role: WalliChatMessageRole;
   block: BuiltInBlockLayoutMap[Name];
   contentInsetX: number;
 } & (Name extends "custom" ? { ctx: WalliChatBlockContext; messageId: string } : object);
 
 export type WalliChatBlockDefinition<Name extends WalliChatBlockName = WalliChatBlockName> =
-  BuiltInBlockDefinitionMap[Name];
+  BuiltInBlockDefinitionMap[Name] & { role?: WalliChatMessageRole };
 
 export type WalliChatBlockRegistration = {
   unregister: () => void;
@@ -184,12 +225,13 @@ export type WalliChatBlockRegistration = {
 
 type AnyBuiltInBlockDefinition = BuiltInBlockDefinitionMap[WalliChatBuiltInBlockName];
 
-const builtInBlockDefinitions = new Map<WalliChatBuiltInBlockName, AnyBuiltInBlockDefinition>();
+const builtInBlockDefinitions: ScopedDefinitions<AnyBuiltInBlockDefinition> = new Map();
 
 export function resolveBuiltInBlockDefinition<Name extends WalliChatBuiltInBlockName>(
   name: Name,
+  role?: WalliChatMessageRole,
 ): BuiltInBlockDefinitionMap[Name] {
-  const definition = builtInBlockDefinitions.get(name);
+  const definition = resolveDefinition(builtInBlockDefinitions, name, role);
   if (definition === undefined) throw new Error(`Built-in block "${name}" is not registered`);
   return definition as BuiltInBlockDefinitionMap[Name];
 }
@@ -205,11 +247,16 @@ export function registerBlock(
 ): WalliChatBlockRegistration {
   const name = definition.name.trim();
   if (name.length === 0) throw new Error("Block name cannot be empty");
+  const role = definition.role?.trim();
+  if (role === "") throw new Error("Block role cannot be empty");
 
   if ("tokenizer" in definition) {
-    const previous = definitions.get(name);
-    const stored = definition as AnyCustomBlockDefinition;
-    definitions.set(name, stored);
+    const registration = registerDefinition(
+      definitions,
+      name,
+      role,
+      definition as AnyCustomBlockDefinition,
+    );
 
     if (!installedTokenizerNames.has(name)) {
       installedTokenizerNames.add(name);
@@ -217,7 +264,10 @@ export function registerBlock(
         level: definition.tokenizer.level ?? "block",
         name: `${tokenTypePrefix}${name}`,
         tokenizer(source, tokens) {
-          const current = definitions.get(name);
+          const role = (
+            this.lexer.options as typeof this.lexer.options & { walliRole?: WalliChatMessageRole }
+          ).walliRole;
+          const current = resolveDefinition(definitions, name, role);
           if (current === undefined) return undefined;
           const result = current.tokenizer.tokenize(source, tokens);
           if (!result) return undefined;
@@ -234,31 +284,19 @@ export function registerBlock(
       marked.use({ extensions: [extension] });
     }
 
-    return {
-      unregister() {
-        if (definitions.get(name) !== stored) return;
-        if (previous) definitions.set(name, previous);
-        else definitions.delete(name);
-      },
-    };
+    return registration;
   }
 
   if (!Object.prototype.hasOwnProperty.call(builtInBlocks, name)) {
     throw new Error(`Unknown built-in block "${name}"`);
   }
 
-  const builtInName = name as WalliChatBuiltInBlockName;
-  const previous = builtInBlockDefinitions.get(builtInName);
-  const stored = definition as unknown as AnyBuiltInBlockDefinition;
-  builtInBlockDefinitions.set(builtInName, stored);
-
-  return {
-    unregister() {
-      if (builtInBlockDefinitions.get(builtInName) !== stored) return;
-      if (previous) builtInBlockDefinitions.set(builtInName, previous);
-      else builtInBlockDefinitions.delete(builtInName);
-    },
-  };
+  return registerDefinition(
+    builtInBlockDefinitions,
+    name,
+    role,
+    definition as AnyBuiltInBlockDefinition,
+  );
 }
 
 export function measureMessageBlockFrame(
@@ -266,8 +304,9 @@ export function measureMessageBlockFrame(
   contentWidth: number,
   top: number,
 ): BlockFrame {
-  const definition = resolveBuiltInBlockDefinition(block.kind);
+  const definition = resolveBuiltInBlockDefinition(block.kind, block.role);
   return definition.measure(block as never, {
+    role: block.role ?? "assistant",
     availableWidth: Math.max(1, contentWidth - block.contentLeft),
     contentWidth,
     top,
@@ -279,8 +318,11 @@ export function materializeMessageBlockLayout(
   frame: BlockFrame,
   contentWidth: number,
 ): BlockLayout {
-  const definition = resolveBuiltInBlockDefinition(block.kind);
-  return definition.materialize(block as never, frame as never, { contentWidth }) as BlockLayout;
+  const definition = resolveBuiltInBlockDefinition(block.kind, block.role);
+  return definition.materialize(block as never, frame as never, {
+    contentWidth,
+    role: block.role ?? "assistant",
+  }) as BlockLayout;
 }
 
 export function renderMessageBlockTemplate(
@@ -288,10 +330,11 @@ export function renderMessageBlockTemplate(
   contentInsetX: number,
   ctx?: WalliChatBlockContext,
   messageId?: string,
+  role: WalliChatMessageRole = "assistant",
 ): unknown {
-  const definition = resolveBuiltInBlockDefinition(block.kind);
-  if (block.kind !== "custom") return definition.render({ block, contentInsetX } as never);
+  const definition = resolveBuiltInBlockDefinition(block.kind, role);
+  if (block.kind !== "custom") return definition.render({ block, contentInsetX, role } as never);
   if (ctx === undefined) throw new Error("Custom blocks require a Walli Chat block context");
   if (messageId === undefined) throw new Error("Custom blocks require a message id");
-  return definition.render({ block, contentInsetX, ctx, messageId } as never);
+  return definition.render({ block, contentInsetX, ctx, messageId, role } as never);
 }

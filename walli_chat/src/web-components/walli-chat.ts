@@ -530,10 +530,10 @@ export class WalliChatElement extends LitElement {
     const message: WalliChatMessage = {
       createdAt: Date.now(),
       id: options.messageId,
-      role: "assistant",
+      role: options.role ?? "assistant",
       markdown: STREAMING_START_MARKDOWN,
     };
-    const parser = new StreamingMarkdownParser();
+    const parser = new StreamingMarkdownParser(message.role);
     const bottomPaddingHeight = Number.isFinite(options.bottomPaddingHeight)
       ? Math.max(0, options.bottomPaddingHeight ?? 0)
       : 0;
@@ -796,7 +796,7 @@ export class WalliChatElement extends LitElement {
       createdAt: message.createdAt,
       markdown,
       id: message.id,
-      role: "assistant",
+      role: message.role,
       showActions: message.showActions ?? true,
       bottomPaddingHeight: this.preparedMessages[index]?.bottomPaddingHeight,
       streaming: true,

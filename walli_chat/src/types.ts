@@ -1,10 +1,12 @@
 import type { IconNode } from "lucide";
 
+export type WalliChatMessageRole = "assistant" | "system" | "user" | (string & {});
+
 export type WalliChatMessage = {
   createdAt?: number;
   id: string;
   meta?: unknown;
-  role: "assistant" | "system" | "user";
+  role: WalliChatMessageRole;
   markdown: string;
   showActions?: boolean;
 };
@@ -210,6 +212,7 @@ export type WalliChatTextStream =
   ReadableStream<string | Uint8Array> | PromiseLike<ReadableStream<string | Uint8Array>>;
 
 type WalliChatStreamingOptionsBase = {
+  role?: WalliChatMessageRole;
   getToolLabel?: (toolName: string) => string;
   messageId: string;
   reasoningLabels?: {

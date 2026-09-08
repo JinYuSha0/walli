@@ -1,3 +1,4 @@
+import type { WalliChatMessageRole } from "../types";
 import type {
   AssetsGroupBlockFrame,
   AssetsGroupBlockLayout,
@@ -19,12 +20,14 @@ import type { PreparedRuleBlock, RuleBlockFrame, RuleBlockLayout } from "./block
 import type { PreparedTableBlock, TableBlockFrame, TableBlockLayout } from "./blocks/table-block";
 
 export type CoreBlockMeasureContext = {
+  role: WalliChatMessageRole;
   availableWidth: number;
   contentWidth: number;
   top: number;
 };
 
 export type CoreBlockMaterializeContext = {
+  role: WalliChatMessageRole;
   contentWidth: number;
 };
 
@@ -49,6 +52,7 @@ export type CoreBlockDefinition<
   ) => Extract<BlockLayout, { kind: Kind }>;
   render: (
     context: {
+      role: WalliChatMessageRole;
       block: Extract<BlockLayout, { kind: Kind }>;
       contentInsetX: number;
     } & (Kind extends "custom"
@@ -58,11 +62,14 @@ export type CoreBlockDefinition<
 };
 
 export type ParseContext = {
+  role?: WalliChatMessageRole;
+  inlineVariant?: import("./blocks/inline-block").InlineVariant;
   listDepth: number;
   quoteDepth: number;
 };
 
 export type PreparedBlockBase = {
+  role?: WalliChatMessageRole;
   contentLeft: number;
   marginTop: number;
   markerClassName: string | null;
@@ -86,7 +93,7 @@ export type PreparedChatMessage = {
   createdAt?: number;
   markdown: string;
   id: string;
-  role: "assistant" | "system" | "user";
+  role: WalliChatMessageRole;
   showActions: boolean;
   streaming?: boolean;
 };
@@ -126,7 +133,6 @@ export type MessageFrame = {
   contentInsetX: number;
   frameWidth: number;
   layoutContentWidth: number;
-  role: "assistant" | "system" | "user";
   totalHeight: number;
   paddingTop?: number;
 };
