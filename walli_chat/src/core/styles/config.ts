@@ -12,6 +12,10 @@ const BREAKPOINTS = {
   "2xl": 1536,
 } as const;
 
+export type ResponsiveBreakpoint = "base" | keyof typeof BREAKPOINTS;
+
+export const RESPONSIVE_SIGNAL = signal<ResponsiveBreakpoint | undefined>(undefined);
+
 type Breakpoint = keyof typeof BREAKPOINTS;
 type ResponsiveValue = Partial<Record<"base" | Breakpoint, number>>;
 
@@ -45,10 +49,14 @@ export function getSpace(multiple: number) {
 
 export function getResponsiveValue(values: ResponsiveValue): number {
   let resolved = values.base ?? 0;
-  if (typeof window === "undefined") return resolved;
+  const responsive = RESPONSIVE_SIGNAL.value;
 
   for (const breakpoint of Object.keys(BREAKPOINTS) as Breakpoint[]) {
-    if (values[breakpoint] !== undefined && window.matchMedia(minWidth(breakpoint)).matches) {
+    const matches =
+      responsive == null
+        ? typeof window !== "undefined" && window.matchMedia(minWidth(breakpoint)).matches
+        : responsive !== "base" && BREAKPOINTS[breakpoint] <= BREAKPOINTS[responsive];
+    if (values[breakpoint] !== undefined && matches) {
       resolved = values[breakpoint]!;
     }
   }

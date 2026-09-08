@@ -122,6 +122,19 @@ function handleSubmit(markdown: string) {
 
 Custom blocks are available from [`@wallilabs/chat-blocks`](https://www.npmjs.com/package/@wallilabs/chat-blocks).
 
+## Responsive breakpoint
+
+Set `responsive` to select the shared global breakpoint. Supported values:
+`base`, `sm`, `md`, `lg`, `xl`, `2xl`. Without an override, viewport media queries apply.
+
+```html
+<walli-chat responsive="xl"></walli-chat>
+```
+
+All chats share this setting. Changing `responsive` updates the global breakpoint
+and relayouts that chat. Removing the attribute restores automatic viewport detection.
+Other chats use the new global setting on their next layout; there is no global subscription.
+
 ## License
 
 [MIT](./LICENSE) © 2026 JinYuSha0

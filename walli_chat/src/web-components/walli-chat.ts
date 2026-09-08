@@ -1,3 +1,4 @@
+import { RESPONSIVE_SIGNAL, type ResponsiveBreakpoint } from "../core/styles/config";
 import "./walli-message";
 import "./walli-scroll-to-bottom-button";
 import "./walli-loading";
@@ -105,6 +106,7 @@ function createErrorBlockMarkdown(text: string): string {
 
 @customElement("walli-chat")
 export class WalliChatElement extends LitElement {
+  @property({ type: String }) accessor responsive: ResponsiveBreakpoint | undefined;
   @property({ attribute: false }) accessor emptyContent: unknown;
   @property({ type: Boolean, reflect: true }) accessor loading = false;
   private actionCallback: ((...args: any[]) => any) | undefined;
@@ -863,6 +865,11 @@ export class WalliChatElement extends LitElement {
   }
 
   override updated(changedProperties: Map<PropertyKey, unknown>): void {
+    if (changedProperties.has("responsive")) {
+      RESPONSIVE_SIGNAL.value = this.responsive ?? undefined;
+      this.messageLayoutCache.clear();
+      this.invalidateFrame();
+    }
     if (changedProperties.has("bottomOcclusionHeight")) {
       this.handleBottomOcclusionChange();
     }
