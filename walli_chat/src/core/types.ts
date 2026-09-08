@@ -20,6 +20,7 @@ import type { PreparedRuleBlock, RuleBlockFrame, RuleBlockLayout } from "./block
 import type { PreparedTableBlock, TableBlockFrame, TableBlockLayout } from "./blocks/table-block";
 
 export type CoreBlockMeasureContext = {
+  meta?: unknown;
   role: WalliChatMessageRole;
   availableWidth: number;
   contentWidth: number;

@@ -208,12 +208,12 @@ export function getBlockUsedWidth(block: BlockFrame | BlockLayout): number {
   }
 }
 
-function layoutBlocks(prepared: readonly PreparedBlock[], width: number, top = 0) {
+function layoutBlocks(prepared: readonly PreparedBlock[], width: number, top = 0, meta?: unknown) {
   let y = top;
   let usedWidth = 0;
   const blocks = prepared.map((block) => {
     y += block.marginTop;
-    const frame = measureMessageBlockFrame(block, width, y);
+    const frame = measureMessageBlockFrame(block, width, y, meta);
     y += frame.height;
     usedWidth = Math.max(usedWidth, getBlockUsedWidth(frame));
     return frame;
@@ -282,7 +282,7 @@ function layoutMessageFrame(
     blocks,
     height,
     usedWidth: usedContentWidth,
-  } = layoutBlocks(preparedMessage.blocks, maxContentWidth, bubblePaddingY);
+  } = layoutBlocks(preparedMessage.blocks, maxContentWidth, bubblePaddingY, preparedMessage.meta);
   const bubbleHeight = height + bubblePaddingY * 2;
   let actionHeight = 0;
   if (!preparedMessage.streaming && preparedMessage.showActions) {

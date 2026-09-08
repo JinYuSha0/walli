@@ -43,8 +43,8 @@ export const customBlockDefinition = {
       kind: "custom" as const,
     };
   },
-  measure(block, { availableWidth, top, role }) {
-    const metrics = block.definition.measure(block.data, { availableWidth, role });
+  measure(block, { availableWidth, top, role, meta }) {
+    const metrics = block.definition.measure(block.data, { availableWidth, role, meta: meta ?? block.definition.meta });
     if (!Number.isFinite(metrics.height) || metrics.height < 0) {
       throw new Error(`Custom block "${block.definition.name}" returned an invalid height`);
     }

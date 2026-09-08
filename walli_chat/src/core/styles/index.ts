@@ -206,7 +206,7 @@ const CommonStyle = computed(() => ({
   bubbleMaxRatio: getResponsiveValue({ base: 0.92, xl: 0.78 }),
   bubblePaddingX: getSpace(getResponsiveValue({ base: 2, xl: 4 })),
   bubblePaddingY: getSpace(2.5),
-  systemBubblePaddingY: getSpace(4),
+  systemBubblePaddingY: getSpace(getResponsiveValue({ base: 2, xl: 4 })),
   messageSidePadding: getSpace(getResponsiveValue({ base: 2, xl: 5.5 })),
   messageGap: getSpace(4),
   assistantMessageActionHeight: getSpace(12.5),

@@ -14,6 +14,7 @@ import type {
 import type { IconNode } from "lucide";
 
 export type WalliChatBlockMeasureContext = {
+  meta?: unknown;
   role: WalliChatMessageRole;
   availableWidth: number;
 };
@@ -340,9 +341,11 @@ export function measureMessageBlockFrame(
   block: PreparedBlock,
   contentWidth: number,
   top: number,
+  meta?: unknown,
 ): BlockFrame {
   const definition = resolveBuiltInBlockDefinition(block.kind, block.role);
   return definition.measure(block as never, {
+    meta,
     role: block.role ?? "assistant",
     availableWidth: Math.max(1, contentWidth - block.contentLeft),
     contentWidth,

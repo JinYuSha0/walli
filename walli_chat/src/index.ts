@@ -34,5 +34,6 @@ export {
   type WalliChatTokenizedBlockRenderContext,
 } from "./core/block-registry";
 export { prepareMarkdownContent } from "./core";
+export { getSpace, getResponsiveValue } from "./core/styles/config";
 
 export type { WalliChatRoleBlockDefinition } from "./core/block-registry";
