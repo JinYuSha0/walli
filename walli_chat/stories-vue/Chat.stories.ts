@@ -1033,16 +1033,6 @@ export const FullChatStickToBottom: Story = {
   render: render(FullChatDemo, { mode: "stickToBottom" }),
   parameters: source(fullChatCode),
 };
-export const ReasoningStream: Story = {
-  render: render(ReasoningStreamDemo),
-  parameters: source(reasoningStreamCode),
-};
-export const Conversation: Story = { parameters: source(chatSource(conversation)) };
-
-function fillIcon(icon: IconNode): IconNode {
-  return icon.map(([tag, attributes]) => [tag, { ...attributes, fill: "currentColor" }]);
-}
-
 export const Actions: Story = {
   render: () => ({
     components: { WalliChat },
@@ -1174,6 +1164,18 @@ function handleAction(action: WalliChatAction) {
   />
 </template>`),
 };
+
+export const Conversation: Story = { parameters: source(chatSource(conversation)) };
+
+export const ReasoningStream: Story = {
+  render: render(ReasoningStreamDemo),
+  parameters: source(reasoningStreamCode),
+};
+
+function fillIcon(icon: IconNode): IconNode {
+  return icon.map(([tag, attributes]) => [tag, { ...attributes, fill: "currentColor" }]);
+}
+
 export const TimeMessages: Story = {
   args: {
     intervalSeconds: 10 * 60,

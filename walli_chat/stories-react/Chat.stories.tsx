@@ -118,16 +118,6 @@ export const FullChatStickToBottom: Story = {
     ),
   ),
 };
-export const ReasoningStream: Story = {
-  render: () => <ReasoningStreamDemo />,
-  parameters: source(exampleSources.reasoningStream),
-};
-export const Conversation: Story = { parameters: source(exampleSources.conversation) };
-
-function fillIcon(icon: IconNode): IconNode {
-  return icon.map(([tag, attributes]) => [tag, { ...attributes, fill: "currentColor" }]);
-}
-
 export const Actions: Story = {
   render: () => (
     <div style={{ height: 320, width: "100%" }}>
@@ -182,6 +172,18 @@ export const Actions: Story = {
   ),
   parameters: source(exampleSources.actions),
 };
+
+export const Conversation: Story = { parameters: source(exampleSources.conversation) };
+
+export const ReasoningStream: Story = {
+  render: () => <ReasoningStreamDemo />,
+  parameters: source(exampleSources.reasoningStream),
+};
+
+function fillIcon(icon: IconNode): IconNode {
+  return icon.map(([tag, attributes]) => [tag, { ...attributes, fill: "currentColor" }]);
+}
+
 export const TimeMessages: Story = {
   args: {
     intervalSeconds: 10 * 60,

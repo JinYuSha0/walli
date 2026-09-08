@@ -33,7 +33,7 @@ const actionsGap = 12;
 const actionsHeight = 36;
 const paddingBottom = 12;
 const actionButtonClass =
-  "appearance-none box-border inline-flex h-9 min-h-9 max-h-9 flex-none cursor-pointer items-center justify-center rounded-[18px] px-3.5 py-0 font-sans text-sm font-medium leading-none outline-none transition-colors";
+  "appearance-none box-border inline-flex h-[36px] min-h-[36px] max-h-[36px] flex-none cursor-pointer items-center justify-center rounded-[18px] px-3.5 py-0 font-sans text-sm font-medium leading-none outline-none transition-colors";
 
 export function createEditBlockMarkdown(value: string, config: WalliChatEditConfig = {}): string {
   return `:::edit-block\n${JSON.stringify({
@@ -83,8 +83,8 @@ export const editBlockDefinition: WalliChatTokenizedBlockDefinition<EditBlockDat
     };
     return html`
       <div
-        class="box-border flex h-full w-full flex-col gap-3 rounded-2xl bg-muted p-3 text-foreground shadow-none"
-        style=${`height:${height}px`}
+        class="box-border flex h-full w-full flex-col rounded-2xl bg-muted text-foreground shadow-none"
+        style=${`height:${height}px;padding:${paddingTop}px ${paddingX}px ${paddingBottom}px;gap:${actionsGap}px`}
       >
         <textarea
           ${ref((element) => {
@@ -96,9 +96,9 @@ export const editBlockDefinition: WalliChatTokenizedBlockDefinition<EditBlockDat
             });
           })}
           aria-label=${data.placeholder}
-          class="box-border w-full resize-none overflow-y-auto border-0 bg-transparent p-0 font-sans text-base leading-6 text-inherit outline-none [scrollbar-color:var(--border)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border"
+          class="box-border w-full min-h-0 flex-none resize-none overflow-y-auto border-0 bg-transparent p-0 text-inherit outline-none [scrollbar-color:var(--border)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border"
           placeholder=${data.placeholder}
-          style=${`height:${inputHeight}px`}
+          style=${`height:${inputHeight}px;font:${font};-webkit-text-size-adjust:100%;text-size-adjust:100%`}
           .value=${data.value}
           @input=${(event: Event) => {
             data.value = (event.currentTarget as HTMLTextAreaElement).value;
@@ -109,7 +109,7 @@ export const editBlockDefinition: WalliChatTokenizedBlockDefinition<EditBlockDat
             ctx.requestRender(messageId);
           }}
         ></textarea>
-        <div class="flex h-9 flex-none justify-end gap-2">
+        <div class="flex flex-none justify-end gap-2" style=${`height:${actionsHeight}px`}>
           <button
             class=${`${actionButtonClass} border border-solid border-border bg-background text-foreground hover:bg-muted`}
             type="button"
