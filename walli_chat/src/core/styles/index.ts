@@ -195,7 +195,9 @@ export function getMediaStyle<Key extends keyof (typeof MediaStyle)["value"]>(
 }
 
 const CommonStyle = computed(() => ({
-  blockGap: getSpace(4),
+  blockGap: getSpace(3),
+  listItemGap: getSpace(1),
+  compactParagraphGap: getSpace(2),
   richBlockGap: getSpace(2),
   headingGap: getSpace(5),
   listNestingIndent: getSpace(5),

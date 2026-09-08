@@ -1,6 +1,4 @@
-import { computed } from "@preact/signals-core";
 import { createBlockBase, createBlockFrameBase } from "../helper";
-import { getSpace } from "../styles/config";
 import type {
   BlockFrameBase,
   CoreBlockDefinition,
@@ -27,14 +25,6 @@ export type RuleBlockLayout = {
   width: number;
 };
 export type RuleBlockFrame = BlockFrameBase & { kind: "rule"; width: number };
-
-const RuleBlockStyle = computed(() => ({
-  ruleHeight: getSpace(4.5),
-}));
-
-function getRuleBlockStyle(key: keyof (typeof RuleBlockStyle)["value"]) {
-  return RuleBlockStyle.value[key];
-}
 
 export const ruleBlockDefinition = {
   name: "rule",
@@ -67,7 +57,7 @@ export const ruleBlockDefinition = {
 function buildRuleBlock(ctx: ParseContext): PreparedRuleBlock {
   return {
     ...createBlockBase(ctx),
-    height: getRuleBlockStyle("ruleHeight"),
+    height: 1,
     kind: "rule",
   };
 }

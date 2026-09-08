@@ -6,6 +6,7 @@ import type { BlockFrameBase, CoreBlockDefinition, PreparedBlockBase } from "../
 import { BlockShellElement, type BlockRenderLayout } from "../block-shell";
 import type { AnyCustomBlockDefinition, WalliChatBlockContext } from "../block-registry";
 import walliChatUnoCss from "virtual:walli-chat-uno-styles";
+import prismThemeCss from "../styles/prism-theme.css?inline";
 
 export type PreparedCustomBlock = PreparedBlockBase & {
   data: unknown;
@@ -174,8 +175,7 @@ function supportsConstructableStyleSheets(root: ShadowRoot): boolean {
 }
 
 function normalizeStyles(styles: string | readonly string[] | undefined): string {
-  if (styles === undefined) return walliChatUnoCss;
-  return `${walliChatUnoCss}\n${typeof styles === "string" ? styles : styles.join("\n")}`;
+  return [walliChatUnoCss, prismThemeCss, ...(Array.isArray(styles) ? styles : [styles])].join("\n");
 }
 
 @customElement("walli-custom-block")

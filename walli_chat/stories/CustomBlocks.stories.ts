@@ -789,6 +789,18 @@ document.body.append(chat);`,
     ></walli-chat>`,
   play: async ({ canvasElement }) => {
     const chat = canvasElement.querySelector<WalliChatElement>("walli-chat")!;
+    const nestedList = parseMarkdownBlocks("- Parent\n  - Child\n  - Sibling\n- Next");
+    await expect(nestedList.slice(1).map((block) => block.marginTop)).toEqual([4, 4, 4]);
+    const quote = parseMarkdownBlocks("> First paragraph\n>\n> Second paragraph");
+    await expect(quote[1]?.marginTop).toBe(8);
+    const separatedLists = parseMarkdownBlocks("- Unordered\n\n1. Ordered");
+    await expect(separatedLists[1]?.marginTop).toBe(12);
+    const listAndQuote = parseMarkdownBlocks("1. Ordered\n\n> First paragraph\n>\n> Second paragraph");
+    await expect(listAndQuote.slice(1).map((block) => block.marginTop)).toEqual([12, 8]);
+    const separator = parseMarkdownBlocks("Before\n\n---\n\nAfter");
+    await expect(separator[1]).toMatchObject({ kind: "rule", height: 1, marginTop: 12 });
+    await expect(separator[2]?.marginTop).toBe(12);
+
     await expect(parseMarkdownBlocks("**Hello**", false, "people")[0]?.kind).toBe("inline");
     const prepared = createPreparedChatMessages([
       { id: "role-wrapper", role: "people", markdown: "**Hello**" },
@@ -952,6 +964,12 @@ document.body.append(chat);`,
       expect(getComputedStyle(wrapper).backgroundColor).toBe("rgba(0, 0, 0, 0)");
       expect(wrapper.querySelector(":scope > [aria-hidden]")).toBeNull();
       expect(content.querySelector("walli-code-block")).toBeTruthy();
+      const keyword = content.querySelector("walli-code-block .token.keyword");
+      expect(keyword).toBeTruthy();
+      expect(getComputedStyle(keyword!).color).toBe("rgb(0, 119, 170)");
+      const codeString = content.querySelector("walli-code-block .token.string");
+      expect(codeString).toBeTruthy();
+      expect(getComputedStyle(codeString!).color).toBe("rgb(102, 153, 0)");
       expect(content.querySelector("walli-table-block")).toBeTruthy();
       const table = content.querySelector("walli-table-block")!;
       const cells = [...table.querySelectorAll<HTMLElement>(".box-border")];

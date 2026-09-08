@@ -129,6 +129,9 @@ export function parseBlockTokens(
   const inline = resolveBuiltInBlockDefinition("inline", ctx.role);
   const rule = resolveBuiltInBlockDefinition("rule", ctx.role);
   const table = resolveBuiltInBlockDefinition("table", ctx.role);
+  const blockGap = getCommonStyle(
+    ctx.listDepth > 0 || ctx.quoteDepth > 0 ? "compactParagraphGap" : "blockGap",
+  );
 
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index];
@@ -165,14 +168,14 @@ export function parseBlockTokens(
         const imageBlock = image.prepare(token.tokens, ctx);
         const fileBlock = buildFileBlock(token.tokens, ctx);
         if (imageBlock) {
-          appendBlockGroup(blocks, [imageBlock], getCommonStyle("blockGap"));
+          appendBlockGroup(blocks, [imageBlock], blockGap);
         } else if (fileBlock) {
-          appendBlockGroup(blocks, [fileBlock], getCommonStyle("blockGap"));
+          appendBlockGroup(blocks, [fileBlock], blockGap);
         } else {
           appendBlockGroup(
             blocks,
             inline.prepare(token.tokens ?? [], ctx.inlineVariant ?? "body", ctx),
-            getCommonStyle("blockGap"),
+            blockGap,
           );
         }
         continue;
@@ -188,11 +191,7 @@ export function parseBlockTokens(
       }
 
       case "code": {
-        appendBlockGroup(
-          blocks,
-          [code.prepare(token.text, ctx, token.lang)],
-          getCommonStyle("blockGap"),
-        );
+        appendBlockGroup(blocks, [code.prepare(token.text, ctx, token.lang)], blockGap);
         continue;
       }
 
@@ -200,7 +199,7 @@ export function parseBlockTokens(
         appendBlockGroup(
           blocks,
           buildListBlocks(token as Tokens.List, ctx),
-          getCommonStyle("blockGap"),
+          ctx.listDepth > 0 ? getCommonStyle("listItemGap") : blockGap,
         );
         continue;
       }
@@ -213,13 +212,13 @@ export function parseBlockTokens(
             listDepth: ctx.listDepth,
             quoteDepth: ctx.quoteDepth + 1,
           }),
-          getCommonStyle("richBlockGap"),
+          blockGap,
         );
         continue;
       }
 
       case "hr": {
-        appendBlockGroup(blocks, [rule.prepare(ctx)], getCommonStyle("blockGap"));
+        appendBlockGroup(blocks, [rule.prepare(ctx)], blockGap);
         continue;
       }
 
@@ -242,11 +241,7 @@ export function parseBlockTokens(
             getCommonStyle("richBlockGap"),
           );
         } else {
-          appendBlockGroup(
-            blocks,
-            buildPlainTextBlocks(htmlText, "body", ctx),
-            getCommonStyle("blockGap"),
-          );
+          appendBlockGroup(blocks, buildPlainTextBlocks(htmlText, "body", ctx), blockGap);
         }
         continue;
       }
@@ -256,14 +251,10 @@ export function parseBlockTokens(
           appendBlockGroup(
             blocks,
             inline.prepare(token.tokens, ctx.inlineVariant ?? "body", ctx),
-            getCommonStyle("blockGap"),
+            blockGap,
           );
         } else {
-          appendBlockGroup(
-            blocks,
-            buildPlainTextBlocks(token.text, "body", ctx),
-            getCommonStyle("blockGap"),
-          );
+          appendBlockGroup(blocks, buildPlainTextBlocks(token.text, "body", ctx), blockGap);
         }
         continue;
       }
@@ -271,11 +262,7 @@ export function parseBlockTokens(
       default: {
         const fallbackText = fallbackTextForToken(token);
         if (fallbackText.length > 0) {
-          appendBlockGroup(
-            blocks,
-            buildPlainTextBlocks(fallbackText, "body", ctx),
-            getCommonStyle("blockGap"),
-          );
+          appendBlockGroup(blocks, buildPlainTextBlocks(fallbackText, "body", ctx), blockGap);
         }
       }
     }
@@ -386,7 +373,11 @@ function buildListBlocks(token: Tokens.List, ctx: ParseContext): PreparedBlock[]
       listMarkerClassName,
       item.task,
     );
-    appendBlockGroup(blocks, itemBlocks, getSpace(1));
+    appendBlockGroup(
+      blocks,
+      itemBlocks,
+      getCommonStyle(token.loose ? "compactParagraphGap" : "listItemGap"),
+    );
   }
 
   return blocks;
