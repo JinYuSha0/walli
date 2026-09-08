@@ -77,7 +77,7 @@ export const recommendedRepliesBlockDefinition = {
     const disabled = ctx.isStreaming;
     const innerWidth = getInnerWidth(width);
     return html`<div
-      class="box-border flex h-full w-full flex-col items-start gap-2 p-1.5"
+      class="box-border flex h-full w-full flex-col items-start gap-2 py-1.5 pr-1.5"
       aria-label="Recommended replies"
     >
       ${data.replies.map((reply) => {
@@ -138,7 +138,7 @@ function getContentWidth(buttonWidth: number): number {
 }
 
 function getInnerWidth(availableWidth: number): number {
-  return Math.max(1, availableWidth - containerInset * 2);
+  return Math.max(1, availableWidth - containerInset);
 }
 
 function getButtonHeight(lineCount: number): number {

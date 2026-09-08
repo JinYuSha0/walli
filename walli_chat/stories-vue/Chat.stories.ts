@@ -1323,9 +1323,9 @@ export const AssistantMessage: Story = {
   render: (args) => ({
     components: { ChatSurface },
     setup: () => ({ args }),
-    template: `<ChatSurface v-bind="args" compact />`,
+    template: `<ChatSurface v-bind="args" />`,
   }),
-  parameters: source(chatSource(assistantMessage, 240)),
+  parameters: source(chatSource(assistantMessage, 640)),
 };
 export const ImageMessage: Story = {
   args: { messages: imageMessage },

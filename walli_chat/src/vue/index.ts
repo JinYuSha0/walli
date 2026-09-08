@@ -328,3 +328,9 @@ export { builtInBlocks, registerBlock };
 export { prepareMarkdownContent } from "../core";
 
 export type { WalliChatRoleBlockDefinition } from "../core/block-registry";
+
+export {
+  assistantBlockDefinition,
+  createAssistantBlockDefinition,
+  type AssistantBlockMeta,
+} from "../core/blocks/assistant-block";

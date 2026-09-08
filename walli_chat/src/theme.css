@@ -58,3 +58,19 @@
   --walli-ring: oklch(0.556 0 0);
   --walli-error: oklch(0.704 0.191 22.216);
 }
+
+:root {
+  --walli-people-background: #eeeef0;
+  --walli-people-color: #161618;
+  --walli-people-nickname-color: #71717a;
+  --walli-people-avatar-background: #ececed;
+  --walli-people-avatar-color: #52525b;
+}
+
+.dark {
+  --walli-people-background: #27272a;
+  --walli-people-color: #f4f4f5;
+  --walli-people-nickname-color: #a1a1aa;
+  --walli-people-avatar-background: #3f3f46;
+  --walli-people-avatar-color: #e4e4e7;
+}

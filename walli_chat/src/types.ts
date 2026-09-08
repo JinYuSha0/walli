@@ -2,14 +2,22 @@ import type { IconNode } from "lucide";
 
 export type WalliChatMessageRole = "assistant" | "system" | "user" | (string & {});
 
+export type AssistantBlockMeta = {
+  nickname?: string;
+  avatarUrl?: string;
+  showBubble?: boolean;
+};
+
 export type WalliChatMessage = {
   createdAt?: number;
   id: string;
-  meta?: unknown;
-  role: WalliChatMessageRole;
+
   markdown: string;
   showActions?: boolean;
-};
+} & (
+  | { role: "assistant"; meta?: AssistantBlockMeta }
+  | { role: WalliChatMessageRole; meta?: Record<string, unknown> }
+);
 export type WalliChatMessagePatch = Partial<WalliChatMessage>;
 export type WalliChatDeleteMessages = (
   ids: readonly string[],

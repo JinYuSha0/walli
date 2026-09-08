@@ -4,6 +4,7 @@ import {
   createConfirmationCardMarkdown,
   createNoticeMarkdown,
   noticeBlockDefinition,
+  peopleBlockDefinition,
   recommendedRepliesBlockDefinition,
   type ConfirmationCardData,
   type ConfirmationCardField,
@@ -19,6 +20,8 @@ import {
   type WalliChatMessage,
 } from "../src/vue";
 import {
+  roleMessageMeta,
+  roleMessageMessages,
   confirmationCardMessage,
   noticeMessages,
   recommendedRepliesMessage,
@@ -28,6 +31,7 @@ import { source } from "./source";
 registerBlock(recommendedRepliesBlockDefinition);
 registerBlock(confirmationCardBlockDefinition);
 registerBlock(noticeBlockDefinition);
+registerBlock({ ...peopleBlockDefinition, role: "people", meta: roleMessageMeta });
 
 type Args = { messages: WalliChatMessage[] };
 
@@ -354,4 +358,34 @@ export const ConfirmationCard: Story = {
 export const Notices: Story = {
   args: { messages: noticeMessages },
   parameters: source(vueNoticesSource),
+};
+
+export const RoleMessageBlock: Story = {
+  args: { messages: roleMessageMessages },
+  render: (args) => ({
+    components: { WalliChat },
+    setup: () => ({ args }),
+    template:
+      '<WalliChat :messages="args.messages" style="display:block;width:100%;height:380px" />',
+  }),
+  parameters: source(`<script setup lang="ts">
+import { WalliChat, registerBlock, type WalliChatMessage } from "@wallilabs/chat/vue";
+import { peopleBlockDefinition } from "@wallilabs/chat-blocks";
+import "@wallilabs/chat/theme.css";
+
+registerBlock({
+  ...peopleBlockDefinition,
+  role: "people", // Register the message block for this role.
+  meta: {
+    avatarUrl: ${JSON.stringify(roleMessageMeta.avatarUrl)},
+    nickname: ${JSON.stringify(roleMessageMeta.nickname)},
+  },
+});
+
+const messages: WalliChatMessage[] = ${JSON.stringify(roleMessageMessages, null, 2)};
+</script>
+
+<template>
+  <WalliChat :messages="messages" style="display:block;width:100%;height:380px" />
+</template>`),
 };

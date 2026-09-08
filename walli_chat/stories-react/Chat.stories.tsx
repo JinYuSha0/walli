@@ -211,7 +211,7 @@ export const UserMessage: Story = {
 };
 export const AssistantMessage: Story = {
   args: { messages: assistantMessage },
-  render: (args) => <ChatSurface {...args} compact />,
+  render: (args) => <ChatSurface {...args} />,
   parameters: source(exampleSources.assistantMessage),
 };
 export const ImageMessage: Story = {

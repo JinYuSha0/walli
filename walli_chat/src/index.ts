@@ -1,5 +1,8 @@
 export * from "./web-components";
 export {
+  assistantBlockDefinition,
+  createAssistantBlockDefinition,
+  type AssistantBlockMeta,
   assetsGroupBlockDefinition,
   codeBlockDefinition,
   customBlockDefinition,

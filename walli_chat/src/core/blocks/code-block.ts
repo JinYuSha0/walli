@@ -244,9 +244,9 @@ class WalliCodeBlockElement extends BlockShellElement<CodeBlockLayout> {
       >
         <walli-action-button
           .action=${{
-            kind: "copy",
+            type: "copy",
             label: "Copy code",
-            text: block.lines.map((line) => line.text).join("\n"),
+            text: block.text,
           }}
         ></walli-action-button>
       </div>

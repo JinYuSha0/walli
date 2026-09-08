@@ -1,9 +1,4 @@
 :root {
-  --walli-people-background: #eeeef0;
-  --walli-people-color: #161618;
-  --walli-people-nickname-color: #71717a;
-  --walli-people-avatar-background: #ececed;
-  --walli-people-avatar-color: #52525b;
   --walli-block-error: oklch(0.52 0.22 27.325);
   --walli-block-info: oklch(0.546 0.245 262.881);
   --walli-block-info-background: color-mix(in oklch, var(--walli-block-info) 8%, transparent);
@@ -15,11 +10,6 @@
 }
 
 .dark {
-  --walli-people-background: #27272a;
-  --walli-people-color: #f4f4f5;
-  --walli-people-nickname-color: #a1a1aa;
-  --walli-people-avatar-background: #3f3f46;
-  --walli-people-avatar-color: #e4e4e7;
   --walli-block-error: oklch(0.704 0.191 22.216);
   --walli-block-info: oklch(0.707 0.165 254.624);
   --walli-block-success: oklch(0.723 0.219 149.579);

@@ -1,3 +1,4 @@
+import { assistantBlockDefinition } from "./assistant-block";
 import { registerBlock } from "../block-registry";
 import { assetsGroupBlockDefinition } from "./assets-group-block";
 import { codeBlockDefinition } from "./code-block";
@@ -16,6 +17,7 @@ import {
 import { systemBlockDefinition } from "./system-block";
 import { tableBlockDefinition } from "./table-block";
 
+registerBlock(assistantBlockDefinition);
 registerBlock(assetsGroupBlockDefinition);
 registerBlock(codeBlockDefinition);
 registerBlock(customBlockDefinition);
@@ -45,3 +47,9 @@ export { reasoningBlockDefinition };
 export { errorBlockDefinition };
 export { toolCallBlockDefinition };
 export { createSystemMessage, systemBlockDefinition } from "./system-block";
+
+export {
+  assistantBlockDefinition,
+  createAssistantBlockDefinition,
+  type AssistantBlockMeta,
+} from "./assistant-block";

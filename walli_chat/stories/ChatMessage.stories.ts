@@ -164,8 +164,18 @@ export const userMessage: WalliChatMessage[] = [
 
 export const assistantMessage: WalliChatMessage[] = [
   {
+    id: "assistant-without-identity",
+    role: "assistant",
+    markdown:
+      "Assistant content uses a lighter editorial layout. It can be a short answer, a longer explanation, or a structured Markdown response.",
+  },
+  {
     id: "single-assistant",
     role: "assistant",
+    meta: {
+      nickname: "Walli Bot",
+      avatarUrl: "/walli-bot-avatar.png",
+    },
     markdown:
       "Assistant content uses a lighter editorial layout. It can be a short answer, a longer explanation, or a structured Markdown response.",
   },
@@ -910,16 +920,20 @@ export const ReasoningStream: Story = {
     await waitFor(
       () =>
         expect(
-          chat.renderRoot.querySelector('walli-custom-block[data-block="reasoning-block"]'),
+          chat.renderRoot
+            .querySelector("walli-custom-block-content")
+            ?.shadowRoot?.querySelector('walli-custom-block[data-block="reasoning-block"]'),
         ).toBeTruthy(),
       { timeout: 2_000 },
     );
     await expect(
-      chat.renderRoot.querySelector('walli-custom-block[data-block="start-block"]'),
+      chat.renderRoot
+        .querySelector("walli-custom-block-content")
+        ?.shadowRoot?.querySelector('walli-custom-block[data-block="start-block"]'),
     ).toBeFalsy();
-    const streamingReasoningBlock = chat.renderRoot.querySelector<HTMLElement>(
-      'walli-custom-block[data-block="reasoning-block"]',
-    )!;
+    const streamingReasoningBlock = chat.renderRoot
+      .querySelector("walli-custom-block-content")!
+      .shadowRoot!.querySelector<HTMLElement>('walli-custom-block[data-block="reasoning-block"]')!;
     const streamingReasoningContent = streamingReasoningBlock.querySelector<HTMLElement>(
       "walli-custom-block-content",
     )!;
@@ -944,7 +958,9 @@ export const ReasoningStream: Story = {
     await waitFor(
       () =>
         expect(
-          chat.renderRoot.querySelector('walli-custom-block[data-block="toolcall-block"]'),
+          chat.renderRoot
+            .querySelector("walli-custom-block-content")
+            ?.shadowRoot?.querySelector('walli-custom-block[data-block="toolcall-block"]'),
         ).toBeTruthy(),
       { timeout: 10_000 },
     );
@@ -955,7 +971,8 @@ export const ReasoningStream: Story = {
     });
     await expect(chat.messages.at(-1)?.markdown).not.toContain("Here is the final answer.");
     const completedReasoningContent = chat.renderRoot
-      .querySelector<HTMLElement>('walli-custom-block[data-block="reasoning-block"]')!
+      .querySelector("walli-custom-block-content")!
+      .shadowRoot!.querySelector<HTMLElement>('walli-custom-block[data-block="reasoning-block"]')!
       .querySelector<HTMLElement>("walli-custom-block-content")!;
     await expect(
       completedReasoningContent.shadowRoot!.querySelector("button span")?.textContent,
@@ -965,9 +982,9 @@ export const ReasoningStream: Story = {
       () => expect(chat.messages.at(-1)?.markdown).toContain("Here is the final answer."),
       { timeout: 12_000 },
     );
-    const bodyStreamingBlock = chat.renderRoot.querySelector<HTMLElement>(
-      'walli-custom-block[data-block="reasoning-block"]',
-    )!;
+    const bodyStreamingBlock = chat.renderRoot
+      .querySelector("walli-custom-block-content")!
+      .shadowRoot!.querySelector<HTMLElement>('walli-custom-block[data-block="reasoning-block"]')!;
     const bodyStreamingContent = bodyStreamingBlock.querySelector<HTMLElement>(
       "walli-custom-block-content",
     )!;
@@ -975,9 +992,11 @@ export const ReasoningStream: Story = {
       bodyStreamingContent.shadowRoot!.querySelector<HTMLButtonElement>("button")!;
     await expect(bodyStreamingToggle.getAttribute("aria-expanded")).toBe("false");
     await waitFor(() => {
-      const completedBlock = chat.renderRoot.querySelector<HTMLElement>(
-        'walli-custom-block[data-block="reasoning-block"]',
-      )!;
+      const completedBlock = chat.renderRoot
+        .querySelector("walli-custom-block-content")!
+        .shadowRoot!.querySelector<HTMLElement>(
+          'walli-custom-block[data-block="reasoning-block"]',
+        )!;
       const completedContent = completedBlock.querySelector<HTMLElement>(
         "walli-custom-block-content",
       )!;
@@ -991,10 +1010,14 @@ export const ReasoningStream: Story = {
     await waitFor(
       () => {
         expect(
-          chat.renderRoot.querySelector('walli-custom-block[data-block="reasoning-block"]'),
+          chat.renderRoot
+            .querySelector("walli-custom-block-content")
+            ?.shadowRoot?.querySelector('walli-custom-block[data-block="reasoning-block"]'),
         ).toBeTruthy();
         expect(
-          chat.renderRoot.querySelector('walli-custom-block[data-block="toolcall-block"]'),
+          chat.renderRoot
+            .querySelector("walli-custom-block-content")
+            ?.shadowRoot?.querySelector('walli-custom-block[data-block="toolcall-block"]'),
         ).toBeFalsy();
       },
       { timeout: 2_000 },
@@ -1004,9 +1027,9 @@ export const ReasoningStream: Story = {
       expect(canvasElement.querySelector<HTMLButtonElement>("button")!.disabled).toBe(false),
     );
 
-    const reasoningBlock = chat.renderRoot.querySelector<HTMLElement>(
-      'walli-custom-block[data-block="reasoning-block"]',
-    )!;
+    const reasoningBlock = chat.renderRoot
+      .querySelector("walli-custom-block-content")!
+      .shadowRoot!.querySelector<HTMLElement>('walli-custom-block[data-block="reasoning-block"]')!;
     const reasoningContent = reasoningBlock.querySelector<HTMLElement>(
       "walli-custom-block-content",
     )!;
@@ -1015,9 +1038,11 @@ export const ReasoningStream: Story = {
     await expect(toggle.getAttribute("aria-expanded")).toBe("false");
     await userEvent.click(toggle);
     await waitFor(() => {
-      const nextBlock = chat.renderRoot.querySelector<HTMLElement>(
-        'walli-custom-block[data-block="reasoning-block"]',
-      )!;
+      const nextBlock = chat.renderRoot
+        .querySelector("walli-custom-block-content")!
+        .shadowRoot!.querySelector<HTMLElement>(
+          'walli-custom-block[data-block="reasoning-block"]',
+        )!;
       const nextContent = nextBlock.querySelector<HTMLElement>("walli-custom-block-content")!;
       expect(nextContent.shadowRoot!.querySelector("button")?.getAttribute("aria-expanded")).toBe(
         "true",
@@ -1193,10 +1218,14 @@ export const UserMessage: Story = {
 export const AssistantMessage: Story = {
   args: { messages: assistantMessage },
   play: assertArgsMessagesRendered,
-  render: ({ messages }) => renderCompactMessages(messages),
   parameters: {
     docs: {
-      source: { code: createChatSource(assistantMessage) },
+      source: {
+        code: createChatSource(assistantMessage).replace(
+          "<walli-chat>",
+          '<walli-chat style="display:block;height:640px;width:100%">',
+        ),
+      },
     },
   },
 };

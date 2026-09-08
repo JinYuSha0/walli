@@ -437,44 +437,25 @@ export function getMessages() {
         ]),
       ].join("\n"),
       showActions: false,
+      meta: { nickname: "Walli Bot", avatarUrl: "/walli-bot-avatar.png" },
     },
     {
       id: "demo-confirmation-card",
       role: "assistant",
       markdown: createConfirmationCardMarkdown(demoConfirmationCardData),
-      meta: demoConfirmationCardData,
+      meta: {
+        ...demoConfirmationCardData,
+        nickname: "Walli Bot",
+        avatarUrl: "/walli-bot-avatar.png",
+      },
       showActions: false,
     },
     {
-      id: "demo-people",
-      meta: {
-        avatarUrl:
-          "https://images-eds-ssl.xboxlive.com/image?url=4rt9.lXDC4H_93laV1_eHHFT949fUipzkiFOBH3fAiZZUCdYojwUyX2aTonS1aIwMrx6NUIsHfUHSLzjGJFxxirR4S1OR6ENyYFm.V2SIODPI_arJDY2qXDIrJMvAFW.J1Aj7MoRy.5ftrwrvxScXBtzIro59ghN6m1RvL39j7E-&format=source&h=210",
-        nickname: "逗包（在线时间9:00-18:00）",
-      },
-      role: "people",
-      markdown:
-        "我非常理解你此刻的心情，我会用最不绕弯子、最容易听懂的话，陪你把这件事理清楚。你不用急着整理好情绪，也不用担心自己说得不够完整，想到哪里就说到哪里。我们先看看最让你难受的是什么，再一起分清哪些是已经发生的事实，哪些是你担心会发生的事，最后找到眼下能做的一小步。不必一下子解决所有问题，我们一件一件来。",
-    },
-    {
-      id: "demo-people",
-      meta: {
-        avatarUrl:
-          "https://images-eds-ssl.xboxlive.com/image?url=4rt9.lXDC4H_93laV1_eHHFT949fUipzkiFOBH3fAiZZUCdYojwUyX2aTonS1aIwMrx6NUIsHfUHSLzjGJFxxirR4S1OR6ENyYFm.V2SIODPI_arJDY2qXDIrJMvAFW.J1Aj7MoRy.5ftrwrvxScXBtzIro59ghN6m1RvL39j7E-&format=source&h=210",
-        nickname: "逗包（在线时间9:00-18:00）",
-      },
-      role: "people",
-      markdown:
-        "我非常理解你此刻的心情，也知道你现在更希望听到一个直接、清楚的回答。我会用最不绕弯子的方式，把事情的来龙去脉、需要留意的地方，以及接下来能怎么做，一次说明白。你可以按自己的节奏慢慢看，有不明白的地方随时提出来，我会继续解释，直到你觉得清楚为止。",
-    },
-    {
       id: "demo-people-markdown",
-      role: "people",
+      role: "assistant",
       meta: {
-        avatarUrl:
-          "https://images-eds-ssl.xboxlive.com/image?url=4rt9.lXDC4H_93laV1_eHHFT949fUipzkiFOBH3fAiZZUCdYojwUyX2aTonS1aIwMrx6NUIsHfUHSLzjGJFxxirR4S1OR6ENyYFm.V2SIODPI_arJDY2qXDIrJMvAFW.J1Aj7MoRy.5ftrwrvxScXBtzIro59ghN6m1RvL39j7E-&format=source&h=210",
-        nickname: "逗包（在线时间9:00-18:00）",
-        showBubble: false,
+        nickname: "Walli Bot",
+        avatarUrl: "/walli-bot-avatar.png",
       },
       markdown: [
         "# 项目交付说明",
@@ -525,6 +506,29 @@ export function getMessages() {
         "最后用一段较长的文字检查连续内容的排版：调整窗口宽度时，标题、正文、列表、代码和图片应始终留在气泡内部，后续消息的位置也应随内容高度同步变化。This paragraph also mixes English words with 中文，用来观察不同字符宽度下的自动换行效果。",
       ].join("\n"),
     },
+    {
+      id: "demo-people",
+      meta: {
+        avatarUrl:
+          "https://images-eds-ssl.xboxlive.com/image?url=4rt9.lXDC4H_93laV1_eHHFT949fUipzkiFOBH3fAiZZUCdYojwUyX2aTonS1aIwMrx6NUIsHfUHSLzjGJFxxirR4S1OR6ENyYFm.V2SIODPI_arJDY2qXDIrJMvAFW.J1Aj7MoRy.5ftrwrvxScXBtzIro59ghN6m1RvL39j7E-&format=source&h=210",
+        nickname: "逗包（在线时间9:00-18:00）",
+      },
+      role: "people",
+      markdown:
+        "我非常理解你此刻的心情，我会用最不绕弯子、最容易听懂的话，陪你把这件事理清楚。你不用急着整理好情绪，也不用担心自己说得不够完整，想到哪里就说到哪里。我们先看看最让你难受的是什么，再一起分清哪些是已经发生的事实，哪些是你担心会发生的事，最后找到眼下能做的一小步。不必一下子解决所有问题，我们一件一件来。",
+    },
+    {
+      id: "demo-people",
+      meta: {
+        avatarUrl:
+          "https://images-eds-ssl.xboxlive.com/image?url=4rt9.lXDC4H_93laV1_eHHFT949fUipzkiFOBH3fAiZZUCdYojwUyX2aTonS1aIwMrx6NUIsHfUHSLzjGJFxxirR4S1OR6ENyYFm.V2SIODPI_arJDY2qXDIrJMvAFW.J1Aj7MoRy.5ftrwrvxScXBtzIro59ghN6m1RvL39j7E-&format=source&h=210",
+        nickname: "逗包（在线时间9:00-18:00）",
+      },
+      role: "people",
+      markdown:
+        "我非常理解你此刻的心情，也知道你现在更希望听到一个直接、清楚的回答。我会用最不绕弯子的方式，把事情的来龙去脉、需要留意的地方，以及接下来能怎么做，一次说明白。你可以按自己的节奏慢慢看，有不明白的地方随时提出来，我会继续解释，直到你觉得清楚为止。",
+    },
+
     createSystemMessage("当前对话结束人工接入 [详情](#handoff)", {
       id: "demo-system-handoff",
     }),

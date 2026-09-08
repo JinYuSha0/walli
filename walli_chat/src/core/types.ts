@@ -130,6 +130,7 @@ export type BlockLayout =
 
 export type MessageFrame = {
   actionHeight: number;
+  bodyInsetX: number;
   blocks: BlockFrame[];
   bubbleHeight: number;
   contentInsetX: number;

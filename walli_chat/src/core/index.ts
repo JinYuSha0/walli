@@ -15,6 +15,7 @@ import type {
 import { getCommonStyle } from "./styles";
 import {
   resolveBuiltInBlockDefinition,
+  resolveRoleBlockDefinition,
   measureMessageBlockFrame,
   materializeMessageBlockLayout,
   renderMessageBlockTemplate,
@@ -274,6 +275,8 @@ function layoutMessageFrame(
   maxContentWidth: number,
   contentInsetX: number,
 ): MessageFrame {
+  const roleBlock = resolveRoleBlockDefinition(preparedMessage.role);
+  const bodyInsetX = roleBlock?.getContentInsetX?.(preparedMessage.meta ?? roleBlock.meta) ?? 0;
   const isSystem = preparedMessage.role === "system";
   const bubblePaddingY = isSystem
     ? getCommonStyle("systemBubblePaddingY")
@@ -302,6 +305,7 @@ function layoutMessageFrame(
       : maxFrameWidth;
   const frame: MessageFrame = {
     actionHeight,
+    bodyInsetX,
     blocks,
     bubbleHeight,
     contentInsetX,

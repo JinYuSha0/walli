@@ -27,7 +27,10 @@ export type CustomBlockLayout = {
   top: number;
   width: number;
 };
-export type CustomBlockFrame = BlockFrameBase & { kind: "custom"; width: number };
+export type CustomBlockFrame = BlockFrameBase & {
+  kind: "custom";
+  width: number;
+};
 type CustomBlockRenderLayout = BlockRenderLayout<CustomBlockLayout> & {
   ctx: WalliChatBlockContext;
   messageId: string;
@@ -36,15 +39,26 @@ type CustomBlockRenderLayout = BlockRenderLayout<CustomBlockLayout> & {
 export const customBlockDefinition = {
   name: "custom",
   prepare(data: unknown, definition: AnyCustomBlockDefinition, base: PreparedBlockBase) {
+    let prepared = data;
+    if ("scope" in definition) {
+      if (typeof data !== "string") throw new TypeError("Message block content must be a string");
+      prepared = definition.prepare === undefined ? data : definition.prepare(data);
+    } else if (definition.prepare) {
+      prepared = definition.prepare(data);
+    }
     return {
       ...base,
-      data: definition.prepare === undefined ? data : definition.prepare(data),
+      data: prepared,
       definition,
       kind: "custom" as const,
     };
   },
   measure(block, { availableWidth, top, role, meta }) {
-    const metrics = block.definition.measure(block.data, { availableWidth, role, meta: meta ?? block.definition.meta });
+    const metrics = block.definition.measure(block.data, {
+      availableWidth,
+      role,
+      meta: meta ?? block.definition.meta,
+    });
     if (!Number.isFinite(metrics.height) || metrics.height < 0) {
       throw new Error(`Custom block "${block.definition.name}" returned an invalid height`);
     }
@@ -175,7 +189,9 @@ function supportsConstructableStyleSheets(root: ShadowRoot): boolean {
 }
 
 function normalizeStyles(styles: string | readonly string[] | undefined): string {
-  return [walliChatUnoCss, prismThemeCss, ...(Array.isArray(styles) ? styles : [styles])].join("\n");
+  return [walliChatUnoCss, prismThemeCss, ...(Array.isArray(styles) ? styles : [styles])].join(
+    "\n",
+  );
 }
 
 @customElement("walli-custom-block")

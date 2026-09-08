@@ -4,6 +4,7 @@ import {
   createConfirmationCardMarkdown,
   createNoticeMarkdown,
   noticeBlockDefinition,
+  peopleBlockDefinition,
   recommendedRepliesBlockDefinition,
   type ConfirmationCardData,
   type ConfirmationCardField,
@@ -19,6 +20,8 @@ import {
   type WalliChatRef,
 } from "../src/react";
 import {
+  roleMessageMeta,
+  roleMessageMessages,
   confirmationCardMessage,
   noticeMessages,
   recommendedRepliesMessage,
@@ -28,6 +31,7 @@ import { source } from "./source";
 registerBlock(recommendedRepliesBlockDefinition);
 registerBlock(confirmationCardBlockDefinition);
 registerBlock(noticeBlockDefinition);
+registerBlock({ ...peopleBlockDefinition, role: "people", meta: roleMessageMeta });
 
 type Args = { messages: WalliChatMessage[] };
 
@@ -349,4 +353,30 @@ export const ConfirmationCard: Story = {
 export const Notices: Story = {
   args: { messages: noticeMessages },
   parameters: source(reactNoticesSource),
+};
+
+export const RoleMessageBlock: Story = {
+  args: { messages: roleMessageMessages },
+  render: ({ messages }) => (
+    <WalliChat messages={messages} style={{ display: "block", width: "100%", height: 380 }} />
+  ),
+  parameters:
+    source(`import { WalliChat, registerBlock, type WalliChatMessage } from "@wallilabs/chat/react";
+import { peopleBlockDefinition } from "@wallilabs/chat-blocks";
+import "@wallilabs/chat/theme.css";
+
+registerBlock({
+  ...peopleBlockDefinition,
+  role: "people", // Register the message block for this role.
+  meta: {
+    avatarUrl: ${JSON.stringify(roleMessageMeta.avatarUrl)},
+    nickname: ${JSON.stringify(roleMessageMeta.nickname)},
+  },
+});
+
+const messages: WalliChatMessage[] = ${JSON.stringify(roleMessageMessages, null, 2)};
+
+export function RoleMessageBlock() {
+  return <WalliChat messages={messages} style={{ display: "block", width: "100%", height: 380 }} />;
+}`),
 };

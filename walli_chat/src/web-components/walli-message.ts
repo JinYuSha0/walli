@@ -115,6 +115,7 @@ export class WalliMessageElement extends HTMLElement {
           message.frame.actionHeight === 0
             ? null
             : html`<walli-message-actions
+                style=${`display:block;margin-left:${message.frame.bodyInsetX}px;`}
                 .context=${messageActionContext}
                 .variant=${message.prepared.role}
               ></walli-message-actions>`

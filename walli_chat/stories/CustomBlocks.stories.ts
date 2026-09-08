@@ -17,13 +17,8 @@ import { html } from "lit";
 import { ref } from "lit/directives/ref.js";
 import { expect, waitFor } from "storybook/test";
 import type { WalliChatAction, WalliChatMessage } from "../src/types";
-import {
-  registerBlock,
-  resolveBuiltInBlockDefinition,
-  type WalliChatTokenizedBlockDefinition,
-} from "../src/core/block-registry";
-import { systemBlockDefinition } from "../src/core/blocks/system-block";
-import { ruleBlockDefinition } from "../src/core/blocks/rule-block";
+import { registerBlock } from "../src/core/block-registry";
+import { assistantBlockDefinition } from "../src/core/blocks/assistant-block";
 import { parseMarkdownBlocks, StreamingMarkdownParser } from "../src/core/md-parse";
 import {
   createPreparedChatMessages,
@@ -450,220 +445,6 @@ export const Notices: Story = {
   parameters: { docs: { source: { code: noticesSource, language: "ts" } } },
 };
 
-function roleCardDefinition(
-  role?: string,
-): WalliChatTokenizedBlockDefinition<string, string, { text: string; role: string }> {
-  const label = role ?? "shared";
-  return {
-    name: "role-card",
-    role,
-    tokenizer: {
-      tokenize(source) {
-        const match = /^:::role-card\n([^\n]*)\n:::(?:\n|$)/.exec(source);
-        return match ? { raw: match[0], data: `${label}:${match[1]}` } : undefined;
-      },
-    },
-    measure: (_data, { role }) => ({ height: role === "user" ? 36 : 40 }),
-    materialize: (text, { role }) => ({ text, role }),
-    render: ({ data, role }) =>
-      html`<div
-        data-role-card=${`${role}:${data.text}`}
-        data-materialized-role=${data.role}
-        style="padding:8px;border:1px solid currentColor;border-radius:8px"
-      >
-        ${role}: ${data.text}
-      </div>`,
-  };
-}
-
-registerBlock(roleCardDefinition());
-for (const role of ["user", "system", "tool"]) registerBlock(roleCardDefinition(role));
-
-export const RoleScopedBlocks: Story = {
-  parameters: {
-    docs: {
-      description: {
-        story:
-          "The same block name can have different tokenizers and renderers by message role. Role-specific registrations override the shared fallback. Custom roles use assistant message layout. Built-in blocks use the same registration API.",
-      },
-      source: {
-        language: "ts",
-        code: `import { registerBlock } from "@wallilabs/chat";
-import { createNoticeMarkdown, noticeBlockDefinition } from "@wallilabs/chat-blocks";
-import "@wallilabs/chat/theme.css";
-
-registerBlock(noticeBlockDefinition); // Shared fallback.
-const registration = registerBlock({
-  ...noticeBlockDefinition,
-  role: "tool", // Also accepts assistant, system, user, or another custom role.
-  render(context) {
-    console.log(context.role); // Actual message role.
-    return noticeBlockDefinition.render(context);
-  },
-});
-
-const chat = document.createElement("walli-chat");
-chat.style.cssText = "display: block; height: 640px";
-chat.messages = [
-  {
-    id: "tool-result",
-    role: "tool",
-    markdown: createNoticeMarkdown({ text: "Tool finished", variant: "success" }),
-  },
-];
-document.body.append(chat);
-
-// registration.unregister() restores the shared fallback.`,
-      },
-    },
-  },
-  render: () => {
-    const messages: WalliChatMessage[] = ["assistant", "user", "system", "tool"].map((role) => ({
-      id: `role-${role}`,
-      role,
-      markdown: ":::role-card\nhello\n:::",
-      showActions: false,
-    }));
-    return html`<walli-chat
-      style="display:block;height:640px;width:100%"
-      .messages=${messages}
-    ></walli-chat>`;
-  },
-  play: async ({ canvasElement }) => {
-    const chat = canvasElement.querySelector<WalliChatElement>("walli-chat")!;
-    await chat.updateComplete;
-    await expect(parseMarkdownBlocks(":::role-card\nhello\n:::", false, "tool")[0]?.kind).toBe(
-      "custom",
-    );
-    const cards = () =>
-      [...chat.renderRoot.querySelectorAll("walli-custom-block-content")].map((element) =>
-        element.shadowRoot?.querySelector<HTMLElement>("[data-role-card]"),
-      );
-    await waitFor(() =>
-      expect(
-        cards()
-          .map((card) => card?.dataset.roleCard)
-          .sort(),
-      ).toEqual([
-        "assistant:shared:hello",
-        "system:system:hello",
-        "tool:tool:hello",
-        "user:user:hello",
-      ]),
-    );
-    for (const card of cards())
-      await expect(card?.dataset.materializedRole).toBe(card?.dataset.roleCard?.split(":")[0]);
-    const toolRow = [...chat.renderRoot.querySelectorAll("walli-message")].find(
-      (row) => row.message?.prepared.role === "tool",
-    )!;
-    await expect(toolRow.message?.prepared.role).toBe("tool");
-    await expect(toolRow.message?.frame.actionHeight).toBe(0);
-    await expect(toolRow.querySelector(".justify-start")).toBeTruthy();
-
-    const isolated = registerBlock({
-      ...roleCardDefinition("tool"),
-      name: "tool-only",
-      tokenizer: {
-        tokenize(source: string) {
-          return source.startsWith("!tool-only")
-            ? { raw: "!tool-only", data: "tool-only" }
-            : undefined;
-        },
-      },
-    });
-    const rule = registerBlock({
-      ...ruleBlockDefinition,
-      role: "tool",
-      measure(block, context) {
-        return {
-          ...ruleBlockDefinition.measure(block, context),
-          height: context.role === "tool" ? 37 : 99,
-        };
-      },
-      render: ({ role, block }) =>
-        html`<div data-role-rule=${role} style=${`height:${block.height}px`}>Tool rule</div>`,
-    });
-    try {
-      await expect(parseMarkdownBlocks("!tool-only", false, "tool")[0]?.kind).toBe("custom");
-      await expect(parseMarkdownBlocks("!tool-only", false, "assistant")[0]?.kind).not.toBe(
-        "custom",
-      );
-      const nested = parseMarkdownBlocks("> :::role-card\n> hello\n> :::", false, "tool");
-      await expect(nested[0]?.role).toBe("tool");
-      await expect(nested[0]?.kind).toBe("custom");
-      const parser = new StreamingMarkdownParser("tool");
-      const stable = parser.parse(":::role-card\nhello\n:::\n\nFirst");
-      const updated = parser.parse(":::role-card\nhello\n:::\n\nFirst second");
-      await expect(updated[0]).toBe(stable[0]);
-      await expect(updated[0]?.role).toBe("tool");
-      const prepared = createPreparedChatMessages([
-        { id: "rule-tool", role: "tool", markdown: "---" },
-      ]);
-      const frame = buildConversationFrame(prepared, 500);
-      await expect(frame.messages[0]?.frame.blocks[0]?.height).toBe(37);
-      await expect(materializeMessageBlocks(frame.messages[0]!).blocks[0]?.height).toBe(37);
-      chat.insertMessagesAtBottom(
-        [{ id: "rule-tool", role: "tool", markdown: "---", showActions: false }],
-        { stick: true },
-      );
-      await waitFor(() =>
-        expect(chat.renderRoot.querySelector('[data-role-rule="tool"]')).toBeTruthy(),
-      );
-      await expect(resolveBuiltInBlockDefinition("rule", "assistant")).toBe(ruleBlockDefinition);
-
-      const first = registerBlock({ ...ruleBlockDefinition, role: "isolated-role" });
-      const second = registerBlock({ ...ruleBlockDefinition, role: "isolated-role" });
-      first.unregister();
-      second.unregister();
-      await expect(resolveBuiltInBlockDefinition("rule", "isolated-role")).toBe(
-        ruleBlockDefinition,
-      );
-      const override = registerBlock(roleCardDefinition("assistant"));
-      await expect(
-        parseMarkdownBlocks(":::role-card\nhello\n:::", false, "assistant")[0],
-      ).toMatchObject({ data: "assistant:hello" });
-      override.unregister();
-      await expect(
-        parseMarkdownBlocks(":::role-card\nhello\n:::", false, "assistant")[0],
-      ).toMatchObject({ data: "shared:hello" });
-
-      let streamController!: ReadableStreamDefaultController<string>;
-      const stream = new ReadableStream<string>({
-        start(controller) {
-          streamController = controller;
-          controller.enqueue(
-            `data: ${JSON.stringify({ type: "text-delta", delta: ":::role-card\nhello\n:::" })}\n\n`,
-          );
-        },
-      });
-      const insertion = chat.insertStreamingMessageAtBottom(stream, {
-        messageId: "tool-stream",
-        role: "tool",
-        stickToBottom: true,
-      });
-      try {
-        await waitFor(() => {
-          const row = [...chat.renderRoot.querySelectorAll("walli-message")].find(
-            (row) => row.message?.prepared.id === "tool-stream",
-          );
-          expect(row?.message?.prepared.streaming).toBe(true);
-          expect(row?.message?.prepared.role).toBe("tool");
-        });
-      } finally {
-        streamController.close();
-        await insertion.finished;
-      }
-      await expect(chat.messages.at(-1)?.role).toBe("tool");
-      await waitFor(() =>
-        expect(cards().some((card) => card?.dataset.roleCard === "tool:tool:hello")).toBe(true),
-      );
-    } finally {
-      isolated.unregister();
-      rule.unregister();
-    }
-  },
-};
-
 async function assertBlockMessages({
   args,
   canvasElement,
@@ -681,71 +462,31 @@ async function assertBlockMessages({
   await expect(chat!.renderRoot.querySelector("walli-custom-block")).toBeTruthy();
 }
 
-export const SystemBlockOverride: Story = {
+export const roleMessageMeta = { avatarUrl: "/demo-landscape-coast.jpg", nickname: "Oliver" };
+export const roleMessageMessages: WalliChatMessage[] = [
+  {
+    id: "people-default",
+    role: "people",
+    markdown: "I found a quiet coffee shop near the station. Shall we meet there tomorrow?",
+  },
+  {
+    id: "people-override",
+    role: "people",
+    markdown: "Sounds great! I will bring my notebook.",
+    meta: { avatarUrl: "/demo-landscape-lake.jpg", nickname: "Emma" },
+  },
+  { id: "people-short", role: "people", markdown: "See you there!" },
+];
+
+registerBlock({ ...peopleBlockDefinition, role: "people", meta: roleMessageMeta });
+
+export const RoleMessageBlock: Story = {
   parameters: {
     docs: {
       description: {
         story:
-          "System text uses the registered inline block for the system role. Override its preparation, measurement, or rendering without changing other roles.",
+          'Registers a whole-message layout for a specific role using scope: "message". This example uses the people role with default avatar and nickname metadata that individual messages can override.',
       },
-      source: {
-        language: "ts",
-        code: `import { registerBlock, systemBlockDefinition } from "@wallilabs/chat";
-import { html } from "lit";
-
-const registration = registerBlock({
-  ...systemBlockDefinition,
-  render(context) {
-    return html\`<div style="color: teal">\${systemBlockDefinition.render(context)}</div>\`;
-  },
-});
-
-const chat = document.createElement("walli-chat");
-chat.style.cssText = "display: block; height: 320px";
-chat.messages = [{ id: "system", role: "system", markdown: "Conversation started" }];
-document.body.append(chat);
-
-// registration.unregister() restores the default system block.`,
-      },
-    },
-  },
-  render: () =>
-    renderBlocks([{ id: "system-default", role: "system", markdown: "Conversation started" }]),
-  play: async ({ canvasElement }) => {
-    const chat = canvasElement.querySelector<WalliChatElement>("walli-chat")!;
-    const original = resolveBuiltInBlockDefinition("inline", "assistant");
-    await expect(resolveBuiltInBlockDefinition("inline", "system")).toBe(systemBlockDefinition);
-    const registration = registerBlock({
-      ...systemBlockDefinition,
-      render(context) {
-        return html`<div data-system-override=${context.role} style="color:teal">
-          ${systemBlockDefinition.render(context)}
-        </div>`;
-      },
-    });
-    try {
-      chat.messages = [{ id: "system-override", role: "system", markdown: "Conversation started" }];
-      await waitFor(() =>
-        expect(chat.renderRoot.querySelector('[data-system-override="system"]')).toBeTruthy(),
-      );
-      await expect(resolveBuiltInBlockDefinition("inline", "assistant")).toBe(original);
-    } finally {
-      registration.unregister();
-    }
-    await expect(resolveBuiltInBlockDefinition("inline", "system")).toBe(systemBlockDefinition);
-    chat.messages = [{ id: "system-restored", role: "system", markdown: "Conversation started" }];
-    await waitFor(() => expect(chat.renderRoot.querySelector("[data-system-override]")).toBeNull());
-  },
-};
-
-registerBlock({
-  ...peopleBlockDefinition,
-  meta: { avatarUrl: "/demo-landscape-coast.jpg", nickname: "guangzhi" },
-});
-
-export const People: Story = {
-  parameters: {
-    docs: {
       source: {
         language: "ts",
         code: `import { registerBlock } from "@wallilabs/chat";
@@ -755,37 +496,24 @@ import "@wallilabs/chat/theme.css";
 // Configure the block's default identity from outside.
 registerBlock({
   ...peopleBlockDefinition,
-  meta: { avatarUrl: "/avatar.jpg", nickname: "guangzhi" },
+  role: "people", // Register the message block for this role.
+  meta: {
+    avatarUrl: ${JSON.stringify(roleMessageMeta.avatarUrl)},
+    nickname: ${JSON.stringify(roleMessageMeta.nickname)},
+  },
 });
 
 const chat = document.createElement("walli-chat");
-chat.style.cssText = "display: block; height: 380px";
-chat.messages = [
-  { id: "people-default", role: "people", markdown: "Working towards the same goal." },
-  {
-    id: "people-override",
-    role: "people",
-    markdown: "Together!",
-    meta: { avatarUrl: "/alex.jpg", nickname: "Alex" },
-  },
-];
+chat.style.cssText = "display:block;width:100%;height:380px";
+chat.messages = ${JSON.stringify(roleMessageMessages, null, 2)};
 document.body.append(chat);`,
       },
     },
   },
   render: () =>
     html`<walli-chat
-      style="display:block;width:420px;height:380px"
-      .messages=${[
-        { id: "people-default", role: "people", markdown: "在这一点上，我们目标出奇的一致" },
-        {
-          id: "people-override",
-          role: "people",
-          markdown: "众志成城",
-          meta: { avatarUrl: "/demo-landscape-lake.jpg", nickname: "Alex" },
-        },
-        { id: "people-short", role: "people", markdown: "fighting" },
-      ]}
+      style="display:block;width:100%;height:380px"
+      .messages=${roleMessageMessages}
     ></walli-chat>`,
   play: async ({ canvasElement }) => {
     const chat = canvasElement.querySelector<WalliChatElement>("walli-chat")!;
@@ -795,7 +523,9 @@ document.body.append(chat);`,
     await expect(quote[1]?.marginTop).toBe(8);
     const separatedLists = parseMarkdownBlocks("- Unordered\n\n1. Ordered");
     await expect(separatedLists[1]?.marginTop).toBe(12);
-    const listAndQuote = parseMarkdownBlocks("1. Ordered\n\n> First paragraph\n>\n> Second paragraph");
+    const listAndQuote = parseMarkdownBlocks(
+      "1. Ordered\n\n> First paragraph\n>\n> Second paragraph",
+    );
     await expect(listAndQuote.slice(1).map((block) => block.marginTop)).toEqual([12, 8]);
     const separator = parseMarkdownBlocks("Before\n\n---\n\nAfter");
     await expect(separator[1]).toMatchObject({ kind: "rule", height: 1, marginTop: 12 });
@@ -825,7 +555,7 @@ document.body.append(chat);`,
     await waitFor(() =>
       expect(
         roots().map((root) => root.querySelector("[data-people-nickname]")?.textContent?.trim()),
-      ).toEqual(["guangzhi", "Alex", "guangzhi"]),
+      ).toEqual(["Oliver", "Emma", "Oliver"]),
     );
     await expect(roots()[0]!.querySelector("img")?.getAttribute("src")).toBe(
       "/demo-landscape-coast.jpg",
@@ -964,6 +694,8 @@ document.body.append(chat);`,
       expect(getComputedStyle(wrapper).backgroundColor).toBe("rgba(0, 0, 0, 0)");
       expect(wrapper.querySelector(":scope > [aria-hidden]")).toBeNull();
       expect(content.querySelector("walli-code-block")).toBeTruthy();
+      const copyButton = content.querySelector('walli-code-block button[aria-label="Copy code"]');
+      expect(copyButton?.querySelector("svg")).toBeTruthy();
       const keyword = content.querySelector("walli-code-block .token.keyword");
       expect(keyword).toBeTruthy();
       expect(getComputedStyle(keyword!).color).toBe("rgb(0, 119, 170)");
@@ -991,7 +723,48 @@ document.body.append(chat);`,
       const bubble = roots()[0]!.querySelector("[data-people-bubble]")!.getBoundingClientRect();
       expect(content.getBoundingClientRect().bottom).toBeLessThanOrEqual(bubble.bottom);
     });
+    chat.messages = [
+      {
+        id: "assistant-identity",
+        role: "assistant",
+        meta: { nickname: "Alex", avatarUrl: "/demo-landscape-coast.jpg" },
+        markdown: "**Shared assistant layout**",
+      },
+    ];
+    await waitFor(() => {
+      const root = roots()[0]!;
+      expect(root.querySelector("[data-people-nickname]")?.textContent?.trim()).toBe("Alex");
+      expect(root.querySelector("img")?.getAttribute("src")).toBe("/demo-landscape-coast.jpg");
+      expect(root.querySelector("[data-people-markdown]")?.textContent).toContain(
+        "Shared assistant layout",
+      );
+      expect(getComputedStyle(root.querySelector("[data-people-bubble]")!).backgroundColor).toBe(
+        "rgba(0, 0, 0, 0)",
+      );
+    });
+    const registration = registerBlock({
+      ...assistantBlockDefinition,
+      meta: { nickname: "Default assistant", showBubble: true },
+    });
+    try {
+      chat.messages = [{ id: "assistant-default-meta", role: "assistant", markdown: "Hello" }];
+      await waitFor(() => {
+        const root = roots()[0]!;
+        expect(root.querySelector("[data-people-nickname]")?.textContent?.trim()).toBe(
+          "Default assistant",
+        );
+        expect(
+          getComputedStyle(root.querySelector("[data-people-bubble]")!).backgroundColor,
+        ).not.toBe("rgba(0, 0, 0, 0)");
+        expect(root.querySelector("[data-people-markdown]")?.getAttribute("style")).toContain(
+          "left:12px;top:8px",
+        );
+      });
+    } finally {
+      registration.unregister();
+    }
     chat.style.height = "380px";
+    chat.style.width = "100%";
     chat.messages = originalMessages;
   },
 };

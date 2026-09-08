@@ -246,7 +246,7 @@ export function ReasoningStream() {
 }`,
   richMarkdown: chat(markdownShowcase),
   userMessage: chat(userMessage, 240),
-  assistantMessage: chat(assistantMessage, 240),
+  assistantMessage: chat(assistantMessage, 640),
   imageMessage: chat(imageMessage),
   customBlock: `import { useEffect, useMemo } from "react";
 import { WalliChat, registerBlock } from "@wallilabs/chat/react";

@@ -141,13 +141,15 @@ export type WalliChatRoleBlockDefinition<Prepared = string, Materialized = Prepa
   "tokenizer" | "role"
 > & {
   scope: "message";
+  getContentInsetX?: (meta: unknown) => number;
   role: WalliChatMessageRole;
 };
 
-export type AnyCustomBlockDefinition = Omit<
-  WalliChatTokenizedBlockDefinition<unknown, unknown, unknown>,
-  "tokenizer"
->;
+type AnyRoleBlockDefinition = WalliChatRoleBlockDefinition<unknown, unknown>;
+
+export type AnyCustomBlockDefinition =
+  | Omit<WalliChatTokenizedBlockDefinition<unknown, unknown, unknown>, "tokenizer">
+  | AnyRoleBlockDefinition;
 
 type ScopedDefinitions<T> = Map<string, Map<WalliChatMessageRole | undefined, { definition: T }[]>>;
 
@@ -185,11 +187,11 @@ function registerDefinition<T>(
 
 const definitions: ScopedDefinitions<WalliChatTokenizedBlockDefinition<unknown, unknown, unknown>> =
   new Map();
-const roleDefinitions: ScopedDefinitions<AnyCustomBlockDefinition> = new Map();
+const roleDefinitions: ScopedDefinitions<AnyRoleBlockDefinition> = new Map();
 
 export function resolveRoleBlockDefinition(
   role: WalliChatMessageRole,
-): AnyCustomBlockDefinition | undefined {
+): AnyRoleBlockDefinition | undefined {
   return resolveDefinition(roleDefinitions, "message", role);
 }
 
@@ -284,7 +286,7 @@ export function registerBlock(
       roleDefinitions,
       "message",
       role,
-      definition as AnyCustomBlockDefinition,
+      definition as AnyRoleBlockDefinition,
     );
   }
 
