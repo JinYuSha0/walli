@@ -82,13 +82,18 @@ const meta = {
         "Shared global breakpoint. Auto uses viewport media queries; changing the prop relayouts this chat.",
     },
 
+    locales: {
+      control: "object",
+      description: "Localized UI labels. Unset values use English defaults.",
+      table: { type: { summary: "WalliChatLocales", detail: "{ copyCode?: string }" } },
+    },
     actionConfig: {
       control: "object",
       table: {
         type: {
           summary: "WalliChatActionConfig",
           detail:
-            "ActionItem = boolean | { visible: boolean; sort?: number }\nCustomAction = { type: string; icon?: IconNode; component?: (context) => unknown; label?: string; visible: boolean; sort?: number }\nAssistant = { copy?: ActionItem; feedback?: ActionItem; share?: ActionItem; [name: string]: ActionItem | CustomAction | undefined }\nUser = { copy?: ActionItem; edit?: ActionItem; [name: string]: ActionItem | CustomAction | undefined }",
+            "ActionItem = boolean | { visible: boolean; sort?: number; label?: string }\nCustomAction = { icon?: IconNode; component?: (context) => unknown; label?: string; visible: boolean; sort?: number }\nAssistant = { copy?: ActionItem; feedback?: ActionItem; share?: ActionItem; [name: string]: ActionItem | CustomAction | undefined }\nUser = { copy?: ActionItem; edit?: ActionItem; [name: string]: ActionItem | CustomAction | undefined }",
         },
       },
     },
@@ -132,9 +137,9 @@ export const Actions: Story = {
       <WalliChat
         actionConfig={{
           assistant: {
-            copy: { visible: true, sort: 1 },
+            copy: { visible: true, sort: 1, label: "Copy message" },
             feedback: { visible: true, sort: 2 },
-            share: { visible: true, sort: 3 },
+            share: { visible: true, sort: 3, label: "Share message" },
             enhance: {
               component: ({ blockStates, setIcon }) => html`
                 <details style="position:relative;width:32px;height:32px">
@@ -157,20 +162,20 @@ export const Actions: Story = {
               `,
               label: "Enhance",
               sort: 4,
-              type: "enhance",
+
               visible: true,
             },
           },
           user: {
-            edit: { visible: true, sort: 1 },
-            copy: { visible: true, sort: 2 },
+            edit: { visible: true, sort: 1, label: "Edit message" },
+            copy: { visible: true, sort: 2, label: "Copy message" },
           },
         }}
         messages={actionMessages}
         onAction={(action) => {
-          if (action.type === "feedback" && "feedback" in action) {
-            action.setIcon(fillIcon(action.feedback === "like" ? ThumbsUp : ThumbsDown));
-            action.setIcon(undefined, action.feedback === "like" ? "dislike" : "like");
+          if (action.type === "like" || action.type === "dislike") {
+            action.setIcon(fillIcon(action.type === "like" ? ThumbsUp : ThumbsDown));
+            action.setIcon(undefined, action.type === "like" ? "dislike" : "like");
           }
           console.info("Action", action);
         }}
@@ -646,7 +651,7 @@ function EditMessageDemo() {
     <div style={{ height: 640 }}>
       <WalliChat
         ref={chat}
-        actionConfig={{ user: { edit: { visible: true, sort: 2 } } }}
+        actionConfig={{ user: { edit: { visible: true, sort: 2, label: "Edit message" } } }}
         messages={messages}
         onAction={handleAction}
         style={chatStyle}

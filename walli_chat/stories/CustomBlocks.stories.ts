@@ -20,11 +20,7 @@ import type { WalliChatAction, WalliChatMessage } from "../src/types";
 import { registerBlock } from "../src/core/block-registry";
 import { assistantBlockDefinition } from "../src/core/blocks/assistant-block";
 import { parseMarkdownBlocks, StreamingMarkdownParser } from "../src/core/md-parse";
-import {
-  createPreparedChatMessages,
-  buildConversationFrame,
-  materializeMessageBlocks,
-} from "../src/core";
+import { createPreparedChatMessages } from "../src/core";
 import type { WalliChatElement } from "../src/web-components/walli-chat";
 import "../src/web-components/walli-chat";
 import "../src/web-components/walli-chat-composer";
@@ -723,6 +719,14 @@ document.body.append(chat);`,
       const bubble = roots()[0]!.querySelector("[data-people-bubble]")!.getBoundingClientRect();
       expect(content.getBoundingClientRect().bottom).toBeLessThanOrEqual(bubble.bottom);
     });
+    chat.locales = { copyCode: "复制代码" };
+    await waitFor(() =>
+      expect(roots()[0]!.querySelector('button[aria-label="复制代码"]')).toBeTruthy(),
+    );
+    chat.locales = {};
+    await waitFor(() =>
+      expect(roots()[0]!.querySelector('button[aria-label="Copy code"]')).toBeTruthy(),
+    );
     chat.messages = [
       {
         id: "assistant-identity",

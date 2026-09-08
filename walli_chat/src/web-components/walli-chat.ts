@@ -38,6 +38,7 @@ import type {
   WalliChatMessage,
   WalliChatDeleteMessagesOptions,
   WalliChatEditConfig,
+  WalliChatLocales,
   WalliChatEditActionData,
   WalliChatEndReachedCallback,
   WalliChatInsertMessagesOptions,
@@ -120,6 +121,7 @@ export class WalliChatElement extends LitElement {
     this.requestUpdate("onAction", previous);
   }
   @property({ attribute: false }) accessor actionConfig: WalliChatActionConfig = {};
+  @property({ attribute: false }) accessor locales: WalliChatLocales = {};
   @property({ attribute: false }) accessor editConfig: WalliChatEditConfig = {};
   @property({ attribute: false }) accessor onEndReached: WalliChatEndReachedCallback | undefined;
   @property({ attribute: false }) accessor onEndReachedThreshold = 0;
@@ -917,7 +919,7 @@ export class WalliChatElement extends LitElement {
     if (changedProperties.has("intervalSeconds") || changedProperties.has("timeFormatter")) {
       this.invalidateFrame({ keepMountedRows: true });
     }
-    if (changedProperties.has("actionConfig")) {
+    if (changedProperties.has("actionConfig") || changedProperties.has("locales")) {
       this.invalidateFrame({ keepMountedRows: true });
     }
     if (changedProperties.has("defaultScrollToBottom")) {
@@ -1091,6 +1093,7 @@ export class WalliChatElement extends LitElement {
   private createBlockContext(): WalliChatBlockContext {
     return {
       actionConfig: this.actionConfig,
+      locales: this.locales,
       blockStates: this.blockStates,
       isStreaming: this.activeStreamingMessageCount > 0,
       action: this.handleBlockAction,

@@ -49,11 +49,13 @@ export class WalliMessageActionsElement extends LitElement {
     if (!icon) {
       const component = item.component?.({ blockStates: blockState?.values, setIcon });
       if (component) {
-        return html`<div
-          class="relative flex h-8 w-8 flex-none items-center justify-center overflow-visible"
-        >
-          ${component}
-        </div>`;
+        return html`<walli-tooltip .label=${item.label ?? ""}
+          ><div
+            class="relative flex h-8 w-8 flex-none items-center justify-center overflow-visible"
+          >
+            ${component}
+          </div></walli-tooltip
+        >`;
       }
     }
     return html`<walli-action-button

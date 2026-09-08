@@ -43,7 +43,7 @@ const ComposerDemo = defineComponent({
           menuItems: props.features ? menuItems.slice(1) : [],
           onUploadImages: props.features ? mockUpload : undefined,
           onTranscribe: props.features ? mockTranscription : undefined,
-          onSubmit: (markdown: string, text: string, assets: unknown[]) =>
+          onSubmit: (markdown: string, text: string, assets: readonly unknown[]) =>
             console.info("Submitted from Vue Storybook", { markdown, text, assets }),
         }),
       );
@@ -130,10 +130,10 @@ const meta = {
     slot: { control: "text" },
     style: { control: "object" },
     transcribingText: { control: "text" },
-    "update:value": { control: false },
+    "onUpdate:value": { control: false },
     uploadImagesTitle: { control: "text" },
     value: { control: "text" },
-    valueChange: { control: false },
+    onValueChange: { control: false },
   },
   args: {
     disabled: false,

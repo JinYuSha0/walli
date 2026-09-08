@@ -1,6 +1,7 @@
+import "./walli-tooltip";
 import { Copy, Pencil, Share2, ThumbsDown, ThumbsUp, createElement } from "lucide";
 import type { IconNode } from "lucide";
-import { html, render } from "lit";
+import { html, nothing, render } from "lit";
 import { customElement } from "lit/decorators.js";
 import type {
   WalliChatActionConfig,
@@ -132,7 +133,7 @@ export function createMessageActionItems<Role extends MessageActionRole>(
     items.push(
       ...builtIn.items.map((item, index) => ({
         icon: item.icon,
-        label: item.label,
+        label: typeof value === "object" ? (value.label ?? item.label) : item.label,
         sort: sort + index / 10,
         type: item.type,
       })),
@@ -203,21 +204,22 @@ export class WalliActionButtonElement extends HTMLElement {
   private renderButton(): void {
     const label = this.config.label;
     render(
-      html`<button
-        class="relative flex h-8 w-8 cursor-pointer items-center justify-center overflow-visible rounded-lg border-0 bg-transparent text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-        type="button"
-        title=${label}
-        aria-label=${label}
-        @click=${() => this.performAction()}
-      >
-        ${
-          this.config.icon
-            ? createActionIcon(this.config.icon)
-            : this.config.type
-              ? actionIcons[this.config.type]?.()
-              : null
-        }
-      </button>`,
+      html`<walli-tooltip .label=${label ?? ""}
+        ><button
+          class="relative flex h-8 w-8 cursor-pointer items-center justify-center overflow-visible rounded-lg border-0 bg-transparent text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          type="button"
+          aria-label=${label ?? nothing}
+          @click=${() => this.performAction()}
+        >
+          ${
+            this.config.icon
+              ? createActionIcon(this.config.icon)
+              : this.config.type
+                ? actionIcons[this.config.type]?.()
+                : null
+          }
+        </button></walli-tooltip
+      >`,
       this,
     );
   }

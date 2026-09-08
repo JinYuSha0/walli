@@ -81,7 +81,7 @@ export function Example() {
   return (
     <WalliChat
       ref={chat}
-      actionConfig={{ user: { edit: { visible: true, sort: 2 } } }}
+      actionConfig={{ user: { edit: { visible: true, sort: 2, label: "Edit message" } } }}
       messages={messages}
       onAction={handleAction}
       style={{ height: 640 }}
@@ -122,9 +122,9 @@ const messages: WalliChatMessage[] = [
 ];
 
 function handleAction(action: WalliChatAction) {
-  if (action.type === "feedback" && "feedback" in action) {
-    action.setIcon(fillIcon(action.feedback === "like" ? ThumbsUp : ThumbsDown));
-    const other = action.feedback === "like" ? "dislike" : "like";
+  if (action.type === "like" || action.type === "dislike") {
+    action.setIcon(fillIcon(action.type === "like" ? ThumbsUp : ThumbsDown));
+    const other = action.type === "like" ? "dislike" : "like";
     action.setIcon(undefined, other);
   }
 }
@@ -134,9 +134,9 @@ export function Example() {
     <WalliChat
       actionConfig={{
         assistant: {
-          copy: { visible: true, sort: 1 },
+          copy: { visible: true, sort: 1, label: "Copy message" },
           feedback: { visible: true, sort: 2 },
-          share: { visible: true, sort: 3 },
+          share: { visible: true, sort: 3, label: "Share message" },
           enhance: {
             component: ({ blockStates, setIcon }) => html\`
           <details style="position:relative;width:32px;height:32px">
@@ -158,13 +158,13 @@ export function Example() {
         \`,
             label: "Enhance",
             sort: 4,
-            type: "enhance",
+
             visible: true,
           },
         },
         user: {
-          edit: { visible: true, sort: 1 },
-          copy: { visible: true, sort: 2 },
+          edit: { visible: true, sort: 1, label: "Edit message" },
+          copy: { visible: true, sort: 2, label: "Copy message" },
         },
       }}
       messages={messages}

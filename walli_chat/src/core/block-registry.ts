@@ -2,6 +2,7 @@ import { marked, type Token, type TokenizerExtension } from "marked";
 import type { BlockFrame, BlockLayout, PreparedBlock } from "./types";
 import type {
   WalliChatActionConfig,
+  WalliChatLocales,
   WalliChatDeleteMessagesOptions,
   WalliChatCustomBlockAction,
   WalliChatInsertMessagesOptions,
@@ -61,6 +62,7 @@ export type WalliChatScrollState = {
 
 export type WalliChatBlockContext = WalliChatBlockState & {
   meta?: unknown;
+  locales?: WalliChatLocales;
   actionConfig: WalliChatActionConfig;
   blockStates: Map<string, WalliChatMessageBlockState>;
   action: (action: WalliChatCustomBlockAction) => Promise<boolean>;
@@ -375,7 +377,8 @@ export function renderMessageBlockTemplate(
   role: WalliChatMessageRole = "assistant",
 ): unknown {
   const definition = resolveBuiltInBlockDefinition(block.kind, role);
-  if (block.kind !== "custom") return definition.render({ block, contentInsetX, role } as never);
+  if (block.kind !== "custom")
+    return definition.render({ block, contentInsetX, role, locales: ctx?.locales } as never);
   if (ctx === undefined) throw new Error("Custom blocks require a Walli Chat block context");
   if (messageId === undefined) throw new Error("Custom blocks require a message id");
   return definition.render({ block, contentInsetX, ctx, messageId, role } as never);

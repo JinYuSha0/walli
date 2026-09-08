@@ -5,6 +5,7 @@ import { WalliMessageElement } from "./walli-message";
 import { WalliLoadingElement } from "./walli-loading";
 import { WalliActionButtonElement } from "./walli-action-button";
 import { WalliMessageActionsElement } from "./walli-message-actions";
+import { WalliTooltipElement } from "./walli-tooltip";
 
 export {
   WalliChatComposerAssetsElement,
@@ -14,6 +15,7 @@ export {
   WalliLoadingElement,
   WalliActionButtonElement,
   WalliMessageActionsElement,
+  WalliTooltipElement,
 };
 export type {
   WalliChatBlockAction,
@@ -47,6 +49,7 @@ export type {
   WalliChatDeleteMessagesOptions,
   WalliChatEditActionData,
   WalliChatEditConfig,
+  WalliChatLocales,
   WalliChatMessage,
   WalliChatMessageRole,
   WalliChatMessageType,

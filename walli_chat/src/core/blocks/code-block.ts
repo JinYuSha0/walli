@@ -29,6 +29,7 @@ export type PreparedCodeBlock = PreparedBlockBase & {
   text: string;
 };
 export type CodeBlockLayout = {
+  copyLabel?: string;
   contentLeft: number;
   height: number;
   kind: "code";
@@ -148,8 +149,10 @@ export const codeBlockDefinition = {
       width: frame.width,
     };
   },
-  render: ({ block, contentInsetX }) =>
-    html`<walli-code-block .layout=${{ block, contentInsetX }}></walli-code-block>`,
+  render: ({ block, contentInsetX, locales }) =>
+    html`<walli-code-block
+      .layout=${{ block: { ...block, copyLabel: locales?.copyCode ?? "Copy code" }, contentInsetX }}
+    ></walli-code-block>`,
 } satisfies CoreBlockDefinition<"code">;
 
 function buildCodeBlock(text: string, ctx: ParseContext, language?: string): PreparedCodeBlock {
@@ -245,7 +248,7 @@ class WalliCodeBlockElement extends BlockShellElement<CodeBlockLayout> {
         <walli-action-button
           .action=${{
             type: "copy",
-            label: "Copy code",
+            label: block.copyLabel,
             text: block.text,
           }}
         ></walli-action-button>

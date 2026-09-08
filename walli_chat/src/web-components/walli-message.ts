@@ -17,6 +17,7 @@ export class WalliMessageElement extends HTMLElement {
 
   update(message: ChatMessageInstance, context: WalliChatBlockContext): void {
     const streamingChanged = this.currentBlockContext?.isStreaming !== context.isStreaming;
+    const localesChanged = this.currentBlockContext?.locales !== context.locales;
     const actionConfigChanged = this.currentBlockContext?.actionConfig !== context.actionConfig;
     this.currentBlockContext = context;
     const key = this.computeKey(message);
@@ -29,7 +30,11 @@ export class WalliMessageElement extends HTMLElement {
       const materialized = materializeMessageBlocks(message);
       this.currentBlocks = materialized.blocks;
       this.currentHasCustomBlock = materialized.hasCustomBlock;
-    } else if (!actionConfigChanged && (!streamingChanged || !this.currentHasCustomBlock)) {
+    } else if (
+      !localesChanged &&
+      !actionConfigChanged &&
+      (!streamingChanged || !this.currentHasCustomBlock)
+    ) {
       return;
     }
     this.renderMessage(message);
@@ -55,7 +60,7 @@ export class WalliMessageElement extends HTMLElement {
           renderMessageBlockTemplate(
             block,
             Math.max(0, (message.frame.frameWidth - getBlockUsedWidth(block)) / 2),
-            block.kind === "custom" ? blockContext : undefined,
+            blockContext,
             block.kind === "custom" ? message.prepared.id : undefined,
             message.prepared.role,
           ),
@@ -105,7 +110,7 @@ export class WalliMessageElement extends HTMLElement {
             renderMessageBlockTemplate(
               block,
               block.kind === "assetsGroup" ? 0 : textContentInset,
-              block.kind === "custom" ? blockContext : undefined,
+              blockContext,
               block.kind === "custom" ? message.prepared.id : undefined,
               message.prepared.role,
             ),

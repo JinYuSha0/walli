@@ -47,6 +47,7 @@ import type {
   WalliChatDeleteMessages,
   WalliChatDeleteMessagesOptions,
   WalliChatEditConfig,
+  WalliChatLocales,
   WalliChatInsertMessagesOptions,
   WalliChatMessage,
   WalliChatMessageRole,
@@ -161,6 +162,7 @@ export const WalliChat = defineComponent({
     defaultScrollToBottom: { default: true, type: Boolean },
     defaultScrollToIndex: Number,
     editConfig: Object as PropType<WalliChatEditConfig>,
+    locales: Object as PropType<WalliChatLocales>,
     loading: { default: false, type: Boolean },
     messages: {
       default: () => [],
@@ -187,6 +189,7 @@ export const WalliChat = defineComponent({
       chat.actionConfig = props.actionConfig ?? {};
       chat.defaultScrollToIndex = props.defaultScrollToIndex;
       chat.editConfig = props.editConfig ?? {};
+      chat.locales = props.locales ?? {};
       chat.messages = props.messages;
       chat.loading = props.loading;
       chat.timeFormatter = props.timeFormatter;
@@ -311,6 +314,7 @@ export type {
   WalliChatDeleteMessages,
   WalliChatDeleteMessagesOptions,
   WalliChatEditConfig,
+  WalliChatLocales,
   WalliChatMessagePatch,
   WalliChatRemoveMessages,
   WalliChatScrollTarget,
@@ -334,3 +338,5 @@ export {
   createAssistantBlockDefinition,
   type AssistantBlockMeta,
 } from "../core/blocks/assistant-block";
+
+export type { WalliChatEditActionData, WalliChatComposerMenuItem } from "../types";

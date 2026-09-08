@@ -64,6 +64,7 @@ type DemoAction = WalliChatAction<{ enhance: undefined }, DemoBlockActions>;
 type DemoBlockAction = Extract<DemoAction, { type: "block" }>;
 
 if (chat) {
+  chat.locales = { copyCode: "复制代码" };
   chat.editConfig = {
     cancelLabel: "取消",
     placeholder: "编辑消息",
@@ -71,35 +72,40 @@ if (chat) {
   };
   chat.actionConfig = {
     assistant: {
-      copy: { visible: true, sort: 1 },
-      feedback: { visible: true, sort: 2 },
-      share: { visible: true, sort: 3 },
+      copy: { visible: true, sort: 1, label: "复制" },
+      feedback: false,
+      like: { visible: true, sort: 2, icon: ThumbsUp, label: "喜欢" },
+      dislike: { visible: true, sort: 2.1, icon: ThumbsDown, label: "不喜欢" },
+      share: { visible: true, sort: 3, label: "分享" },
       enhance: {
         component: ({ blockStates, setIcon }) => html`
           <details style="position:relative;width:32px;height:32px">
             <summary
               style="box-sizing:border-box;display:flex;width:32px;height:32px;cursor:pointer;list-style:none;align-items:center;justify-content:center;border-radius:8px"
-              title="Enhance"
+              aria-label="增强回答"
             >
               ✨
             </summary>
             <div
               style="position:absolute;z-index:10;bottom:calc(100% + 8px);left:50%;width:180px;transform:translateX(-50%);border:1px solid #e5e7eb;border-radius:12px;background:white;color:#111827;padding:12px;box-shadow:0 12px 32px rgb(0 0 0 / 18%);"
             >
-              <strong>Enhance response</strong>
+              <strong>增强回答</strong>
               <p style="margin:6px 0 10px;font-size:12px;color:#6b7280">
-                State entries: ${blockStates?.size ?? 0}
+                状态条目： ${blockStates?.size ?? 0}
               </p>
-              <button type="button" @click=${() => setIcon(fillIcon(Sparkles))}>Apply</button>
+              <button type="button" @click=${() => setIcon(fillIcon(Sparkles))}>应用</button>
             </div>
           </details>
         `,
-        label: "Enhance",
+        label: "增强回答",
         sort: 4,
         visible: true,
       },
     },
-    user: { copy: { visible: true, sort: 1 }, edit: { visible: true, sort: 2 } },
+    user: {
+      copy: { visible: true, sort: 1, label: "复制" },
+      edit: { visible: true, sort: 2, label: "编辑" },
+    },
   };
   chat.messages = [];
   chat.loading = true;

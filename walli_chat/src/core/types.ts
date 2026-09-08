@@ -56,6 +56,7 @@ export type CoreBlockDefinition<
       role: WalliChatMessageRole;
       block: Extract<BlockLayout, { kind: Kind }>;
       contentInsetX: number;
+      locales?: import("../types").WalliChatLocales;
     } & (Kind extends "custom"
       ? { ctx: import("./block-registry").WalliChatBlockContext; messageId: string }
       : object),

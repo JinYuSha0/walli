@@ -31,6 +31,7 @@ registerBlock(noticeBlockDefinition);
 
 type Args = Pick<
   WalliChatElement,
+  | "locales"
   | "responsive"
   | "actionConfig"
   | "bottomOcclusionHeight"
@@ -342,6 +343,7 @@ export const replaceToolCallBlockDefinition = {
   measure(data, context) {
     const iconSpace = 26;
     const metrics = toolCallBlockDefinition.measure(data, {
+      ...context,
       availableWidth: Math.max(1, context.availableWidth - iconSpace),
     });
     return { ...metrics, width: context.availableWidth };
@@ -398,6 +400,7 @@ const replacement = {
   measure(data, context) {
     const iconSpace = 26;
     const metrics = toolCallBlockDefinition.measure(data, {
+      ...context,
       availableWidth: Math.max(1, context.availableWidth - iconSpace),
     });
     return { ...metrics, width: context.availableWidth };
@@ -503,6 +506,11 @@ const meta: Meta<Args> = {
         type: { summary: '"base" | "sm" | "md" | "lg" | "xl" | "2xl" | undefined' },
       },
     },
+    locales: {
+      control: "object",
+      description: "Localized UI labels. Unset values use English defaults.",
+      table: { type: { summary: "WalliChatLocales", detail: "{ copyCode?: string }" } },
+    },
     actionConfig: {
       control: "object",
       description: "Controls which assistant and user message actions are visible.",
@@ -510,7 +518,7 @@ const meta: Meta<Args> = {
         type: {
           summary: "WalliChatActionConfig",
           detail:
-            "ActionItem = boolean | { visible: boolean; sort?: number }\nCustomAction = { icon?: IconNode; component?: (context) => unknown; label?: string; visible: boolean; sort?: number }\nAssistant = { copy?: ActionItem; feedback?: ActionItem; share?: ActionItem; [type: string]: ActionItem | CustomAction | undefined }\nUser = { copy?: ActionItem; edit?: ActionItem; [type: string]: ActionItem | CustomAction | undefined }",
+            "ActionItem = boolean | { visible: boolean; sort?: number; label?: string }\nCustomAction = { icon?: IconNode; component?: (context) => unknown; label?: string; visible: boolean; sort?: number; label?: string }\nAssistant = { copy?: ActionItem; feedback?: ActionItem; share?: ActionItem; [type: string]: ActionItem | CustomAction | undefined }\nUser = { copy?: ActionItem; edit?: ActionItem; [type: string]: ActionItem | CustomAction | undefined }",
         },
       },
     },
@@ -575,6 +583,7 @@ const meta: Meta<Args> = {
       <walli-chat
         style="display:block;height:100%;width:100%"
         .responsive=${args.responsive}
+        .locales=${args.locales ?? {}}
         .actionConfig=${args.actionConfig ?? {}}
         .bottomOcclusionHeight=${args.bottomOcclusionHeight}
         .defaultScrollToBottom=${args.defaultScrollToBottom}
@@ -785,9 +794,9 @@ export const Actions: Story = {
   args: {
     actionConfig: {
       assistant: {
-        copy: { visible: true, sort: 1 },
+        copy: { visible: true, sort: 1, label: "Copy message" },
         feedback: { visible: true, sort: 2 },
-        share: { visible: true, sort: 3 },
+        share: { visible: true, sort: 3, label: "Share message" },
         enhance: {
           component: ({ blockStates, setIcon }) => html`
             <details style="position:relative;width:32px;height:32px">
@@ -814,8 +823,8 @@ export const Actions: Story = {
         },
       },
       user: {
-        edit: { visible: true, sort: 1 },
-        copy: { visible: true, sort: 2 },
+        edit: { visible: true, sort: 1, label: "Edit message" },
+        copy: { visible: true, sort: 2, label: "Copy message" },
       },
     },
     messages: actionMessages,
@@ -855,9 +864,9 @@ chat.messages = [
 ];
 chat.actionConfig = {
   assistant: {
-    copy: { visible: true, sort: 1 },
+    copy: { visible: true, sort: 1, label: "Copy message" },
     feedback: { visible: true, sort: 2 },
-    share: { visible: true, sort: 3 },
+    share: { visible: true, sort: 3, label: "Share message" },
     enhance: {
       component: ({ blockStates, setIcon }) => html\`
           <details style="position:relative;width:32px;height:32px">
@@ -883,8 +892,8 @@ chat.actionConfig = {
     },
   },
   user: {
-    edit: { visible: true, sort: 1 },
-    copy: { visible: true, sort: 2 },
+    edit: { visible: true, sort: 1, label: "Edit message" },
+    copy: { visible: true, sort: 2, label: "Copy message" },
   },
 };
 chat.onAction = (action: WalliChatAction) => {
@@ -1217,7 +1226,31 @@ export const UserMessage: Story = {
 
 export const AssistantMessage: Story = {
   args: { messages: assistantMessage },
-  play: assertArgsMessagesRendered,
+  play: async (context) => {
+    await assertArgsMessagesRendered(context);
+    const chat = context.canvasElement.querySelector<WalliChatElement>("walli-chat")!;
+    const button = chat.renderRoot.querySelector<HTMLButtonElement>("walli-action-button button")!;
+    const tooltip = button.closest("walli-tooltip")!;
+    const trigger = tooltip.shadowRoot!.querySelector("span")!;
+    trigger.dispatchEvent(new PointerEvent("pointerenter", { pointerType: "mouse" }));
+    const bubble = tooltip.shadowRoot!.querySelector<HTMLElement>('[role="tooltip"]')!;
+    await expect(bubble.matches(":popover-open")).toBe(true);
+    await expect(bubble.textContent?.trim()).toBe("Copy");
+    await expect(getComputedStyle(bubble).backgroundColor).toBe("rgb(32, 32, 32)");
+    button.dispatchEvent(new WheelEvent("wheel", { bubbles: true, composed: true, deltaY: 100 }));
+    await expect(bubble.matches(":popover-open")).toBe(false);
+    trigger.dispatchEvent(new PointerEvent("pointerenter", { pointerType: "mouse" }));
+    await expect(bubble.matches(":popover-open")).toBe(true);
+    trigger.dispatchEvent(new PointerEvent("pointerleave", { pointerType: "mouse" }));
+    await expect(bubble.matches(":popover-open")).toBe(false);
+    trigger.dispatchEvent(new PointerEvent("pointerenter", { pointerType: "touch" }));
+    await expect(bubble.matches(":popover-open")).toBe(false);
+    tooltip.setAttribute("label", "");
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    trigger.dispatchEvent(new PointerEvent("pointerenter", { pointerType: "mouse" }));
+    await expect(bubble.matches(":popover-open")).toBe(false);
+    tooltip.setAttribute("label", "Copy");
+  },
   parameters: {
     docs: {
       source: {
@@ -1896,7 +1929,7 @@ chat.messages = [
   { id: "edit-assistant", role: "assistant", markdown: "CSS Grid is a layout system." },
 ];
 chat.actionConfig = {
-  user: { edit: { visible: true, sort: 2 } },
+  user: { edit: { visible: true, sort: 2, label: "Edit message" } },
 };
 
 chat.onAction = async (action: EditAction) => {

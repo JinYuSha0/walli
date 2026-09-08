@@ -72,6 +72,7 @@
     "build-storybook:react": "storybook build -c .storybook-react -o storybook-static-react",
     "build-storybook:vue": "storybook build -c .storybook-vue -o storybook-static-vue",
     "test:storybook": "vitest run --project=storybook",
+    "typecheck:storybook": "tsc -p tsconfig.storybook.json",
     "test:storybook:coverage": "vitest run --project=storybook --coverage",
     "test:release": "pnpm run build && pnpm run test:storybook && pnpm run build-storybook && pnpm run build-storybook:react && pnpm run build-storybook:vue",
     "deploy:storybook": "pnpm run build-storybook && pnpm dlx wrangler pages deploy storybook-static --project-name=walli-chat-storybook --branch=main --commit-dirty=true"

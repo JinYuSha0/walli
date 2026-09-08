@@ -15,6 +15,7 @@ import {
   WalliChatComposer,
   registerBlock,
   type WalliChatAction,
+  type WalliChatActionComponentContext,
   type WalliChatEditActionData,
   type WalliChatExpose,
   type WalliChatMessage,
@@ -133,13 +134,18 @@ const meta = {
         "Shared global breakpoint. Auto uses viewport media queries; changing the prop relayouts this chat.",
     },
 
+    locales: {
+      control: "object",
+      description: "Localized UI labels. Unset values use English defaults.",
+      table: { type: { summary: "WalliChatLocales", detail: "{ copyCode?: string }" } },
+    },
     actionConfig: {
       control: "object",
       table: {
         type: {
           summary: "WalliChatActionConfig",
           detail:
-            "ActionItem = boolean | { visible: boolean; sort?: number }\nCustomAction = { type: string; icon?: IconNode; component?: (context) => unknown; label?: string; visible: boolean; sort?: number }\nAssistant = { copy?: ActionItem; feedback?: ActionItem; share?: ActionItem; [name: string]: ActionItem | CustomAction | undefined }\nUser = { copy?: ActionItem; edit?: ActionItem; [name: string]: ActionItem | CustomAction | undefined }",
+            "ActionItem = boolean | { visible: boolean; sort?: number; label?: string }\nCustomAction = { icon?: IconNode; component?: (context) => unknown; label?: string; visible: boolean; sort?: number }\nAssistant = { copy?: ActionItem; feedback?: ActionItem; share?: ActionItem; [name: string]: ActionItem | CustomAction | undefined }\nUser = { copy?: ActionItem; edit?: ActionItem; [name: string]: ActionItem | CustomAction | undefined }",
         },
       },
     },
@@ -455,27 +461,28 @@ const DeleteMessagesDemo = component("DeleteMessagesDemo", () => {
     ]);
 });
 
-type EditMessageDemoAction = WalliChatAction<{}, { "edit-block": WalliChatEditActionData }>;
-
 const EditMessageDemo = component("EditMessageDemo", () => {
   const chat = ref<WalliChatExpose>();
   const messages: WalliChatMessage[] = [
     { id: "vue-edit-user", role: "user", markdown: "Please explain CSS gird." },
     { id: "vue-edit-assistant", role: "assistant", markdown: "CSS Grid is a layout system." },
   ];
-  const handleAction = async (action: EditMessageDemoAction) => {
+  const handleAction = async (action: WalliChatAction) => {
     switch (action.type) {
       case "edit":
         action.edit(action.messageId);
         break;
-      case "block":
-        if (action.name !== "edit-block" || action.data.action === "cancel") break;
+      case "block": {
+        if (action.name !== "edit-block") break;
+        const data = action.data as WalliChatEditActionData;
+        if (data.action === "cancel") break;
         action.deleteMessages(
-          action.data.messages.slice(action.data.messageIndex).map((message) => message.id),
+          data.messages.slice(data.messageIndex).map((message) => message.id),
           { maintainHeight: true },
         );
         await action.submit(action.markdown);
         break;
+      }
     }
   };
   return () =>
@@ -484,7 +491,7 @@ const EditMessageDemo = component("EditMessageDemo", () => {
         WalliChat,
         {
           ref: chat,
-          actionConfig: { user: { edit: { visible: true, sort: 2 } } },
+          actionConfig: { user: { edit: { visible: true, sort: 2, label: "Edit message" } } },
           messages,
           onAction: handleAction,
           style,
@@ -1097,7 +1104,7 @@ async function submit(markdown: string) {
 <template>
   <WalliChat
     ref="chat"
-    :action-config="{ user: { edit: { visible: true, sort: 2 } } }"
+    :action-config="{ user: { edit: { visible: true, sort: 2, label: "Edit message" } } }"
     :messages="messages"
     :on-action="handleAction"
     style="height: 640px"
@@ -1161,11 +1168,11 @@ export const Actions: Story = {
       actionMessages,
       actionConfig: {
         assistant: {
-          copy: { visible: true, sort: 1 },
+          copy: { visible: true, sort: 1, label: "Copy message" },
           feedback: { visible: true, sort: 2 },
-          share: { visible: true, sort: 3 },
+          share: { visible: true, sort: 3, label: "Share message" },
           enhance: {
-            component: ({ blockStates, setIcon }) => html`
+            component: ({ blockStates, setIcon }: WalliChatActionComponentContext) => html`
               <details style="position:relative;width:32px;height:32px">
                 <summary
                   style="box-sizing:border-box;display:flex;width:32px;height:32px;cursor:pointer;list-style:none;align-items:center;justify-content:center;border-radius:8px"
@@ -1186,19 +1193,19 @@ export const Actions: Story = {
             `,
             label: "Enhance",
             sort: 4,
-            type: "enhance",
+
             visible: true,
           },
         },
         user: {
-          edit: { visible: true, sort: 1 },
-          copy: { visible: true, sort: 2 },
+          edit: { visible: true, sort: 1, label: "Edit message" },
+          copy: { visible: true, sort: 2, label: "Copy message" },
         },
       },
       handleAction: (action: Parameters<NonNullable<Args["onAction"]>>[0]) => {
-        if (action.type === "feedback" && "feedback" in action) {
-          action.setIcon(fillIcon(action.feedback === "like" ? ThumbsUp : ThumbsDown));
-          action.setIcon(undefined, action.feedback === "like" ? "dislike" : "like");
+        if (action.type === "like" || action.type === "dislike") {
+          action.setIcon(fillIcon(action.type === "like" ? ThumbsUp : ThumbsDown));
+          action.setIcon(undefined, action.type === "like" ? "dislike" : "like");
         }
         console.info("Action", action);
       },
@@ -1234,9 +1241,9 @@ const messages: WalliChatMessage[] = [
 ];
 const actionConfig = {
   assistant: {
-    copy: { visible: true, sort: 1 },
+    copy: { visible: true, sort: 1, label: "Copy message" },
     feedback: { visible: true, sort: 2 },
-    share: { visible: true, sort: 3 },
+    share: { visible: true, sort: 3, label: "Share message" },
     enhance: {
       component: ({ blockStates, setIcon }) => html\`
           <details style="position:relative;width:32px;height:32px">
@@ -1258,19 +1265,19 @@ const actionConfig = {
         \`,
       label: "Enhance",
       sort: 4,
-      type: "enhance",
+
       visible: true,
     },
   },
   user: {
-    edit: { visible: true, sort: 1 },
-    copy: { visible: true, sort: 2 },
+    edit: { visible: true, sort: 1, label: "Edit message" },
+    copy: { visible: true, sort: 2, label: "Copy message" },
   },
 };
 function handleAction(action: WalliChatAction) {
-  if (action.type === "feedback" && "feedback" in action) {
-    action.setIcon(fillIcon(action.feedback === "like" ? ThumbsUp : ThumbsDown));
-    const other = action.feedback === "like" ? "dislike" : "like";
+  if (action.type === "like" || action.type === "dislike") {
+    action.setIcon(fillIcon(action.type === "like" ? ThumbsUp : ThumbsDown));
+    const other = action.type === "like" ? "dislike" : "like";
     action.setIcon(undefined, other);
   }
 }

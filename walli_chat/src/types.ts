@@ -1,3 +1,7 @@
+export type WalliChatLocales = {
+  copyCode?: string;
+};
+
 import type { IconNode } from "lucide";
 
 export type WalliChatMessageRole = "assistant" | "system" | "user" | (string & {});
@@ -30,7 +34,8 @@ export type WalliChatEditConfig = {
   submitLabel?: string;
 };
 
-export type WalliChatActionItemConfig = boolean | { sort?: number; visible: boolean };
+export type WalliChatActionItemConfig =
+  boolean | { label?: string; sort?: number; visible: boolean };
 export type WalliChatActionComponentContext = {
   blockStates?: ReadonlyMap<string, unknown>;
   setIcon: (icon?: IconNode, type?: string) => void;

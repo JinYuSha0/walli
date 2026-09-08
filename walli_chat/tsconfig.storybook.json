@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx"
+  },
+  "include": ["src", "stories", "stories-react", "stories-vue", "../walli_chat_blocks/virtual.d.ts"]
+}

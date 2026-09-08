@@ -59,6 +59,7 @@ import type {
   WalliChatDeleteMessages,
   WalliChatDeleteMessagesOptions,
   WalliChatEditConfig,
+  WalliChatLocales,
   WalliChatMessagePatch,
   WalliChatRemoveMessages,
   WalliChatScrollTarget,
@@ -202,6 +203,7 @@ export type WalliChatProps = {
   defaultScrollToBottom?: boolean;
   defaultScrollToIndex?: number;
   editConfig?: WalliChatEditConfig;
+  locales?: WalliChatLocales;
   emptyContent?: ReactNode;
   loading?: boolean;
   messages: readonly WalliChatMessage[];
@@ -244,6 +246,7 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
     defaultScrollToBottom = true,
     defaultScrollToIndex,
     editConfig,
+    locales,
     emptyContent,
     loading = false,
     messages,
@@ -263,6 +266,7 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
       elementRef.current.defaultScrollToBottom = defaultScrollToBottom;
       elementRef.current.defaultScrollToIndex = defaultScrollToIndex;
       elementRef.current.editConfig = editConfig ?? {};
+      elementRef.current.locales = locales ?? {};
       elementRef.current.messages = messages;
       elementRef.current.timeFormatter = timeFormatter;
       elementRef.current.intervalSeconds = intervalSeconds;
@@ -271,6 +275,7 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
     defaultScrollToBottom,
     defaultScrollToIndex,
     editConfig,
+    locales,
     intervalSeconds,
     messages,
     timeFormatter,
@@ -388,6 +393,7 @@ export type {
   WalliChatDeleteMessages,
   WalliChatDeleteMessagesOptions,
   WalliChatEditConfig,
+  WalliChatLocales,
   WalliChatInsertMessagesOptions,
   WalliChatMessagePatch,
   WalliChatRemoveMessages,
@@ -412,3 +418,5 @@ export {
   createAssistantBlockDefinition,
   type AssistantBlockMeta,
 } from "../core/blocks/assistant-block";
+
+export type { WalliChatEditActionData, WalliChatComposerMenuItem } from "../types";
