@@ -1989,7 +1989,9 @@ export const EditMessage: Story = {
       await expect(after.getBoundingClientRect().height).toBe(size.height);
       await expect(getComputedStyle(after).transform).toBe("none");
       await expect(getComputedStyle(after.parentElement!).willChange).toBe("transform");
-      const editRoot = chat.renderRoot.querySelector('walli-custom-block[data-block="edit-block"]')!.shadowRoot!;
+      const editRoot = chat.renderRoot
+        .querySelector('walli-custom-block[data-block="edit-block"] walli-custom-block-content')!
+        .shadowRoot!;
       const editor = editRoot.querySelector<HTMLTextAreaElement>("textarea")!;
       await userEvent.type(editor, " updated");
       const send = Array.from(editRoot.querySelectorAll("button")).find(
