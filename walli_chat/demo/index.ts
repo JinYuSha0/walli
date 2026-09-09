@@ -272,10 +272,10 @@ if (composer) {
           role: "user",
         },
       ],
-      { stick: true, waitForStreaming: true },
+      { waitForStreaming: true },
     );
     composer.value = "";
-    return startDemoStreaming({ includeReasoning: true });
+    return startDemoStreaming({ includeReasoning: true, useBottomPadding: true });
   };
   composer.onCancel = stopDemoStreaming;
   composer.onUploadImages = async (files, setProgress, setResult) => {

@@ -75,7 +75,10 @@
     "typecheck:storybook": "tsc -p tsconfig.storybook.json",
     "test:storybook:coverage": "vitest run --project=storybook --coverage",
     "test:release": "pnpm run build && pnpm run test:storybook && pnpm run build-storybook && pnpm run build-storybook:react && pnpm run build-storybook:vue",
-    "deploy:storybook": "pnpm run build-storybook && pnpm dlx wrangler pages deploy storybook-static --project-name=walli-chat-storybook --branch=main --commit-dirty=true"
+    "deploy:storybook": "pnpm run build-storybook && pnpm dlx wrangler pages deploy storybook-static --project-name=walli-chat-storybook --branch=main --commit-dirty=true",
+    "deploy:storybook:react": "pnpm run build-storybook:react && pnpm dlx wrangler pages deploy storybook-static-react --project-name=walli-chat-storybook-react --branch=main --commit-dirty=true",
+    "deploy:storybook:vue": "pnpm run build-storybook:vue && pnpm dlx wrangler pages deploy storybook-static-vue --project-name=walli-chat-storybook-vue --branch=main --commit-dirty=true",
+    "deploy:storybook:all": "pnpm run deploy:storybook && pnpm run deploy:storybook:react && pnpm run deploy:storybook:vue"
   },
   "peerDependencies": {
     "react": ">=18",
