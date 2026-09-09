@@ -1,6 +1,8 @@
+import { editBlockStateKey } from "./blocks/edit-block";
 import {
   parseInlineMarkdownBlocks,
   parseMarkdownBlocks,
+  parseUserMarkdownBlocks,
   prepareRoleMessageBlock,
 } from "./md-parse";
 import type {
@@ -14,7 +16,6 @@ import type {
 } from "./types";
 import { getCommonStyle } from "./styles";
 import {
-  resolveBuiltInBlockDefinition,
   resolveRoleBlockDefinition,
   measureMessageBlockFrame,
   materializeMessageBlockLayout,
@@ -51,9 +52,7 @@ export function createPreparedChatMessages(
           blocks = parseInlineMarkdownBlocks(seed.markdown, "body", seed.role);
           break;
         case "user":
-          blocks = groupUserMessageAssets(
-            parseMarkdownBlocks(seed.markdown, options.streaming, seed.role),
-          );
+          blocks = parseUserMarkdownBlocks(seed.markdown, options.streaming);
           break;
         default:
           blocks = parseMarkdownBlocks(seed.markdown, options.streaming, seed.role);
@@ -74,30 +73,6 @@ export function createPreparedChatMessages(
   });
 }
 
-function groupUserMessageAssets(blocks: readonly PreparedBlock[]): PreparedBlock[] {
-  const assetsGroup = resolveBuiltInBlockDefinition("assetsGroup", "user");
-  const grouped: PreparedBlock[] = [];
-  for (let index = 0; index < blocks.length; index++) {
-    const block = blocks[index]!;
-    if (block.kind !== "image" && block.kind !== "assetsGroup") {
-      grouped.push(block);
-      continue;
-    }
-
-    const assets = block.kind === "assetsGroup" ? [...block.assets] : [block];
-    let nextIndex = index + 1;
-    while (blocks[nextIndex]?.kind === "image" || blocks[nextIndex]?.kind === "assetsGroup") {
-      const next = blocks[nextIndex]!;
-      if (next.kind === "assetsGroup") assets.push(...next.assets);
-      else if (next.kind === "image") assets.push(next);
-      nextIndex++;
-    }
-    grouped.push(assetsGroup.prepare(assets, block) as PreparedBlock);
-    index = nextIndex - 1;
-  }
-  return grouped;
-}
-
 export function getMaxChatWidth(viewportWidth: number): number {
   return Math.max(
     240,
@@ -113,6 +88,7 @@ export function buildConversationFrame(
   composerBottomInsetHeight = 0,
   timeOptions?: TimeSystemMessageOptions,
   layoutCache: MessageLayoutCache = new Map(),
+  getBlockState?: WalliChatBlockContext["getBlockState"],
 ): ConversationFrame {
   const laneWidth = Math.max(120, chatWidth - getCommonStyle("messageSidePadding") * 2);
   const userFrameWidth = Math.min(
@@ -128,14 +104,18 @@ export function buildConversationFrame(
 
   let y = chatTopPadding;
   const appendMessage = (preparedMessage: PreparedChatMessage): ChatMessageInstance => {
-    const contentInsetX = preparedMessage.role === "user" ? getCommonStyle("bubblePaddingX") : 0;
-    const frameWidth = preparedMessage.role === "user" ? userFrameWidth : assistantFrameWidth;
-    const contentWidth = Math.max(120, frameWidth - contentInsetX * 2);
+    const isEditing = getBlockState?.(preparedMessage.id, editBlockStateKey) !== undefined;
+    const useUserLayout = preparedMessage.role === "user" && !isEditing;
+    const frameWidth = useUserLayout ? userFrameWidth : assistantFrameWidth;
+    const contentWidth =
+      preparedMessage.role === "user"
+        ? Math.max(120, userFrameWidth - getCommonStyle("bubblePaddingX") * 2)
+        : frameWidth;
     const cached = layoutCache.get(preparedMessage.id);
     const messageFrame =
       cached?.prepared === preparedMessage && cached.width === frameWidth
         ? cached.frame
-        : layoutMessageFrame(preparedMessage, frameWidth, contentWidth, contentInsetX);
+        : layoutMessageFrame(preparedMessage, frameWidth, contentWidth);
     layoutCache.set(preparedMessage.id, {
       prepared: preparedMessage,
       width: frameWidth,
@@ -151,7 +131,7 @@ export function buildConversationFrame(
       top,
     };
     messages.push(message);
-    y = bottom + getMessageGap(preparedMessage);
+    y = bottom + getMessageGap(preparedMessage, getBlockState);
     return message;
   };
 
@@ -166,7 +146,7 @@ export function buildConversationFrame(
       layoutCache,
     );
     if (systemMessage !== undefined) {
-      y -= getMessageGap(previousMessage);
+      y -= getMessageGap(previousMessage, getBlockState);
       appendMessage(systemMessage);
     }
     const message = appendMessage(preparedMessage);
@@ -182,7 +162,7 @@ export function buildConversationFrame(
   const totalHeight =
     messages.length === 0
       ? chatTopPadding + chatBottomPadding
-      : y - getMessageGap(lastMessage) + chatBottomPadding;
+      : y - getMessageGap(lastMessage, getBlockState) + chatBottomPadding;
 
   return {
     bottomOcclusionHeight,
@@ -199,6 +179,7 @@ export function getBlockUsedWidth(block: BlockFrame | BlockLayout): number {
   switch (block.kind) {
     case "inline":
       return block.contentLeft + block.usedWidth;
+    case "bubble":
     case "code":
     case "image":
     case "assetsGroup":
@@ -209,12 +190,18 @@ export function getBlockUsedWidth(block: BlockFrame | BlockLayout): number {
   }
 }
 
-function layoutBlocks(prepared: readonly PreparedBlock[], width: number, top = 0, meta?: unknown) {
+function layoutBlocks(
+  prepared: readonly PreparedBlock[],
+  width: number,
+  top = 0,
+  meta?: unknown,
+  availableWidth = width,
+) {
   let y = top;
   let usedWidth = 0;
   const blocks = prepared.map((block) => {
     y += block.marginTop;
-    const frame = measureMessageBlockFrame(block, width, y, meta);
+    const frame = measureMessageBlockFrame(block, width, y, meta, availableWidth);
     y += frame.height;
     usedWidth = Math.max(usedWidth, getBlockUsedWidth(frame));
     return frame;
@@ -258,7 +245,13 @@ export function prepareMarkdownContent(
   };
 }
 
-function getMessageGap(message: PreparedChatMessage | undefined): number {
+function getMessageGap(
+  message: PreparedChatMessage | undefined,
+  getBlockState?: WalliChatBlockContext["getBlockState"],
+): number {
+  if (message && getBlockState?.(message.id, editBlockStateKey) !== undefined) {
+    return getCommonStyle("messageGap");
+  }
   switch (message?.role) {
     case undefined:
     case "user":
@@ -273,7 +266,6 @@ function layoutMessageFrame(
   preparedMessage: PreparedChatMessage,
   maxFrameWidth: number,
   maxContentWidth: number,
-  contentInsetX: number,
 ): MessageFrame {
   const roleBlock = resolveRoleBlockDefinition(preparedMessage.role);
   const bodyInsetX = roleBlock?.getContentInsetX?.(preparedMessage.meta ?? roleBlock.meta) ?? 0;
@@ -281,12 +273,16 @@ function layoutMessageFrame(
   const bubblePaddingY = isSystem
     ? getCommonStyle("systemBubblePaddingY")
     : getCommonStyle("bubblePaddingY");
-  const {
-    blocks,
-    height,
-    usedWidth: usedContentWidth,
-  } = layoutBlocks(preparedMessage.blocks, maxContentWidth, bubblePaddingY, preparedMessage.meta);
-  const bubbleHeight = height + bubblePaddingY * 2;
+  const paddingY = preparedMessage.role === "user" ? 0 : bubblePaddingY;
+  const layout = layoutBlocks(
+    preparedMessage.blocks,
+    maxContentWidth,
+    paddingY,
+    preparedMessage.meta,
+    maxFrameWidth,
+  );
+  const { blocks, height, usedWidth: usedContentWidth } = layout;
+  const bubbleHeight = height + paddingY * 2;
   let actionHeight = 0;
   if (!preparedMessage.streaming && preparedMessage.showActions) {
     switch (preparedMessage.role) {
@@ -301,14 +297,14 @@ function layoutMessageFrame(
   const paddingTop = preparedMessage.role === "user" ? getCommonStyle("userMessagePaddingTop") : 0;
   const frameWidth =
     preparedMessage.role === "user"
-      ? Math.min(maxFrameWidth, contentInsetX * 2 + Math.max(1, usedContentWidth))
+      ? Math.min(maxFrameWidth, Math.max(1, usedContentWidth))
       : maxFrameWidth;
   const frame: MessageFrame = {
     actionHeight,
     bodyInsetX,
     blocks,
     bubbleHeight,
-    contentInsetX,
+    contentInsetX: 0,
     frameWidth,
     layoutContentWidth: maxContentWidth,
     totalHeight: bubbleHeight + paddingTop + actionHeight,

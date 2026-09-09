@@ -29,11 +29,11 @@ import {
   editBlockName,
   editBlockStateKey,
   editBlockSubmitActionName,
-  type WalliChatEditBlockAction,
+  isEditBlockAction,
 } from "../core/blocks/edit-block";
 import { parseEventData, ServerSentEventParser, type ServerSentEvent } from "../core/sse-parser";
 import { getCommonStyle } from "../core/styles";
-import { timeScheduler, unescapeMarkdownText } from "../core/helper";
+import { timeScheduler } from "../core/helper";
 import type {
   WalliChatMessage,
   WalliChatDeleteMessagesOptions,
@@ -76,7 +76,6 @@ type EditMessageBlockState = {
   message: WalliChatMessage;
   messageIndex: number;
   messages: readonly WalliChatMessage[];
-  value: string;
 };
 
 type PendingScrollRequest = {
@@ -957,16 +956,13 @@ export class WalliChatElement extends LitElement {
     if (messageIndex < 0) return false;
     const message = this._messages[messageIndex]!;
     if (message.role !== "user") return false;
-    const value = unescapeMarkdownText(message.markdown);
     this.setBlockState(messageId, editBlockStateKey, {
       message,
       messageIndex,
       messages: this._messages,
-      value,
     } satisfies EditMessageBlockState);
     this.replaceMessage(messageId, {
-      markdown: createEditBlockMarkdown(value, this.editConfig),
-      role: "assistant",
+      markdown: createEditBlockMarkdown(message.markdown, this.editConfig),
       showActions: false,
     });
     return true;
@@ -1124,6 +1120,7 @@ export class WalliChatElement extends LitElement {
   }
 
   private deleteBlockState(messageId: string, key: string): void {
+    this.messageLayoutCache.delete(messageId);
     this.blockStates.get(messageId)?.values.delete(key);
   }
 
@@ -1159,14 +1156,14 @@ export class WalliChatElement extends LitElement {
   }
 
   private readonly handleBlockAction = async (
-    action: WalliChatEditBlockAction | WalliChatCustomBlockAction,
+    action: WalliChatCustomBlockAction,
   ): Promise<boolean> => {
     const editState = this.getBlockState<EditMessageBlockState>(
       action.messageId,
       editBlockStateKey,
     );
 
-    if (editState) {
+    if (editState && isEditBlockAction(action)) {
       switch (action.name) {
         case editBlockCancelActionName:
           this.deleteBlockState(action.messageId, editBlockStateKey);
@@ -1190,7 +1187,7 @@ export class WalliChatElement extends LitElement {
           );
           return true;
         case editBlockSubmitActionName: {
-          const markdown = editState.value.trim();
+          const markdown = action.data.markdown.trim();
           if (!markdown) return false;
           this.deleteBlockState(action.messageId, editBlockStateKey);
           this.replaceMessage(action.messageId, {
@@ -1476,6 +1473,7 @@ export class WalliChatElement extends LitElement {
         intervalSeconds: this.intervalSeconds,
       },
       this.messageLayoutCache,
+      (messageId, key) => this.getBlockState(messageId, key),
     );
     const preparedMessage = this.getStreamingBottomPaddingMessage();
     if (preparedMessage === undefined) return frame;

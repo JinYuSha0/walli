@@ -1,3 +1,4 @@
+import { bubbleBlockDefinition } from "./bubble-block";
 import { assistantBlockDefinition } from "./assistant-block";
 import { registerBlock } from "../block-registry";
 import { assetsGroupBlockDefinition } from "./assets-group-block";
@@ -19,6 +20,7 @@ import { tableBlockDefinition } from "./table-block";
 
 registerBlock(assistantBlockDefinition);
 registerBlock(assetsGroupBlockDefinition);
+registerBlock(bubbleBlockDefinition);
 registerBlock(codeBlockDefinition);
 registerBlock(customBlockDefinition);
 registerBlock(editBlockDefinition);

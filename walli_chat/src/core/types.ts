@@ -1,3 +1,8 @@
+import type {
+  PreparedBubbleBlock,
+  BubbleBlockFrame,
+  BubbleBlockLayout,
+} from "./blocks/bubble-block";
 import type { WalliChatMessageRole } from "../types";
 import type {
   AssetsGroupBlockFrame,
@@ -81,6 +86,7 @@ export type PreparedBlockBase = {
 };
 
 export type PreparedBlock =
+  | PreparedBubbleBlock
   | PreparedInlineBlock
   | PreparedCodeBlock
   | PreparedImageBlock
@@ -112,6 +118,7 @@ export type BlockFrameBase = {
 };
 
 export type BlockFrame =
+  | BubbleBlockFrame
   | InlineBlockFrame
   | CodeBlockFrame
   | ImageBlockFrame
@@ -121,6 +128,7 @@ export type BlockFrame =
   | CustomBlockFrame;
 
 export type BlockLayout =
+  | BubbleBlockLayout
   | InlineBlockLayout
   | CodeBlockLayout
   | ImageBlockLayout

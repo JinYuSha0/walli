@@ -54,6 +54,7 @@ import {
   WalliChatComposer,
   type WalliChatAction,
   type WalliChatEditActionData,
+  type WalliChatMessage,
   type WalliChatRef,
 } from "@wallilabs/chat/react";
 
@@ -61,6 +62,18 @@ type EditAction = WalliChatAction<{}, { "edit-block": WalliChatEditActionData }>
 
 export function Example() {
   const chat = useRef<WalliChatRef>(null);
+  const messages: WalliChatMessage[] = [
+    { id: "react-edit-user", role: "user", markdown: "Please explain CSS gird." },
+    { id: "react-edit-assistant", role: "assistant", markdown: "CSS Grid is a layout system." },
+    {
+      id: "react-edit-user-image",
+      role: "user",
+      markdown: [
+        '![Coast](/demo-landscape-coast.jpg){width="1200" height="800"}',
+        "Please help me write a caption for this photo.",
+      ].join("\\n\\n"),
+    },
+  ];
 
   async function handleAction(action: EditAction) {
     switch (action.type) {
@@ -71,7 +84,6 @@ export function Example() {
         if (action.name !== "edit-block" || action.data.action === "cancel") break;
         action.deleteMessages(
           action.data.messages.slice(action.data.messageIndex).map((message) => message.id),
-          { maintainHeight: true },
         );
         await action.submit(action.markdown);
         break;
@@ -84,15 +96,18 @@ export function Example() {
       actionConfig={{ user: { edit: { visible: true, sort: 2, label: "Edit message" } } }}
       messages={messages}
       onAction={handleAction}
-      style={{ height: 640 }}
+      style={{ height: 720 }}
     >
       <WalliChatComposer
         slot="composer"
         value=""
         onSubmit={async (markdown) => {
-          chat.current?.insertMessagesAtBottom([
-            { id: crypto.randomUUID(), role: "user", markdown },
-          ]);
+          chat.current?.insertMessagesAtBottom(
+            [
+              { id: crypto.randomUUID(), role: "user", markdown },
+            ],
+            { stick: true },
+          );
           // Start the new assistant response here.
         }}
       />

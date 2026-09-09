@@ -1,7 +1,7 @@
 import { html, render, type TemplateResult } from "lit";
 import { customElement } from "lit/decorators.js";
 import { getBlockUsedWidth, materializeMessageBlocks } from "../core";
-import type { BlockLayout, ChatMessageInstance, MessageFrame } from "../core/types";
+import type { BlockLayout, ChatMessageInstance } from "../core/types";
 import { renderMessageBlockTemplate, type WalliChatBlockContext } from "../core/block-registry";
 import { getCommonStyle } from "../core/styles";
 import clsx from "clsx";
@@ -68,14 +68,6 @@ export class WalliMessageElement extends HTMLElement {
       </div>`;
     }
 
-    const assetsGroups =
-      message.prepared.role === "user"
-        ? blocks.filter((block) => block.kind === "assetsGroup")
-        : [];
-    const hasAssets = assetsGroups.length > 0;
-    const textBlocks = hasAssets ? blocks.filter((block) => block.kind !== "assetsGroup") : [];
-    const textBubbleStyle = getTextBubbleStyle(message.frame, textBlocks);
-    const textContentInset = getTextContentInset(message.frame, textBlocks);
     const messageActionContext = this.createMessageActionContext(message);
 
     return html`<div
@@ -92,29 +84,21 @@ export class WalliMessageElement extends HTMLElement {
         style=${`width:${message.frame.frameWidth}px;`}
       >
         <div
-          class=${clsx({
-            "message-bubble relative max-w-full flex-none rounded-none text-foreground":
-              message.prepared.role !== "user",
-            "message-bubble relative max-w-full flex-none rounded-2xl text-secondary-foreground shadow-lg":
-              message.prepared.role === "user",
-            "bg-transparent shadow-none": hasAssets,
+          class=${clsx("message-bubble relative max-w-full flex-none", {
+            "text-foreground": message.prepared.role !== "user",
+            "text-secondary-foreground": message.prepared.role === "user",
           })}
-          style=${`width:${message.frame.frameWidth}px;height:${message.frame.bubbleHeight}px;${message.prepared.role === "user" && !hasAssets ? "background-color:var(--user-message-background,var(--walli-user-message-background));" : ""}`}
+          style=${`width:${message.frame.frameWidth}px;height:${message.frame.bubbleHeight}px;`}
         >
-          ${
-            textBubbleStyle
-              ? html`<div class="absolute rounded-2xl shadow-lg" style=${textBubbleStyle}></div>`
-              : null
-          }
-          ${blocks.map((block) =>
-            renderMessageBlockTemplate(
+          ${blocks.map((block) => {
+            return renderMessageBlockTemplate(
               block,
-              block.kind === "assetsGroup" ? 0 : textContentInset,
+              message.frame.contentInsetX,
               blockContext,
               block.kind === "custom" ? message.prepared.id : undefined,
               message.prepared.role,
-            ),
-          )}
+            );
+          })}
         </div>
         ${
           message.frame.actionHeight === 0
@@ -130,7 +114,7 @@ export class WalliMessageElement extends HTMLElement {
   }
 
   private computeKey(message: ChatMessageInstance): string {
-    const frame: MessageFrame = message.frame;
+    const frame = message.frame;
     return `${message.top}:${frame.frameWidth}:${frame.bubbleHeight}:${frame.totalHeight}:${frame.layoutContentWidth}:${frame.contentInsetX}:${message.prepared.markdown}`;
   }
 
@@ -197,26 +181,4 @@ export class WalliMessageElement extends HTMLElement {
     };
     void this.currentBlockContext.action(action);
   };
-}
-
-function getTextBubbleStyle(
-  frame: MessageFrame,
-  textBlocks: readonly BlockLayout[],
-): string | null {
-  if (textBlocks.length === 0) return null;
-
-  const textWidth = Math.max(...textBlocks.map(getBlockUsedWidth));
-  const bubbleWidth = Math.min(frame.frameWidth, frame.contentInsetX * 2 + textWidth);
-  const left = frame.frameWidth - bubbleWidth;
-  const top = Math.min(...textBlocks.map((block) => block.top));
-  const bottom = Math.max(...textBlocks.map((block) => block.top + block.height));
-  const paddingY = getCommonStyle("bubblePaddingY");
-  return `background-color:var(--user-message-background,var(--walli-user-message-background));left:${left}px;top:${top - paddingY}px;width:${bubbleWidth}px;height:${bottom - top + paddingY * 2}px;`;
-}
-
-function getTextContentInset(frame: MessageFrame, textBlocks: readonly BlockLayout[]): number {
-  if (textBlocks.length === 0) return frame.contentInsetX;
-  const textWidth = Math.max(...textBlocks.map(getBlockUsedWidth));
-  const bubbleWidth = Math.min(frame.frameWidth, frame.contentInsetX * 2 + textWidth);
-  return frame.contentInsetX + frame.frameWidth - bubbleWidth;
 }

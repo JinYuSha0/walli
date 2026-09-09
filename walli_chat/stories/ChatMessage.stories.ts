@@ -1,3 +1,6 @@
+import { getCommonStyle } from "../src/core/styles";
+import { buildConversationFrame, createPreparedChatMessages } from "../src/core";
+import { createEditBlockMarkdown, splitEditContent } from "../src/core/blocks/edit-block";
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import type { UIMessageChunk } from "ai";
 import { html } from "lit";
@@ -1856,11 +1859,171 @@ document.querySelector("#reset").onclick = () => {
 };
 
 export const EditMessage: Story = {
+  play: async ({ canvasElement }) => {
+    const image = '![Screenshot](<blob:http://localhost/image>){width="1280" height="2774"}';
+    const content = splitEditContent(`${image}\n\n123`);
+    await expect(content.value).toBe("123");
+    await expect(content.images).toEqual([image]);
+    for (const width of [375, 960]) {
+      for (const markdown of [`${image}\n\n123`, `${image}\n\n${image}\n\n123`]) {
+        const frames = [markdown, createEditBlockMarkdown(markdown)].map(
+          (markdown, index) =>
+            buildConversationFrame(
+              createPreparedChatMessages([{ id: "image-edit", role: "user", markdown }]),
+              width,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              () => (index === 1 ? {} : undefined),
+            ).messages[0]!.frame,
+        );
+        const assets = frames.map((frame) =>
+          frame.blocks.find((block) => block.kind === "assetsGroup"),
+        );
+        await expect(assets[0]).toBeTruthy();
+        await expect(assets[1]).toEqual(assets[0]);
+        const [asset, text] = frames[0]!.blocks;
+        await expect(text!.top - asset!.top - asset!.height).toBe(getCommonStyle("blockGap"));
+        const editor = frames[1]!.blocks.find((block) => block.kind === "custom");
+        await expect(editor && "width" in editor ? editor.width : undefined).toBe(
+          frames[1]!.frameWidth,
+        );
+        await expect(frames[1]!.contentInsetX).toBe(0);
+      }
+    }
+    for (const width of [375, 960]) {
+      for (const markdown of [
+        "Plain text",
+        "- First item\n- Second item",
+        "> Quoted text",
+        `${image}\n\nText`,
+        `First paragraph\n\nSecond paragraph\n\n${image}\n\nLast paragraph\n\n${image}`,
+      ]) {
+        const prepared = createPreparedChatMessages([
+          { id: "bubble-layout", role: "user", markdown, showActions: false },
+        ]);
+        const frame = buildConversationFrame(prepared, width).messages[0]!.frame;
+        const surfaces = frame.blocks;
+        for (const [index, surface] of surfaces.entries()) {
+          const previous = surfaces[index - 1];
+          await expect(surface.top - (previous ? previous.top + previous.height : 0)).toBe(
+            previous ? getCommonStyle("blockGap") : 0,
+          );
+        }
+        for (const bubble of frame.blocks) {
+          if (bubble.kind !== "bubble") continue;
+          await expect(bubble.contentLeft).toBe(0);
+          await expect(bubble.width).toBeLessThanOrEqual(frame.frameWidth);
+          const first = bubble.blocks[0]!;
+          const last = bubble.blocks.at(-1)!;
+          await expect(first.top).toBe(getCommonStyle("bubblePaddingY"));
+          await expect(bubble.height - last.top - last.height).toBe(
+            getCommonStyle("bubblePaddingY"),
+          );
+        }
+        const last = surfaces.at(-1)!;
+        await expect(frame.bubbleHeight).toBe(last.top + last.height);
+      }
+    }
+    const editingConversation = buildConversationFrame(
+      createPreparedChatMessages([
+        {
+          id: "editing-gap",
+          role: "user",
+          markdown: createEditBlockMarkdown("Text"),
+          showActions: false,
+        },
+        { id: "following-message", role: "assistant", markdown: "Next message" },
+      ]),
+      960,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      (id) => (id === "editing-gap" ? {} : undefined),
+    );
+    const [editing, following] = editingConversation.messages;
+    await expect(following!.top - editing!.top - editing!.frame.totalHeight).toBe(
+      getCommonStyle("messageGap"),
+    );
+    await expect(splitEditContent(image).value).toBe("");
+    await expect(splitEditContent("Plain text")).toEqual({ images: [], value: "Plain text" });
+    const chat = canvasElement.querySelector<WalliChatElement>("walli-chat")!;
+    const originalMessages = chat.messages;
+    try {
+      chat.messages = [
+        { id: "before-image", role: "assistant", markdown: "Try editing the photo caption." },
+        {
+          id: "image-quality",
+          role: "user",
+          markdown: '![Coast](/demo-landscape-coast.jpg){width="1200" height="800"}\n\nText',
+        },
+      ];
+      await waitFor(() =>
+        expect(chat.renderRoot.querySelector("walli-assets-group-block img")).toBeTruthy(),
+      );
+      const before = chat.renderRoot.querySelector<HTMLImageElement>(
+        "walli-assets-group-block img",
+      )!;
+      await before.decode();
+      const size = before.getBoundingClientRect();
+      const source = before.currentSrc;
+      const naturalWidth = before.naturalWidth;
+      await userEvent.click(
+        chat.renderRoot.querySelector<HTMLButtonElement>('button[aria-label="Edit"]')!,
+      );
+      await waitFor(() =>
+        expect(chat.renderRoot.querySelector('button[aria-label="Edit"]')).toBeNull(),
+      );
+      const after = chat.renderRoot.querySelector<HTMLImageElement>(
+        "walli-assets-group-block img",
+      )!;
+      await after.decode();
+      await expect(after).toBe(before);
+      await expect(after.currentSrc).toBe(source);
+      await expect(after.naturalWidth).toBe(naturalWidth);
+      await expect(after.getBoundingClientRect().width).toBe(size.width);
+      await expect(after.getBoundingClientRect().height).toBe(size.height);
+      await expect(getComputedStyle(after).transform).toBe("none");
+      await expect(getComputedStyle(after.parentElement!).willChange).toBe("transform");
+      const editRoot = chat.renderRoot.querySelector('walli-custom-block[data-block="edit-block"]')!.shadowRoot!;
+      const editor = editRoot.querySelector<HTMLTextAreaElement>("textarea")!;
+      await userEvent.type(editor, " updated");
+      const send = Array.from(editRoot.querySelectorAll("button")).find(
+        (button) => button.textContent?.trim() === "Send",
+      )!;
+      await userEvent.click(send);
+      await waitFor(() => expect(chat.messages.at(-1)?.markdown).toBe("Updated response."));
+      const viewport = chat.renderRoot.querySelector<HTMLElement>(".chat-viewport")!;
+      await waitFor(() =>
+        expect(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop).toBeLessThan(2),
+      );
+      const submittedHeight = viewport.scrollHeight;
+      // A fresh render of the same messages must not remove any leftover edit padding.
+      chat.messages = [...chat.messages];
+      await chat.updateComplete;
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await expect(viewport.scrollHeight).toBe(submittedHeight);
+    } finally {
+      chat.messages = originalMessages;
+    }
+  },
   render: () => {
     let chat: WalliChatElement | undefined;
     const messages: WalliChatMessage[] = [
       { id: "edit-user", role: "user", markdown: "Please explain CSS gird." },
       { id: "edit-assistant", role: "assistant", markdown: "CSS Grid is a layout system." },
+      {
+        id: "edit-user-image",
+        role: "user",
+        markdown: [
+          '![Coast](/demo-landscape-coast.jpg){width="1200" height="800"}',
+          "Please help me write a caption for this photo.",
+        ].join("\n\n"),
+      },
     ];
     const handleAction = async (action: EditMessageDemoAction) => {
       switch (action.type) {
@@ -1871,14 +2034,13 @@ export const EditMessage: Story = {
           if (action.name !== "edit-block" || action.data.action === "cancel") break;
           action.deleteMessages(
             action.data.messages.slice(action.data.messageIndex).map((message) => message.id),
-            { maintainHeight: true },
           );
           await action.submit(action.markdown);
           break;
       }
     };
     return html`
-      <div style="height:640px">
+      <div style="height:720px">
         <walli-chat
           ${ref((element) => {
             if (!(element instanceof WalliChatElement)) return;
@@ -1893,10 +2055,13 @@ export const EditMessage: Story = {
             ${ref((element) => {
               if (!(element instanceof WalliChatComposerElement)) return;
               element.onSubmit = (markdown) => {
-                chat?.insertMessagesAtBottom([
-                  { id: "edited-user", role: "user", markdown },
-                  { id: "edited-assistant", role: "assistant", markdown: "Updated response." },
-                ]);
+                chat?.insertMessagesAtBottom(
+                  [
+                    { id: "edited-user", role: "user", markdown },
+                    { id: "edited-assistant", role: "assistant", markdown: "Updated response." },
+                  ],
+                  { stick: true },
+                );
                 element.value = "";
               };
             })}
@@ -1908,7 +2073,7 @@ export const EditMessage: Story = {
   },
   parameters: {
     docs: {
-      description: { story: "Enables editing and handles the edit block submission." },
+      description: { story: "Edit plain text or the caption of an image message while keeping the image unchanged." },
       source: {
         language: "ts",
         code: `import "@wallilabs/chat";
@@ -1927,6 +2092,14 @@ const composer = document.querySelector<WalliChatComposerElement>("walli-chat-co
 chat.messages = [
   { id: "edit-user", role: "user", markdown: "Please explain CSS gird." },
   { id: "edit-assistant", role: "assistant", markdown: "CSS Grid is a layout system." },
+  {
+    id: "edit-user-image",
+    role: "user",
+    markdown: [
+      '![Coast](/demo-landscape-coast.jpg){width="1200" height="800"}',
+      "Please help me write a caption for this photo.",
+    ].join("\\n\\n"),
+  },
 ];
 chat.actionConfig = {
   user: { edit: { visible: true, sort: 2, label: "Edit message" } },
@@ -1941,7 +2114,6 @@ chat.onAction = async (action: EditAction) => {
       if (action.name !== "edit-block" || action.data.action === "cancel") break;
       action.deleteMessages(
         action.data.messages.slice(action.data.messageIndex).map((message) => message.id),
-        { maintainHeight: true },
       );
       await action.submit(action.markdown);
       break;
@@ -1949,9 +2121,12 @@ chat.onAction = async (action: EditAction) => {
 };
 
 composer.onSubmit = async (markdown) => {
-  chat.insertMessagesAtBottom([
-    { id: crypto.randomUUID(), role: "user", markdown },
-  ]);
+  chat.insertMessagesAtBottom(
+    [
+      { id: crypto.randomUUID(), role: "user", markdown },
+    ],
+    { stick: true },
+  );
   // Start the new assistant response here.
 };`,
       },

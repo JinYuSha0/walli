@@ -466,6 +466,14 @@ const EditMessageDemo = component("EditMessageDemo", () => {
   const messages: WalliChatMessage[] = [
     { id: "vue-edit-user", role: "user", markdown: "Please explain CSS gird." },
     { id: "vue-edit-assistant", role: "assistant", markdown: "CSS Grid is a layout system." },
+    {
+      id: "vue-edit-user-image",
+      role: "user",
+      markdown: [
+        '![Coast](/demo-landscape-coast.jpg){width="1200" height="800"}',
+        "Please help me write a caption for this photo.",
+      ].join("\n\n"),
+    },
   ];
   const handleAction = async (action: WalliChatAction) => {
     switch (action.type) {
@@ -478,7 +486,6 @@ const EditMessageDemo = component("EditMessageDemo", () => {
         if (data.action === "cancel") break;
         action.deleteMessages(
           data.messages.slice(data.messageIndex).map((message) => message.id),
-          { maintainHeight: true },
         );
         await action.submit(action.markdown);
         break;
@@ -486,7 +493,7 @@ const EditMessageDemo = component("EditMessageDemo", () => {
     }
   };
   return () =>
-    h("div", { style: { height: "640px" } }, [
+    h("div", { style: { height: "720px" } }, [
       h(
         WalliChat,
         {
@@ -502,14 +509,17 @@ const EditMessageDemo = component("EditMessageDemo", () => {
               slot: "composer",
               value: "",
               onSubmit: async (markdown: string) => {
-                chat.value?.insertMessagesAtBottom([
-                  { id: crypto.randomUUID(), role: "user", markdown },
-                  {
-                    id: crypto.randomUUID(),
-                    role: "assistant",
-                    markdown: "Updated response.",
-                  },
-                ]);
+                chat.value?.insertMessagesAtBottom(
+                  [
+                    { id: crypto.randomUUID(), role: "user", markdown },
+                    {
+                      id: crypto.randomUUID(),
+                      role: "assistant",
+                      markdown: "Updated response.",
+                    },
+                  ],
+                  { stick: true },
+                );
               },
             }),
         },
@@ -1071,11 +1081,24 @@ import {
   WalliChatComposer,
   type WalliChatAction,
   type WalliChatEditActionData,
+  type WalliChatMessage,
   type WalliChatExpose,
 } from "@wallilabs/chat/vue";
 
 type EditAction = WalliChatAction<{}, { "edit-block": WalliChatEditActionData }>;
 const chat = ref<WalliChatExpose>();
+const messages: WalliChatMessage[] = [
+  { id: "vue-edit-user", role: "user", markdown: "Please explain CSS gird." },
+  { id: "vue-edit-assistant", role: "assistant", markdown: "CSS Grid is a layout system." },
+  {
+    id: "vue-edit-user-image",
+    role: "user",
+    markdown: [
+      '![Coast](/demo-landscape-coast.jpg){width="1200" height="800"}',
+      "Please help me write a caption for this photo.",
+    ].join("\\n\\n"),
+  },
+];
 
 async function handleAction(action: EditAction) {
   switch (action.type) {
@@ -1086,7 +1109,6 @@ async function handleAction(action: EditAction) {
       if (action.name !== "edit-block" || action.data.action === "cancel") break;
       action.deleteMessages(
         action.data.messages.slice(action.data.messageIndex).map((message) => message.id),
-        { maintainHeight: true },
       );
       await action.submit(action.markdown);
       break;
@@ -1094,9 +1116,12 @@ async function handleAction(action: EditAction) {
 }
 
 async function submit(markdown: string) {
-  chat.value?.insertMessagesAtBottom([
-    { id: crypto.randomUUID(), role: "user", markdown },
-  ]);
+  chat.value?.insertMessagesAtBottom(
+    [
+      { id: crypto.randomUUID(), role: "user", markdown },
+    ],
+    { stick: true },
+  );
   // Start the new assistant response here.
 }
 </script>
@@ -1107,7 +1132,7 @@ async function submit(markdown: string) {
     :action-config="{ user: { edit: { visible: true, sort: 2, label: "Edit message" } } }"
     :messages="messages"
     :on-action="handleAction"
-    style="height: 640px"
+    style="height: 720px"
   >
     <WalliChatComposer slot="composer" value="" :on-submit="submit" />
   </WalliChat>

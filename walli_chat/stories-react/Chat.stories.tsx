@@ -630,6 +630,14 @@ function EditMessageDemo() {
       role: "assistant",
       markdown: "CSS Grid is a layout system.",
     },
+    {
+      id: "react-edit-user-image",
+      role: "user",
+      markdown: [
+        '![Coast](/demo-landscape-coast.jpg){width="1200" height="800"}',
+        "Please help me write a caption for this photo.",
+      ].join("\n\n"),
+    },
   ];
   const handleAction = async (action: EditMessageDemoAction) => {
     switch (action.type) {
@@ -640,7 +648,6 @@ function EditMessageDemo() {
         if (action.name !== "edit-block" || action.data.action === "cancel") break;
         action.deleteMessages(
           action.data.messages.slice(action.data.messageIndex).map((message) => message.id),
-          { maintainHeight: true },
         );
         await action.submit(action.markdown);
         break;
@@ -648,7 +655,7 @@ function EditMessageDemo() {
   };
 
   return (
-    <div style={{ height: 640 }}>
+    <div style={{ height: 720 }}>
       <WalliChat
         ref={chat}
         actionConfig={{ user: { edit: { visible: true, sort: 2, label: "Edit message" } } }}
@@ -660,14 +667,17 @@ function EditMessageDemo() {
           slot="composer"
           value=""
           onSubmit={async (markdown) => {
-            chat.current?.insertMessagesAtBottom([
-              { id: crypto.randomUUID(), role: "user", markdown },
-              {
-                id: crypto.randomUUID(),
-                role: "assistant",
-                markdown: "Updated response.",
-              },
-            ]);
+            chat.current?.insertMessagesAtBottom(
+              [
+                { id: crypto.randomUUID(), role: "user", markdown },
+                {
+                  id: crypto.randomUUID(),
+                  role: "assistant",
+                  markdown: "Updated response.",
+                },
+              ],
+              { stick: true },
+            );
           }}
         />
       </WalliChat>

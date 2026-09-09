@@ -154,7 +154,7 @@ class WalliAssetsGroupBlockElement extends BlockShellElement<AssetsGroupBlockLay
   ): TemplateResult {
     this.renderedBlock = block;
     return html`<div
-      class="pointer-events-auto absolute right-0 top-0 touch-manipulation"
+      class="pointer-events-auto absolute right-0 top-0 touch-manipulation [will-change:transform]"
       style=${`width:${block.width}px;height:${block.height}px;`}
     >
       ${block.items.map((item, index) =>
@@ -170,7 +170,7 @@ class WalliAssetsGroupBlockElement extends BlockShellElement<AssetsGroupBlockLay
               tabindex="0"
               draggable="false"
               data-index=${index}
-              style=${`left:${item.left}px;top:${item.top}px;width:${item.width}px;height:${item.height}px;object-fit:${item.crop ? "cover" : "contain"};transform:translateZ(0);backface-visibility:hidden;`}
+              style=${`left:${item.left}px;top:${item.top}px;width:${item.width}px;height:${item.height}px;object-fit:${item.crop ? "cover" : "contain"};`}
               @click=${this.handlePreviewClick}
               @keydown=${this.handlePreviewKeydown}
             />`

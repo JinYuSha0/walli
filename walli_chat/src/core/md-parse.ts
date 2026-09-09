@@ -43,6 +43,46 @@ export function parseMarkdownBlocks(
   return mergeAssetsGroups(parseBlockTokens(tokens, { listDepth: 0, quoteDepth: 0, role }));
 }
 
+export function parseUserMarkdownBlocks(markdown: string, streaming = false): PreparedBlock[] {
+  return groupUserMessageBlocks(parseMarkdownBlocks(markdown, streaming, "user"));
+}
+
+function groupUserMessageBlocks(blocks: readonly PreparedBlock[]): PreparedBlock[] {
+  const assetsGroup = resolveBuiltInBlockDefinition("assetsGroup", "user");
+  const grouped: PreparedBlock[] = [];
+  const bubbleDefinition = resolveBuiltInBlockDefinition("bubble", "user");
+  let bubble: Extract<PreparedBlock, { kind: "bubble" }> | undefined;
+  for (let index = 0; index < blocks.length; index++) {
+    const block = blocks[index]!;
+    if (block.kind === "custom") {
+      bubble = undefined;
+      grouped.push(block);
+      continue;
+    }
+    if (block.kind !== "image" && block.kind !== "assetsGroup") {
+      if (!bubble) {
+        bubble = bubbleDefinition.prepare([], block);
+        grouped.push(bubble);
+      }
+      bubble.blocks.push(block);
+      continue;
+    }
+
+    bubble = undefined;
+    const assets = block.kind === "assetsGroup" ? [...block.assets] : [block];
+    let nextIndex = index + 1;
+    while (blocks[nextIndex]?.kind === "image" || blocks[nextIndex]?.kind === "assetsGroup") {
+      const next = blocks[nextIndex]!;
+      if (next.kind === "assetsGroup") assets.push(...next.assets);
+      else if (next.kind === "image") assets.push(next);
+      nextIndex++;
+    }
+    grouped.push(assetsGroup.prepare(assets, block) as PreparedBlock);
+    index = nextIndex - 1;
+  }
+  return grouped;
+}
+
 export function prepareRoleMessageBlock(
   markdown: string,
   role: WalliChatMessageRole,

@@ -212,6 +212,7 @@ export function resolveCustomBlockToken(
 }
 
 export const builtInBlocks = {
+  bubble: "bubble",
   assetsGroup: "assetsGroup",
   code: "code",
   custom: "custom",
@@ -225,6 +226,7 @@ export type WalliChatBuiltInBlockName = keyof typeof builtInBlocks;
 export type WalliChatBlockName = WalliChatBuiltInBlockName;
 
 type BuiltInBlockDefinitionMap = {
+  bubble: typeof import("./blocks/bubble-block").bubbleBlockDefinition;
   assetsGroup: typeof import("./blocks/assets-group-block").assetsGroupBlockDefinition;
   code: typeof import("./blocks/code-block").codeBlockDefinition;
   custom: typeof import("./blocks/custom-block").customBlockDefinition;
@@ -346,12 +348,13 @@ export function measureMessageBlockFrame(
   contentWidth: number,
   top: number,
   meta?: unknown,
+  availableWidth = contentWidth,
 ): BlockFrame {
   const definition = resolveBuiltInBlockDefinition(block.kind, block.role);
   return definition.measure(block as never, {
     meta,
     role: block.role ?? "assistant",
-    availableWidth: Math.max(1, contentWidth - block.contentLeft),
+    availableWidth: Math.max(1, availableWidth - block.contentLeft),
     contentWidth,
     top,
   }) as BlockFrame;
@@ -375,10 +378,11 @@ export function renderMessageBlockTemplate(
   ctx?: WalliChatBlockContext,
   messageId?: string,
   role: WalliChatMessageRole = "assistant",
+  locales = ctx?.locales,
 ): unknown {
   const definition = resolveBuiltInBlockDefinition(block.kind, role);
   if (block.kind !== "custom")
-    return definition.render({ block, contentInsetX, role, locales: ctx?.locales } as never);
+    return definition.render({ block, contentInsetX, role, locales } as never);
   if (ctx === undefined) throw new Error("Custom blocks require a Walli Chat block context");
   if (messageId === undefined) throw new Error("Custom blocks require a message id");
   return definition.render({ block, contentInsetX, ctx, messageId, role } as never);
