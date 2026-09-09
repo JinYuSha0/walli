@@ -258,6 +258,7 @@ export const Disabled: Story = {
 };
 
 export const SubmitWithEnter: Story = {
+  tags: ["!dev", "!autodocs", "test"],
   args: {
     onSubmit: fn(),
     onValueChange: fn(),
@@ -279,6 +280,7 @@ export const SubmitWithEnter: Story = {
 };
 
 export const ShiftEnterCreatesNewLine: Story = {
+  tags: ["!dev", "!autodocs", "test"],
   args: {
     onSubmit: fn(),
     onValueChange: fn(),
@@ -296,6 +298,7 @@ export const ShiftEnterCreatesNewLine: Story = {
 };
 
 export const WhitespaceCannotSubmit: Story = {
+  tags: ["!dev", "!autodocs", "test"],
   args: {
     onSubmit: fn(),
   },
@@ -314,6 +317,7 @@ export const WhitespaceCannotSubmit: Story = {
 };
 
 export const ActionMenuKeyboardDismissal: Story = {
+  tags: ["!dev", "!autodocs", "test"],
   args: {
     onSubmit: fn(),
   },
