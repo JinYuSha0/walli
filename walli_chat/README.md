@@ -11,7 +11,45 @@ High-performance AI chat Web Components with React and Vue wrappers.
 ## Install
 
 ```bash
-npm install @wallilabs/chat@alpha
+npm install @wallilabs/chat
+```
+
+## Agent skill and API reference
+
+The npm package includes [the Walli Chat skill](./skills/walli-chat/SKILL.md), with
+[installation](./skills/walli-chat/references/installation.md),
+[existing custom blocks](./skills/walli-chat/references/existing-blocks.md),
+[shared API](./skills/walli-chat/references/api.md),
+[JavaScript](./skills/walli-chat/references/javascript.md),
+[React](./skills/walli-chat/references/react.md),
+[Vue](./skills/walli-chat/references/vue.md), and
+[custom blocks](./skills/walli-chat/references/blocks.md) guides.
+
+`npm install @wallilabs/chat` automatically links the bundled skill into
+`.agents/skills/walli-chat` through the package's `postinstall` script. No separate
+skill command is needed when dependency lifecycle scripts are enabled.
+
+The link follows dependency upgrades. Existing different skills are preserved;
+link failures do not fail installation of the UI library. Global installs and
+source-repository installs without a consuming project are skipped.
+
+Codex can discover `$walli-chat` through this directory. If it does not appear,
+restart Codex. See [Codex skill discovery](https://learn.chatgpt.com/docs/build-skills).
+
+Package managers can block dependency scripts (including pnpm configurations),
+and `--ignore-scripts` disables this automatic step. The package cannot override
+that policy. The skill files are still included under
+`node_modules/@wallilabs/chat/skills/walli-chat`; if needed, the optional repair
+command is `npx --no-install walli-chat-skill` from the consuming project.
+See [npm lifecycle scripts](https://docs.npmjs.com/cli/v11/using-npm/scripts/) and
+[pnpm script settings](https://pnpm.io/settings).
+
+Tools can resolve the bundled entry without importing browser code:
+
+```js
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+const skillPath = require.resolve("@wallilabs/chat/skills/walli-chat/SKILL.md");
 ```
 
 ## Vanilla
