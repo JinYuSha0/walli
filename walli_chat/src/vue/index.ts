@@ -91,6 +91,7 @@ export const WalliChatComposer = defineComponent({
     class: String,
     disabled: { default: false, type: Boolean },
     maxHeight: { default: 200, type: Number },
+    maxLength: Number,
     menuItems: {
       default: () => [],
       type: Array as PropType<readonly WalliChatComposerMenuItem[]>,
@@ -118,6 +119,7 @@ export const WalliChatComposer = defineComponent({
       if (!composer) return;
       composer.disabled = props.disabled;
       composer.maxHeight = props.maxHeight;
+      composer.maxLength = props.maxLength;
       composer.menuItems = props.menuItems;
       composer.placeholder = props.placeholder;
       composer.transcribingText = props.transcribingText;

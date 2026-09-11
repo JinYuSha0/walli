@@ -70,6 +70,7 @@ export class WalliChatComposerElement extends LitElement {
 
   @property({ type: Boolean }) accessor disabled = false;
   @property({ attribute: "max-height", type: Number }) accessor maxHeight = 200;
+  @property({ attribute: "max-length", type: Number }) accessor maxLength: number | undefined;
   @property() accessor placeholder = "Message";
   @property({ attribute: "upload-images-title" }) accessor uploadImagesTitle = "Add files";
   @property({ attribute: "transcribing-text" }) accessor transcribingText = "Transcribing";
@@ -101,6 +102,12 @@ export class WalliChatComposerElement extends LitElement {
     super.connectedCallback();
     document.addEventListener("pointerdown", this.handleDocumentPointerDown);
     document.addEventListener("keydown", this.handleDocumentKeyDown);
+  }
+
+  private get inputMaxLength(): number | undefined {
+    return this.maxLength !== undefined && Number.isFinite(this.maxLength) && this.maxLength >= 0
+      ? Math.floor(this.maxLength)
+      : undefined;
   }
 
   override updated(changedProperties: Map<PropertyKey, unknown>): void {
@@ -324,6 +331,7 @@ export class WalliChatComposerElement extends LitElement {
       this.disabled ||
       this.running ||
       normalizedText.length === 0 ||
+      (this.inputMaxLength !== undefined && normalizedText.length > this.inputMaxLength) ||
       this.onSubmit === undefined
     ) {
       return false;
@@ -340,6 +348,7 @@ export class WalliChatComposerElement extends LitElement {
   }
 
   private get canSubmit(): boolean {
+    if (this.inputMaxLength !== undefined && this.value.length > this.inputMaxLength) return false;
     if (this.attachments.some((attachment) => attachment.status === "uploading")) return false;
     return (
       this.value.trim().length > 0 ||
@@ -795,6 +804,7 @@ export class WalliChatComposerElement extends LitElement {
           .value=${this.value}
           ?disabled=${this.disabled}
           placeholder=${this.placeholder}
+          maxlength=${this.inputMaxLength ?? nothing}
           rows="1"
           autocomplete="off"
           autocapitalize="sentences"

@@ -225,6 +225,7 @@ export type WalliChatTextStream =
   ReadableStream<string | Uint8Array> | PromiseLike<ReadableStream<string | Uint8Array>>;
 
 type WalliChatStreamingOptionsBase = {
+  meta?: WalliChatMessage["meta"];
   role?: WalliChatMessageRole;
   getToolLabel?: (toolName: string) => string;
   messageId: string;

@@ -77,6 +77,7 @@ export type WalliChatComposerProps = {
   className?: string;
   disabled?: boolean;
   maxHeight?: number;
+  maxLength?: number;
   menuItems?: readonly WalliChatComposerMenuItem[];
   onCancel?: WalliChatComposerActionCallback;
   onSubmit?: WalliChatComposerSubmitCallback;
@@ -122,6 +123,7 @@ export const WalliChatComposer = forwardRef<WalliChatComposerRef, WalliChatCompo
       className,
       disabled = false,
       maxHeight = 200,
+      maxLength,
       menuItems = [],
       onCancel,
       onSubmit,
@@ -144,6 +146,7 @@ export const WalliChatComposer = forwardRef<WalliChatComposerRef, WalliChatCompo
       if (!element) return;
       element.disabled = disabled;
       element.maxHeight = maxHeight;
+      element.maxLength = maxLength;
       element.menuItems = menuItems;
       element.onCancel = onCancel;
       element.onSubmit = onSubmit;
@@ -157,6 +160,7 @@ export const WalliChatComposer = forwardRef<WalliChatComposerRef, WalliChatCompo
     }, [
       disabled,
       maxHeight,
+      maxLength,
       menuItems,
       onCancel,
       onSubmit,

@@ -468,7 +468,8 @@ export class WalliChatElement extends LitElement {
       left?.createdAt === right?.createdAt &&
       left?.markdown === right?.markdown &&
       left?.role === right?.role &&
-      left?.showActions === right?.showActions
+      left?.showActions === right?.showActions &&
+      left?.meta === right?.meta
     );
   }
 
@@ -532,6 +533,7 @@ export class WalliChatElement extends LitElement {
       createdAt: Date.now(),
       id: options.messageId,
       role: options.role ?? "assistant",
+      meta: options.meta,
       markdown: STREAMING_START_MARKDOWN,
     };
     const parser = new StreamingMarkdownParser(message.role);
@@ -1763,6 +1765,7 @@ export class WalliChatElement extends LitElement {
         @walli-message-action=${this.handleMessageAction}
       >
         <div
+          part="viewport"
           class="chat-viewport absolute inset-0 overflow-auto [overflow-anchor:none]"
           @wheel=${this.handleWheel}
           @touchmove=${this.handleTouchMove}

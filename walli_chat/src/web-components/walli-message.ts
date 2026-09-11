@@ -59,7 +59,8 @@ export class WalliMessageElement extends HTMLElement {
         ${blocks.map((block) =>
           renderMessageBlockTemplate(
             block,
-            Math.max(0, (message.frame.frameWidth - getBlockUsedWidth(block)) / 2),
+            getCommonStyle("messageSidePadding") +
+              Math.max(0, (message.frame.frameWidth - getBlockUsedWidth(block)) / 2),
             blockContext,
             block.kind === "custom" ? message.prepared.id : undefined,
             message.prepared.role,
