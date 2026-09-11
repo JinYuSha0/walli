@@ -14,6 +14,7 @@ import "../src/web-components/walli-chat-composer";
 type Args = {
   disabled: boolean;
   maxHeight: number;
+  maxLength?: number;
   menuItems: readonly WalliChatComposerMenuItem[];
   onCancel: () => void;
   onSubmit: (markdown: string, text: string) => Promise<void> | void;
@@ -52,6 +53,7 @@ const meta: Meta<Args> = {
   args: {
     disabled: false,
     maxHeight: 200,
+    maxLength: undefined,
     menuItems: demoMenuItems.slice(1),
     onCancel: fn(),
     onSubmit: fn(),
@@ -68,6 +70,11 @@ const meta: Meta<Args> = {
       description: "Maximum textarea height in pixels before it scrolls.",
       table: { defaultValue: { summary: "200" } },
     },
+    maxLength: {
+      control: { type: "number", min: 0, step: 1 },
+      description: "Maximum text length in UTF-16 code units. Omit for unlimited input; 0 blocks text input. Programmatic values are preserved, but over-limit messages cannot be submitted.",
+      table: { defaultValue: { summary: "undefined (unlimited)" } },
+    },
     menuItems: {
       control: "object",
       description: "Additional actions displayed in the add menu.",
@@ -83,7 +90,7 @@ const meta: Meta<Args> = {
       description: "Uploads inserted images and files and reports their progress.",
     },
     onValueChange: { control: false, description: "Runs whenever the text value changes." },
-    placeholder: { description: "Placeholder shown when the Composer is empty." },
+    placeholder: { control: "text", description: "Placeholder shown when the Composer is empty.", table: { defaultValue: { summary: "Message" } } },
     transcribingText: {
       description: "Status text displayed while recorded audio is transcribed.",
       table: { defaultValue: { summary: "Transcribing" } },
@@ -100,6 +107,7 @@ const meta: Meta<Args> = {
         <walli-chat-composer
           .disabled=${args.disabled}
           .maxHeight=${args.maxHeight}
+          .maxLength=${args.maxLength}
           .placeholder=${args.placeholder}
           .transcribingText=${args.transcribingText}
           .uploadImagesTitle=${args.uploadImagesTitle}
@@ -649,3 +657,14 @@ export async function mockTranscription({
   console.info("Recorded audio in Storybook", { bytes: audio.size, type: audio.type });
   return "This is a simulated transcription returned by Storybook.";
 }
+
+export const LengthLimit: Story = {
+  args: { maxLength: 20, placeholder: "Up to 20 characters", value: "" },
+  parameters: {
+    docs: { description: { story: "Try typing or pasting more than 20 characters. Change maxLength and placeholder in Controls. Programmatic values and transcription results are not automatically truncated; over-limit text cannot be submitted." } },
+  },
+};
+
+export const CustomPlaceholder: Story = {
+  args: { placeholder: "Ask Walli anything", value: "" },
+};

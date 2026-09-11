@@ -43,13 +43,18 @@ const meta = {
     className: { control: "text" },
     disabled: { control: "boolean" },
     maxHeight: { control: "number" },
+    maxLength: {
+      control: { type: "number", min: 0, step: 1 },
+      description: "Maximum text length in UTF-16 code units. Omit for unlimited input; 0 blocks text input. Programmatic values are preserved, but over-limit messages cannot be submitted.",
+      table: { defaultValue: { summary: "undefined (unlimited)" } },
+    },
     menuItems: { control: "object" },
     onCancel: { control: false },
     onSubmit: { control: false },
     onTranscribe: { control: false },
     onUploadImages: { control: false },
     onValueChange: { control: false },
-    placeholder: { control: "text" },
+    placeholder: { control: "text", description: "Placeholder shown when the Composer is empty.", table: { defaultValue: { summary: "Message" } } },
     slot: { control: "text" },
     style: { control: "object" },
     transcribingText: { control: "text" },
@@ -59,6 +64,7 @@ const meta = {
   args: {
     disabled: false,
     maxHeight: 200,
+    maxLength: undefined,
     menuItems: [],
     placeholder: "Message",
     transcribingText: "Transcribing",
@@ -203,3 +209,14 @@ function AttachmentsDemo(args: Args) {
     </div>
   );
 }
+
+export const LengthLimit: Story = {
+  args: { maxLength: 20, placeholder: "Up to 20 characters", value: "" },
+  parameters: {
+    docs: { description: { story: "Try typing or pasting more than 20 characters. Change maxLength and placeholder in Controls. Programmatic values and transcription results are not automatically truncated; over-limit text cannot be submitted." } },
+  },
+};
+
+export const CustomPlaceholder: Story = {
+  args: { placeholder: "Ask Walli anything", value: "" },
+};
