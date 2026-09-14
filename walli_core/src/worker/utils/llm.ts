@@ -8,8 +8,8 @@ const TOKEN_MESSAGE_OVERHEAD = 4;
 let tokenizer: Tiktoken | undefined;
 const markdownImagePattern =
   /!\[([^\]]*)\]\(\s*(?:<(https?:\/\/[^>]+)>|(https?:\/\/[^\s)]+))\s*\)(?:\{[^}]*\})?/gi;
-const privateImagePathPattern = /^\/api\/assets\/([^/]+)\/image\/([^/]+)$/;
-const temporaryAssetPathPattern = /^\/api\/assets\/[^/]+\/(?:image|file)\/[^/]+$/;
+const privateImagePathPattern = /^\/api\/assets\/(?:([^/]+)\/)?([^/]+)\/image\/([^/]+)$/;
+const temporaryAssetPathPattern = /^\/api\/assets\/(?:[^/]+\/)?[^/]+\/(?:image|file)\/[^/]+$/;
 const TEMPORARY_ASSET_URL_TTL_MS = 5 * 60 * 1000;
 const MODEL_IMAGE_MAX_COUNT = 4;
 const MODEL_IMAGE_MAX_SIZE = 1536;
@@ -17,6 +17,7 @@ const MODEL_IMAGE_QUALITY = 80;
 
 type ModelAssetContext = {
   bucket: R2Bucket;
+  clientId?: string;
   createHistoricalReferenceResolver?: () => HistoricalAssetReferenceResolver;
   images: ImagesBinding;
   origin: string;
@@ -263,14 +264,16 @@ async function createModelImagePart(value: string, context: ModelAssetContext) {
     url.origin === context.origin ? privateImagePathPattern.exec(url.pathname) : null;
   if (!privatePath) return { type: "file" as const, data: url, mediaType: "image" };
 
-  const ownerId = decodeURIComponent(privatePath[1]!);
-  const imageId = decodeURIComponent(privatePath[2]!);
+  const clientId = privatePath[1] ? decodeURIComponent(privatePath[1]) : undefined;
+  const ownerId = decodeURIComponent(privatePath[2]!);
+  const imageId = decodeURIComponent(privatePath[3]!);
+  if (clientId && clientId !== context.clientId) throw new Error("Private image belongs to another client");
   if (!context.userId || ownerId !== context.userId) {
     throw new Error("Private image is not owned by the current user");
   }
 
-  const object = await context.bucket.get(`uploads/${ownerId}/images/${imageId}`);
-  if (!object || object.customMetadata?.userId !== ownerId) {
+  const object = await context.bucket.get(`uploads/${clientId ? `${clientId}/` : ""}${ownerId}/images/${imageId}`);
+  if (!object || object.customMetadata?.userId !== ownerId || (clientId && object.customMetadata?.clientId !== clientId)) {
     throw new Error("Private image not found");
   }
 

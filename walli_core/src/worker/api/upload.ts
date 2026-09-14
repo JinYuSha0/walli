@@ -72,48 +72,52 @@ export const uploadRoute = new Hono<AppBindings>()
   })
   .post("/api/upload/image", requireUser, (c) => upload(c, "image"))
   .post("/api/upload/file", requireUser, (c) => upload(c, "file"))
-  .get("/api/assets/:userId/:kind/:id", async (c) => {
-    const ownerId = c.req.param("userId");
-    const hasTemporaryAccess = await hasValidTemporaryAssetUrl(
-      getAsyncContext().env.API_TOKEN,
-      c.req.path,
-      c.req.query("expires"),
-      c.req.query("signature"),
-    );
-    const user = c.get("user");
-    if (!user && !hasTemporaryAccess) {
-      return c.json(parseResponse(errorResponseSchema, { error: "Unauthorized" }), 401);
-    }
-    if (!hasTemporaryAccess && user?.id !== ownerId) {
-      return c.json(parseResponse(errorResponseSchema, { error: "File not found" }), 404);
-    }
+  .get("/api/assets/:clientId/:userId/:kind/:id", readAsset)
+  .get("/api/assets/:userId/:kind/:id", readAsset);
 
-    const kind = parseAssetKind(c.req.param("kind"));
-    if (!kind) {
-      return c.json(parseResponse(errorResponseSchema, { error: "File not found" }), 404);
-    }
+async function readAsset(c: Context<AppBindings>) {
+  const clientId = c.req.param("clientId");
+  const ownerId = c.req.param("userId");
+  const hasTemporaryAccess = await hasValidTemporaryAssetUrl(
+    getAsyncContext().env.API_TOKEN,
+    c.req.path,
+    c.req.query("expires"),
+    c.req.query("signature"),
+  );
+  const user = c.get("user");
+  if (!user && !hasTemporaryAccess) {
+    return c.json(parseResponse(errorResponseSchema, { error: "Unauthorized" }), 401);
+  }
+  if (!hasTemporaryAccess && user?.id !== ownerId) {
+    return c.json(parseResponse(errorResponseSchema, { error: "File not found" }), 404);
+  }
 
-    const object = await getAsyncContext().env.R2.get(createObjectKey(ownerId, kind, c.req.param("id")));
-    if (!object || object.customMetadata?.userId !== ownerId) {
-      return c.json(parseResponse(errorResponseSchema, { error: "File not found" }), 404);
-    }
+  const kind = parseAssetKind(c.req.param("kind"));
+  if (!kind) {
+    return c.json(parseResponse(errorResponseSchema, { error: "File not found" }), 404);
+  }
 
-    const headers = new Headers();
-    object.writeHttpMetadata(headers);
-    headers.set("Cache-Control", "private, max-age=3600");
-    headers.set("Content-Length", object.size.toString());
-    headers.set("ETag", object.httpEtag);
-    headers.set("X-Content-Type-Options", "nosniff");
+  const object = await getAsyncContext().env.R2.get(createObjectKey(ownerId, kind, c.req.param("id")!, clientId));
+  if (!object || object.customMetadata?.userId !== ownerId || (clientId && object.customMetadata?.clientId !== clientId)) {
+    return c.json(parseResponse(errorResponseSchema, { error: "File not found" }), 404);
+  }
 
-    const name = object.customMetadata?.name;
-    if (name) {
-      headers.set("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(name)}`);
-    }
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("Cache-Control", "private, max-age=3600");
+  headers.set("Content-Length", object.size.toString());
+  headers.set("ETag", object.httpEtag);
+  headers.set("X-Content-Type-Options", "nosniff");
 
-    return new Response(object.body, { headers });
-  });
+  const name = object.customMetadata?.name;
+  if (name) {
+    headers.set("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(name)}`);
+  }
 
-export async function upload<E extends AppBindings>(c: Context<E>, kind: AssetKind, ownerId = c.get("user")!.id) {
+  return new Response(object.body, { headers });
+}
+
+export async function upload<E extends AppBindings>(c: Context<E>, kind: AssetKind, ownerId = c.get("user")!.id, clientId?: string) {
   const body = await c.req.raw.formData().catch(() => null);
   const file = body?.get("file");
 
@@ -142,9 +146,9 @@ export async function upload<E extends AppBindings>(c: Context<E>, kind: AssetKi
   }
 
   const id = crypto.randomUUID();
-  const key = createObjectKey(ownerId, kind, id);
+  const key = createObjectKey(ownerId, kind, id, clientId);
   await getAsyncContext().env.R2.put(key, file.stream(), {
-    customMetadata: { kind, name: file.name, userId: ownerId },
+    customMetadata: { kind, name: file.name, userId: ownerId, ...(clientId ? { clientId } : {}) },
     httpMetadata: { contentType },
   });
 
@@ -154,14 +158,14 @@ export async function upload<E extends AppBindings>(c: Context<E>, kind: AssetKi
       name: file.name,
       size: file.size,
       type: contentType,
-      url: new URL(`/api/assets/${ownerId}/${kind}/${id}`, c.req.url).toString(),
+      url: new URL(`/api/assets/${clientId ? `${encodeURIComponent(clientId)}/` : ""}${encodeURIComponent(ownerId)}/${kind}/${id}`, c.req.url).toString(),
     }),
     201,
   );
 }
 
-function createObjectKey(userId: string, kind: AssetKind, id: string): string {
-  return `uploads/${userId}/${kind}s/${id}`;
+function createObjectKey(userId: string, kind: AssetKind, id: string, clientId?: string): string {
+  return `uploads/${clientId ? `${clientId}/` : ""}${userId}/${kind}s/${id}`;
 }
 
 function parseAssetKind(value: string): AssetKind | null {

@@ -135,12 +135,12 @@ describe("chat tools", () => {
     expect(instructions).toContain("text accompanying the images");
   });
 
-  it("keeps prior images available to a vision model during follow-up questions", async () => {
+  it.each([undefined, "client-a"])("keeps prior images available to a vision model during follow-up questions (%s)", async (clientId) => {
     const optimizedImageBytes = new Uint8Array([4, 5]);
     const images = createImagesBinding(optimizedImageBytes);
     const r2Get = vi.fn(async () => ({
       body: new ReadableStream<Uint8Array>(),
-      customMetadata: { userId: "user-1" },
+      customMetadata: { userId: "user-1", ...(clientId ? { clientId } : {}) },
       httpMetadata: { contentType: "image/png" },
     }));
     const messages = await prepareModelMessagesWithAssets(
@@ -148,7 +148,7 @@ describe("chat tools", () => {
         {
           role: "user",
           content:
-            '这是我的桌面\n\n![desk](<https://example.com/api/assets/user-1/image/image-1>){width="100" height="80"}',
+            `这是我的桌面\n\n![desk](<https://example.com/api/assets/${clientId ? `${clientId}/` : ""}user-1/image/image-1>){width="100" height="80"}`,
         },
         { role: "assistant", content: "我看到了。" },
         { role: "user", content: "这张图片里桌面上的杯子是什么颜色？" },
@@ -156,6 +156,7 @@ describe("chat tools", () => {
       {
         bucket: { get: r2Get } as unknown as R2Bucket,
         images,
+        clientId,
         origin: "https://example.com",
         createHistoricalReferenceResolver: () => async () => [0],
         userId: "user-1",
@@ -172,7 +173,7 @@ describe("chat tools", () => {
     expect(imagePart).toMatchObject({ type: "file", mediaType: "image/webp" });
     expect(imagePart && "data" in imagePart && new Uint8Array(imagePart.data as ArrayBuffer))
       .toEqual(optimizedImageBytes);
-    expect(r2Get).toHaveBeenCalledWith("uploads/user-1/images/image-1");
+    expect(r2Get).toHaveBeenCalledWith(`uploads/${clientId ? `${clientId}/` : ""}user-1/images/image-1`);
     expect(images.input).toHaveBeenCalled();
     expect(messages[2]).toEqual({
       role: "user",

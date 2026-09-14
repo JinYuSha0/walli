@@ -51,8 +51,8 @@ const sessionsQuery = z.object({
 const messageBody = z.object({ content: z.string().trim().min(1).max(100_000) }).strict();
 
 // Only sign this visitor's own stored images, including when restoring old history.
-async function refreshImages(markdown: string, userId: string, origin: string) {
-  const matches = [...markdown.matchAll(/https?:\/\/[^\s)]+\/api\/assets\/[^\s)]+/g)];
+async function refreshImages(markdown: string, userId: string, origin: string, clientId: string) {
+  const matches = [...markdown.matchAll(/https?:\/\/[^\s<>)"]+\/api\/assets\/[^\s<>)"]+/g)];
   for (const [value] of matches) {
     let url: URL;
     try {
@@ -60,7 +60,7 @@ async function refreshImages(markdown: string, userId: string, origin: string) {
     } catch {
       continue;
     }
-    if (url.origin !== origin || !url.pathname.startsWith(`/api/assets/${userId}/image/`)) continue;
+    if (url.origin !== origin || !(url.pathname.startsWith(`/api/assets/${userId}/image/`) || url.pathname.startsWith(`/api/assets/${clientId}/${userId}/image/`))) continue;
     markdown = markdown.replace(
       value,
       await createTemporaryAssetUrl(value, origin, getAsyncContext().env.API_TOKEN),
@@ -183,7 +183,7 @@ export const webChatRoute = new Hono<WebBindings>()
       messages: await Promise.all(
         page.messages.map(async (message) => ({
           ...message,
-          markdown: await refreshImages(message.markdown, userId, new URL(c.req.url).origin),
+          markdown: await refreshImages(message.markdown, userId, new URL(c.req.url).origin, c.get("webClient").id),
         })),
       ),
     });
@@ -226,7 +226,7 @@ export const webChatRoute = new Hono<WebBindings>()
   })
   .post("/api/web-chat/:slug/image", async (c) => {
     if (!c.get("webDialog").dialogImageEnabled) return c.json({ error: "Images disabled" }, 403);
-    const response = await upload(c, "image", c.get("webUserId"));
+    const response = await upload(c, "image", c.get("webUserId"), c.get("webClient").id);
     if (response.status !== 201) return response;
     const asset = (await response.json()) as { url: string };
     return c.json(

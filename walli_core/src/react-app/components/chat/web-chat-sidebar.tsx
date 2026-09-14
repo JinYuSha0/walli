@@ -1,4 +1,5 @@
 import { WebChatSidebarHeader } from "./web-chat-sidebar-header";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useTranslation } from "react-i18next";
 import { UserRound, MoreHorizontal, Trash2, Sun, Moon } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -51,6 +52,7 @@ export function WebChatSidebar({
   signingOut: boolean;
 }) {
   const { t } = useTranslation();
+  const isMobile = useIsMobile();
 
 
   return (
@@ -101,7 +103,7 @@ export function WebChatSidebar({
                       <MoreHorizontal className="size-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" side="bottom">
+                  <DropdownMenuContent align={isMobile ? "end" : "start"} side="bottom">
                     <DropdownMenuItem
                       variant="destructive"
                       disabled={disabled}
@@ -192,7 +194,7 @@ export function WebChatThemeToggle() {
   const label = t(dark ? "themeLight" : "themeDark");
   return (
     <Button
-      className="shrink-0 rounded-lg"
+      className="shrink-0 rounded-full border border-border/40 bg-background/60 shadow-sm backdrop-blur-md hover:bg-background/80 md:rounded-lg md:border-0 md:bg-transparent md:shadow-none md:backdrop-blur-none md:hover:bg-accent"
       variant="ghost"
       size="icon"
       onClick={() => setTheme(dark ? "light" : "dark")}

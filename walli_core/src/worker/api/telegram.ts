@@ -270,9 +270,9 @@ export const createTelegramDeps = async (
       createTelegramFileProxyUrl(origin, fileId, await getTelegramFilePath(token, fileId)),
     storeImage: async (fileId, userId) => {
       const imageId = await createTelegramImageId(fileId);
-      const objectKey = `uploads/${userId}/images/${imageId}`;
+      const objectKey = `uploads/${clientId}/${userId}/images/${imageId}`;
       const assetUrl = new URL(
-        `/api/assets/${encodeURIComponent(userId)}/image/${imageId}`,
+        `/api/assets/${encodeURIComponent(clientId)}/${encodeURIComponent(userId)}/image/${imageId}`,
         origin,
       ).toString();
       const existingObject = await env.R2.head(objectKey);
@@ -289,7 +289,7 @@ export const createTelegramDeps = async (
       const name = filePath.split("/").pop() || `${imageId}.jpg`;
       const contentType = inferTelegramFileContentType(filePath);
       await env.R2.put(objectKey, response.body, {
-        customMetadata: { kind: "image", name, userId },
+        customMetadata: { kind: "image", name, userId, clientId },
         httpMetadata: { contentType },
       });
 

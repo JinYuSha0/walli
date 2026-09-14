@@ -1,3 +1,7 @@
+import { useStore } from "zustand";
+import { useShallow } from "zustand/react/shallow";
+import { createWebChatStore, createConversationStore, type WebChatStore } from "@/stores/web-chat-store";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useTurnstileChallenge } from "@/components/chat/turnstile-challenge";
 import { readPendingQuestion, savePendingQuestion, clearPendingQuestion } from "@/components/chat/pending-question";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -55,19 +59,51 @@ import { WebChatLoading } from "@/components/chat/web-chat-loading";
 
 export function WebChatRoute() {
   const { slug, sessionId } = useParams({ strict: false });
+  const viewportRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const element = viewportRef.current;
+    if (!element) return;
+    const viewport = window.visualViewport;
+    const scrollY = window.scrollY;
+    let frame = 0;
+    const update = () => {
+      if (viewport && viewport.scale !== 1) return;
+      element.style.height = `${viewport?.height ?? window.innerHeight}px`;
+      element.style.top = `${viewport?.offsetTop ?? 0}px`;
+    };
+    const scheduleUpdate = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(update);
+    };
+    document.documentElement.classList.add("web-chat-page");
+    update();
+    viewport?.addEventListener("resize", scheduleUpdate);
+    viewport?.addEventListener("scroll", scheduleUpdate);
+    window.addEventListener("resize", scheduleUpdate);
+    return () => {
+      cancelAnimationFrame(frame);
+      viewport?.removeEventListener("resize", scheduleUpdate);
+      viewport?.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+      document.documentElement.classList.remove("web-chat-page");
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
   if (!slug) return null;
   return (
-    <>
+    <div ref={viewportRef} className="fixed inset-x-0 top-0 h-dvh overflow-hidden">
       <WebChatPage key={slug} slug={slug} sessionId={sessionId} />
       <Toaster />
-    </>
+    </div>
   );
 }
 
 function WebChatPage({ slug, sessionId }: { slug: string; sessionId?: string }) {
   const { t } = useTranslation();
   const config = useQuery(webChatConfigQuery(slug));
-  const [loginOpen, setLoginOpen] = useState(false);
+  const [pageStore] = useState(createWebChatStore);
+  const loginOpen = useStore(pageStore, (state) => state.loginOpen);
+  const { setLoginOpen } = pageStore.getState();
   const botCheck = useTurnstileChallenge(config.data?.turnstileSiteKey, config.data?.id);
   const queryClient = useQueryClient();
   useEffect(() => {
@@ -88,7 +124,7 @@ function WebChatPage({ slug, sessionId }: { slug: string; sessionId?: string }) 
   if (config.isPending) return <WebChatLoading />;
   if (config.isError)
     return (
-      <div className="grid h-dvh place-items-center p-6">
+      <div className="grid h-full place-items-center p-6">
         <p role="alert">{t("webChatUnavailable")}</p>
       </div>
     );
@@ -96,7 +132,7 @@ function WebChatPage({ slug, sessionId }: { slug: string; sessionId?: string }) 
   return <>
     {botCheck.dialog}
     <WebChatSessions key={config.data.userId ?? "guest"} config={config.data} credentials={credentials} selectedId={sessionId}
-      onRequireLogin={() => setLoginOpen(true)} />
+      pageStore={pageStore} />
     <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
@@ -113,12 +149,12 @@ function WebChatSessions({
   config,
   credentials,
   selectedId: requestedId,
-  onRequireLogin,
+  pageStore,
 }: {
   config: WebChatConfig;
   credentials?: WebCredentials;
   selectedId?: string;
-  onRequireLogin: () => void;
+  pageStore: WebChatStore;
 }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -144,9 +180,13 @@ function WebChatSessions({
     },
     onError: () => toast.error(t("webChatRequestFailed")),
   });
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [running, setRunning] = useState(false);
+  const { sidebarOpen, sidebarCollapsed, running, draftVersion, createdSessionId } = useStore(pageStore, useShallow(
+    (state) => ({
+      sidebarOpen: state.sidebarOpen, sidebarCollapsed: state.sidebarCollapsed,
+      running: state.running, draftVersion: state.draftVersion, createdSessionId: state.createdSessionId,
+    }),
+  ));
+  const { setSidebarOpen, setSidebarCollapsed } = pageStore.getState();
   const queryKey = useMemo(
     () => ["web-chat-sessions", config.id, credentials?.userId ?? "visitor"],
     [config.id, credentials?.userId],
@@ -172,7 +212,7 @@ function WebChatSessions({
         return navigate({ to: "/chat/$slug", params: { slug: config.slug }, replace });
       }
     },
-    [navigate, config.slug],
+    [navigate, config.slug, setSidebarOpen],
   );
   const firstId = rows[0]?.id;
   useEffect(() => {
@@ -201,11 +241,11 @@ function WebChatSessions({
         : [{ sessions: [session], nextCursor: null }],
       pageParams: current?.pageParams ?? [null],
     }));
+    pageStore.getState().setCreatedSessionId(session.id);
     await selectSession(session.id, true);
   };
-  const [draftVersion, setDraftVersion] = useState(0);
   const startDraft = () => {
-    setDraftVersion((version) => version + 1);
+    pageStore.getState().startDraft();
     void selectSession();
   };
   const deleteSession = useMutation({
@@ -297,7 +337,7 @@ function WebChatSessions({
     />
   );
   return (
-    <div className="relative flex h-dvh min-h-0 overflow-hidden bg-background text-foreground">
+    <div className="relative flex h-full min-h-0 overflow-hidden bg-background text-foreground">
       <aside
         className="web-chat-sidebar hidden shrink-0 bg-muted/40 md:block"
         data-collapsed={sidebarCollapsed}
@@ -347,11 +387,11 @@ function WebChatSessions({
       <div className="absolute right-3 top-3 z-20">
         <WebChatThemeToggle />
       </div>
-      <main className="web-chat-main relative flex min-h-0 min-w-0 flex-1 flex-col pt-14 md:pt-0">
+      <main className="web-chat-main relative flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="absolute top-3 left-3 z-10 md:hidden">
           <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
             <SheetTrigger asChild>
-              <Button variant="outline" size="icon" aria-label={t("webChatOpenSidebar")}>
+              <Button variant="ghost" size="icon" className="rounded-full border border-border/40 bg-background/60 shadow-sm backdrop-blur-md hover:bg-background/80" aria-label={t("webChatOpenSidebar")}>
                 <PanelLeft className="size-4" />
               </Button>
             </SheetTrigger>
@@ -362,14 +402,13 @@ function WebChatSessions({
           </Sheet>
         </div>
         <Conversation
-          key={selectedId ?? `draft-${draftVersion}`}
+          key={selectedId && selectedId !== createdSessionId ? selectedId : `draft-${draftVersion}`}
           history={selectedHistory}
-          onRequireLogin={onRequireLogin}
+          pageStore={pageStore}
           requestedSessionId={requestedId}
           config={config}
           sessionId={selectedId}
           credentials={credentials}
-          onRunningChange={setRunning}
           onSent={onSent}
           onSessionCreated={onSessionCreated}
         />
@@ -390,76 +429,97 @@ function Conversation({
   config,
   sessionId,
   credentials,
-  onRunningChange,
   onSent,
   onSessionCreated,
-  onRequireLogin,
+  pageStore,
   requestedSessionId,
 }: {
   history: UseQueryResult<WebHistory, Error>;
   config: WebChatConfig;
   sessionId?: string;
   credentials?: WebCredentials;
-  onRunningChange: (running: boolean) => void;
   onSent: (text: string) => void;
   onSessionCreated: (session: WebSession) => Promise<void>;
-  onRequireLogin: () => void;
+  pageStore: WebChatStore;
   requestedSessionId?: string;
 }) {
   const { t } = useTranslation();
+  const isMobile = useIsMobile();
   const queryClient = useQueryClient();
-  const [input, setInput] = useState(() => {
+  const [conversationStore] = useState(() => {
     const pending = readPendingQuestion(config.slug);
-    return pending?.sessionId === requestedSessionId ? pending?.markdown ?? "" : "";
-  });
-  const [messages, setMessages] = useState<WalliChatMessage[]>(() => {
-    if (!history.data) return sessionId ? [] : openingMessages(config);
-    const rows = history.data.messages.map((message) =>
+    const rows = history.data?.messages.map((message) =>
       message.role === "assistant"
         ? { ...message, meta: getAssistantMeta(config.dialogSettings) }
         : message,
     );
-    return history.data.nextCursor === null ? [...openingMessages(config), ...rows] : rows;
+    return createConversationStore({
+      input: pending?.sessionId === requestedSessionId ? pending?.markdown ?? "" : "",
+      messages: rows
+        ? history.data?.nextCursor === null ? [...openingMessages(config), ...rows] : rows
+        : sessionId ? [] : openingMessages(config),
+      cursor: history.data?.nextCursor ?? null,
+    });
   });
-  const [running, setRunning] = useState(false);
+  const { input, messages, loadingOlder } = useStore(conversationStore, useShallow(
+    (state) => ({ input: state.input, messages: state.messages, loadingOlder: state.loadingOlder }),
+  ));
+  const { setInput, setMessages, setHistory, setLoadingOlder } = conversationStore.getState();
+  const running = useStore(pageStore, (state) => state.running);
+  const { setRunning, setLoginOpen } = pageStore.getState();
   const chatRef = useRef<WalliChatRef>(null);
   const sessionRef = useRef(sessionId);
   const requestRef = useRef<AbortController | null>(null);
   const streamRef = useRef<WalliChatStreamingHandle | null>(null);
-  const cursorRef = useRef<number | null>(null);
-  const loadingOlder = useRef(false);
+  const olderRequestRef = useRef<AbortController | null>(null);
+  const hydratedHistory = useRef(history.data);
   const alive = useRef(true);
   const dialog = config.dialogSettings;
   const meta = useMemo(() => getAssistantMeta(dialog), [dialog]);
   useEffect(() => {
-    if (!history.data) return;
-    cursorRef.current = history.data.nextCursor;
+    if (!history.data || hydratedHistory.current === history.data || pageStore.getState().running) return;
+    hydratedHistory.current = history.data;
     const rows = history.data.messages.map((message) =>
       message.role === "assistant" ? { ...message, meta } : message,
     );
-    setMessages(history.data.nextCursor === null ? [...openingMessages(config), ...rows] : rows);
-  }, [history.data, config, meta]);
+    setHistory(history.data.nextCursor === null ? [...openingMessages(config), ...rows] : rows, history.data.nextCursor);
+  }, [history.data, config, meta, pageStore, setHistory]);
   useEffect(() => {
     alive.current = true;
     return () => {
       alive.current = false;
       requestRef.current?.abort();
       streamRef.current?.abort();
-      onRunningChange(false);
+      olderRequestRef.current?.abort();
+      setRunning(false);
     };
-  }, [onRunningChange]);
+  }, [setRunning]);
+  const cacheMessages = (session = history.data?.session) => {
+    const messages = [...(chatRef.current?.element?.messages ?? [])];
+    setMessages(messages);
+    const queryKey = ["web-chat-history", config.id, credentials?.userId, sessionRef.current];
+    queryClient.setQueryData<WebHistory>(queryKey, {
+      session,
+      messages: messages.filter((message) => !message.id.startsWith(OPENING_MESSAGE_PREFIX)),
+      nextCursor: conversationStore.getState().cursor,
+    });
+    // This snapshot came from Chat itself; do not feed it back through history hydration.
+    hydratedHistory.current = queryClient.getQueryData<WebHistory>(queryKey);
+  };
   const loadOlder = async () => {
-    if (!sessionId || cursorRef.current === null || loadingOlder.current || requestRef.current)
-      return;
-    loadingOlder.current = true;
+    const { cursor, loadingOlder } = conversationStore.getState();
+    if (!sessionId || cursor === null || loadingOlder || requestRef.current) return;
+    const controller = new AbortController();
+    olderRequestRef.current = controller;
+    setLoadingOlder(true);
     try {
       const page = await webChatJson<WebHistory>(
         config.slug,
-        `/sessions/${encodeURIComponent(sessionId)}?cursor=${cursorRef.current}`,
+        `/sessions/${encodeURIComponent(sessionId)}?cursor=${cursor}`,
         credentials,
+        { signal: controller.signal },
       );
-      if (!alive.current) return;
-      cursorRef.current = page.nextCursor;
+      if (!alive.current || controller.signal.aborted) return;
       const rows = page.messages.map((message) =>
         message.role === "assistant" ? { ...message, meta } : message,
       );
@@ -467,14 +527,18 @@ function Conversation({
         page.nextCursor === null ? [...openingMessages(config), ...rows] : rows,
         { stick: true },
       );
+      const messages = [...(chatRef.current?.element?.messages ?? [])];
+      setHistory(messages, page.nextCursor);
+      cacheMessages();
     } catch {
-      toast.error(t("webChatRequestFailed"));
+      if (!controller.signal.aborted) toast.error(t("webChatRequestFailed"));
     } finally {
-      loadingOlder.current = false;
+      olderRequestRef.current = null;
+      setLoadingOlder(false);
     }
   };
   const submit = async (markdown: string) => {
-    if (requestRef.current || !markdown.trim()) return;
+    if (requestRef.current || conversationStore.getState().loadingOlder || !markdown.trim()) return;
     const text = markdown.replace(/!\[[^\]]*\]\([^)]+\)/g, "").trim();
     if (text.length > dialog.dialogInputMaxLength) {
       toast.error(t("webChatInputLimit", { count: dialog.dialogInputMaxLength }));
@@ -484,14 +548,13 @@ function Conversation({
       try {
         savePendingQuestion(config.slug, { markdown, sessionId: requestedSessionId, autoSend: true });
         setInput(markdown);
-        onRequireLogin();
+        setLoginOpen(true);
       } catch { toast.error(t("webChatRequestFailed")); }
       return;
     }
     const controller = new AbortController();
     requestRef.current = controller;
     setRunning(true);
-    onRunningChange(true);
     let createdSession: WebSession | undefined;
     try {
       const sessionToken = !sessionRef.current ? await credentials?.verifyBot?.("chat_session", controller.signal) : undefined;
@@ -527,23 +590,16 @@ function Conversation({
       const stream = chatRef.current?.insertStreamingMessageAtBottom(body, {
         messageId,
         meta,
-        bottomPaddingHeight: ((chatRef.current?.element?.clientHeight ?? 600) * 2) / 3,
+        bottomPaddingHeight: isMobile
+          ? (document.documentElement.clientHeight * 2) / 3
+          : ((chatRef.current?.element?.clientHeight ?? 600) * 2) / 3,
       });
       if (!stream) throw new Error("Chat unavailable");
       streamRef.current = stream;
       await stream.finished;
-      queryClient.setQueryData<WebHistory>(
-        ["web-chat-history", config.id, credentials?.userId, activeSessionId],
-        {
-          session: history.data?.session
-            ? { ...history.data.session, title: history.data.session.title || text.slice(0, 50) }
-            : undefined,
-          messages: [...(chatRef.current?.element?.messages ?? [])].filter(
-            (message) => !message.id.startsWith(OPENING_MESSAGE_PREFIX),
-          ),
-          nextCursor: cursorRef.current,
-        },
-      );
+      cacheMessages(history.data?.session
+        ? { ...history.data.session, title: history.data.session.title || text.slice(0, 50) }
+        : undefined);
       clearPendingQuestion(config.slug);
       onSent(text || t("assistantAvatar"));
     } catch {
@@ -558,19 +614,9 @@ function Conversation({
       if (alive.current) {
         setMessages([...(chatRef.current?.element?.messages ?? [])]);
         setRunning(false);
-        onRunningChange(false);
         if (createdSession) {
           const session = { ...createdSession, title: text.slice(0, 50) };
-          queryClient.setQueryData<WebHistory>(
-            ["web-chat-history", config.id, credentials?.userId, session.id],
-            {
-              session,
-              messages: [...(chatRef.current?.element?.messages ?? [])].filter(
-                (message) => !message.id.startsWith(OPENING_MESSAGE_PREFIX),
-              ),
-              nextCursor: cursorRef.current,
-            },
-          );
+          cacheMessages(session);
           await onSessionCreated(session);
         } else if (!sessionRef.current) {
           setInput(markdown);
@@ -643,6 +689,7 @@ function Conversation({
     <div className="min-h-0 flex-1">
       <WalliChat
         className="web-chat-messages block h-full w-full"
+        topOcclusionHeight={isMobile ? 56 : undefined}
         ref={chatRef}
         loading={!!sessionId && history.isPending}
         messages={messages}
@@ -651,7 +698,7 @@ function Conversation({
       >
         <WalliChatComposer
           slot="composer"
-          disabled={!!sessionId && history.isFetching}
+          disabled={loadingOlder || (!!sessionId && history.isFetching)}
           value={input}
           maxLength={dialog.dialogInputMaxLength}
           onValueChange={setInput}

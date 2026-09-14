@@ -20,7 +20,7 @@ export function WebChatHistorySkeleton() {
 export function WebChatLoading() {
   const { t } = useTranslation();
   return (
-    <div className="relative flex h-dvh overflow-hidden bg-background text-foreground">
+    <div className="web-chat-loading relative flex h-dvh overflow-hidden bg-background text-foreground">
       <aside
         className="web-chat-sidebar hidden h-full shrink-0 bg-muted/40 md:block"
         aria-label={t("webChatSessions")}

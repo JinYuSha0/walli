@@ -383,6 +383,7 @@ export const prepareChatCompletion = async ({
   const modelMessages = primaryModelSupportsImages
     ? await prepareModelMessagesWithAssets(limitedMessageResult.messages, {
         bucket: env.R2,
+        clientId: userInfo?.clientId,
         images: env.IMAGES,
         origin,
         userId: userInfo?.userId,

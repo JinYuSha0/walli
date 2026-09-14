@@ -1,3 +1,25 @@
+html.web-chat-page,
+html.web-chat-page body,
+html.web-chat-page #root {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html.web-chat-page body {
+  position: fixed;
+  width: 100%;
+}
+
+.web-chat-page .web-chat-loading {
+  height: 100%;
+}
+
+.web-chat-messages::part(viewport) {
+  overscroll-behavior-y: contain;
+}
+
 .web-chat-scrollbar,
 .web-chat-messages::part(viewport) {
   scrollbar-width: thin;

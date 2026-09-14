@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
+  signAsset: vi.fn(),
   client: vi.fn(),
   google: vi.fn(),
   turnstile: vi.fn(),
@@ -33,7 +34,7 @@ vi.mock("./chat", () => ({
 vi.mock("./settings", () => ({ isMultiSessionClient: async () => true }));
 vi.mock("./upload", () => ({ upload: vi.fn() }));
 vi.mock("./transcribe", () => ({ transcribe: vi.fn() }));
-vi.mock("@worker/utils/llm", () => ({ createTemporaryAssetUrl: async (url: string) => url }));
+vi.mock("@worker/utils/llm", () => ({ createTemporaryAssetUrl: mocks.signAsset }));
 vi.mock("@worker/lib/chat-runner", () => ({ createChatUserInfo: (value: unknown) => value }));
 vi.mock("@worker/lib/async-context", () => ({
   getAsyncContext: () => ({
@@ -63,6 +64,7 @@ const request = (path: string, init?: RequestInit) =>
 const cookie = async () => (await request("/config", { headers: { "X-Chat-Device": crypto.randomUUID().replaceAll("-", "").repeat(2) } })).headers.get("Set-Cookie")!.split(";")[0];
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.signAsset.mockImplementation(async (url: string) => url);
   mocks.client.mockResolvedValue(client);
   mocks.web.mockResolvedValue({ webAccessEnabled: true, loginMethod: "none" });
   mocks.basic.mockResolvedValue({ enabled: true, additionalSystemPrompt: "Client instructions" });
@@ -287,4 +289,37 @@ it("does not require Turnstile when disabled", async () => {
   const visitor = await cookie();
   expect((await request("/sessions", { method: "POST", headers: { Cookie: visitor } })).status).toBe(201);
   expect(mocks.turnstile).not.toHaveBeenCalled();
+});
+
+it.each([false, true])("preserves image Markdown delimiters when renewing signed history URLs (scoped: %s)", async (scoped) => {
+  const visitor = await cookie();
+  const configResponse = await request("/config", { headers: { Cookie: visitor } });
+  const { userId } = await configResponse.json() as { userId: string };
+  const url = `https://example.com/api/assets/${scoped ? `${client.id}/` : ""}${userId}/image/photo?expires=1&signature=old`;
+  const other = "https://example.com/api/assets/another-user/image/photo";
+  const markdown = `![photo](<${url}>){width="748" height="172"}
+
+![plain](${url})
+
+![other](<${other}>)
+
+Can you see it?`;
+  mocks.signAsset.mockImplementation(async (value: string) => {
+    const renewed = new URL(value);
+    renewed.searchParams.set("expires", "9999999999999");
+    renewed.searchParams.set("signature", "renewed");
+    return renewed.toString();
+  });
+  mocks.history.mockResolvedValue({
+    messages: [{ id: "image-message", role: "user", markdown, createdAt: 1 }],
+    nextCursor: null,
+  });
+  const response = await request("/sessions/session-a", { headers: { Cookie: visitor } });
+  expect(response.status).toBe(200);
+  const result = await response.json() as { messages: { markdown: string }[] };
+  expect(result.messages[0].markdown).toBe(
+    markdown.replaceAll(url, url.replace("expires=1&signature=old", "expires=9999999999999&signature=renewed")),
+  );
+  expect(mocks.signAsset).toHaveBeenCalledTimes(2);
+  expect(mocks.signAsset).toHaveBeenCalledWith(url, "https://example.com", expect.any(String));
 });
