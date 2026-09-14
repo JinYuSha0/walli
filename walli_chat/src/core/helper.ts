@@ -3,6 +3,15 @@ import type { BlockFrameBase, ParseContext, PreparedBlock, PreparedBlockBase } f
 import type { InlineVariant } from "./blocks/inline-block";
 import { getCommonStyle } from "./styles";
 
+/** Subtract horizontal padding from a measured client width (which excludes the scrollbar). */
+export function getContentWidth(element: Element | null, clientWidth: number): number {
+  if (!element) return Math.max(0, clientWidth);
+  const style = getComputedStyle(element);
+  const paddingLeft = Number.parseFloat(style.paddingLeft) || 0;
+  const paddingRight = Number.parseFloat(style.paddingRight) || 0;
+  return Math.max(0, clientWidth - paddingLeft - paddingRight);
+}
+
 export type ImageDimensions = {
   height?: number;
   width?: number;

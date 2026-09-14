@@ -33,7 +33,7 @@ import {
 } from "../core/blocks/edit-block";
 import { parseEventData, ServerSentEventParser, type ServerSentEvent } from "../core/sse-parser";
 import { getCommonStyle } from "../core/styles";
-import { timeScheduler } from "../core/helper";
+import { getContentWidth, timeScheduler } from "../core/helper";
 import type {
   WalliChatMessage,
   WalliChatDeleteMessagesOptions,
@@ -1304,7 +1304,7 @@ export class WalliChatElement extends LitElement {
     const topOcclusionHeight = getCommonStyle("topOcclusionHeight");
     const bottomOcclusionHeight = this.bottomOcclusionHeight;
 
-    const chatWidth = getMaxChatWidth(viewportWidth);
+    const chatWidth = getMaxChatWidth(getContentWidth(this.viewportElement, viewportWidth));
     if (this.composerShellElement) {
       this.composerShellElement.style.width = `${chatWidth}px`;
     }
@@ -1426,7 +1426,7 @@ export class WalliChatElement extends LitElement {
     const viewportWidth = this.viewportElement?.clientWidth ?? this.containerSize.width;
     const topOcclusionHeight = getCommonStyle("topOcclusionHeight");
     const bottomOcclusionHeight = this.bottomOcclusionHeight;
-    const chatWidth = getMaxChatWidth(viewportWidth);
+    const chatWidth = getMaxChatWidth(getContentWidth(this.viewportElement, viewportWidth));
     const previousFrame = this.frame;
     const frame =
       previousFrame !== null &&
