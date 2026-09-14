@@ -7,9 +7,13 @@ export const sessions = sqliteTable(
     id: text("id").primaryKey(),
     clientId: text("client_id").notNull(),
     summary: text("summary").notNull(),
+    deletedAt: integer("deleted_at"),
     createdAt: integer("created_at").notNull(),
   },
-  (table) => [index("idx_sessions_created_at").on(table.createdAt)],
+  (table) => [
+    index("idx_sessions_created_at").on(table.createdAt),
+    index("idx_sessions_active_page").on(table.deletedAt, table.createdAt, table.id),
+  ],
 );
 
 export const messages = sqliteTable(

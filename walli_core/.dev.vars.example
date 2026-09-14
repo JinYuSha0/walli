@@ -8,3 +8,8 @@ BETTER_AUTH_TRUSTED_ORIGINS="http://localhost:5173,http://localhost:5174"
 GOOGLE_CLIENT_ID="replace-with-google-client-id"
 GOOGLE_CLIENT_SECRET="replace-with-google-client-secret"
 ADMIN_EMAILS="admin@example.com"
+
+# Cloudflare Turnstile (optional; required when bot verification is enabled)
+TURNSTILE_SITE_KEY=""
+TURNSTILE_SECRET=""
+TURNSTILE_HOSTNAMES="localhost,127.0.0.1"

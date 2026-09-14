@@ -1,0 +1,142 @@
+.web-chat-scrollbar,
+.web-chat-messages::part(viewport) {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted-foreground) 28%, transparent) transparent;
+  scrollbar-gutter: stable;
+}
+
+.web-chat-scrollbar:hover,
+.web-chat-messages:hover::part(viewport) {
+  scrollbar-color: color-mix(in srgb, var(--muted-foreground) 48%, transparent) transparent;
+}
+
+.web-chat-scrollbar::-webkit-scrollbar,
+.web-chat-messages::part(viewport)::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.web-chat-scrollbar::-webkit-scrollbar-thumb,
+.web-chat-messages::part(viewport)::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted-foreground) 28%, transparent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .web-chat-session-menu {
+    opacity: 0;
+  }
+  .group\/session:hover .web-chat-session-menu,
+  .group\/session:focus-within .web-chat-session-menu,
+  .web-chat-session-menu[data-state="open"] {
+    opacity: 1;
+  }
+}
+
+.web-chat-sidebar {
+  position: relative;
+  width: 16rem;
+  overflow: clip;
+  transition: width 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.web-chat-sidebar[data-collapsed="true"] {
+  width: 3.5rem;
+}
+
+/* Keep text at its expanded width so it never wraps during the transition. */
+.web-chat-sidebar-content {
+  width: 16rem;
+  opacity: 1;
+  transform: translateX(0);
+  visibility: visible;
+  transition:
+    opacity 160ms ease 60ms,
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s;
+}
+
+.web-chat-sidebar[data-collapsed="true"] .web-chat-sidebar-content {
+  opacity: 0;
+  transform: translateX(-8px);
+  visibility: hidden;
+  transition-delay: 0s, 0s, 160ms;
+}
+
+.web-chat-sidebar-rail {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3.5rem;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 120ms ease,
+    visibility 0s 120ms;
+}
+
+.web-chat-sidebar[data-collapsed="true"] .web-chat-sidebar-rail {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 100ms, 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .web-chat-sidebar,
+  .web-chat-sidebar-content,
+  .web-chat-sidebar-rail {
+    transition: none;
+  }
+}
+
+/* Keep the scrollport full-width; only its content gets symmetric gutters. */
+@media (min-width: 768px) {
+  .web-chat-main {
+    position: absolute;
+    inset: 0;
+  }
+
+  .web-chat-sidebar {
+    z-index: 10;
+  }
+
+  .web-chat-messages::part(viewport) {
+    box-sizing: border-box;
+    padding-inline: 16rem;
+  }
+}
+
+.web-chat-history-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--muted) 25%,
+    color-mix(in srgb, var(--muted-foreground) 14%, var(--muted)) 50%,
+    var(--muted) 75%
+  );
+  background-size: 200% 100%;
+  animation: web-chat-history-shimmer 1.8s ease-in-out infinite;
+}
+
+@keyframes web-chat-history-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .web-chat-history-skeleton {
+    animation: none;
+  }
+}
+
+/* Unlayered app form styles reset button fonts; pin chat row typography here
+   so the shared loading header and loaded rows have identical metrics. */
+.web-chat-new-session,
+.web-chat-session-link {
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.25rem;
+}

@@ -12,8 +12,6 @@ import {
 import type { AppBindings } from "./types";
 import { getAsyncContext } from "@worker/lib/async-context";
 import { getSettings } from "./settings";
-import { errorResponseSchema, parseResponse } from "./helper/validation";
-import { requireAdmin } from "./helper/middleware";
 import { handleCors } from "./helper/cors";
 import { toWebHistoryMessage } from "./helper/chat-history";
 import {
@@ -33,13 +31,6 @@ const chatMessageSchema = z
   })
   .strict();
 
-const internalChatMessageSchema = z
-  .object({
-    role: z.literal("user"),
-    content: z.string(),
-  })
-  .strict();
-
 const chatRequestSchema = z
   .object({
     appId: z.string().optional(),
@@ -47,13 +38,6 @@ const chatRequestSchema = z
     token: z.string().optional(),
     sessionId: z.string().trim().min(1),
     messages: z.array(chatMessageSchema).length(1),
-  })
-  .strict();
-
-const internalChatRequestSchema = z
-  .object({
-    sessionId: z.string().trim().min(1),
-    messages: z.array(internalChatMessageSchema).length(1),
   })
   .strict();
 
@@ -80,15 +64,9 @@ const chatSessionDeleteRequestSchema = chatSessionRequestSchema.extend({
   sessionId: z.string().trim().min(1),
 });
 
-const internalChatHistoryQuerySchema = z.object({
-  sessionId: z.string().trim().min(1),
-  cursor: z.coerce.number().int().positive().optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(30),
-});
-
 type ParsedChatRequest = {
   sessionId: string;
-  messages: Array<z.infer<typeof internalChatMessageSchema>>;
+  messages: Array<z.infer<typeof chatMessageSchema>>;
 };
 
 const serializeError = (error: unknown) => {
@@ -106,7 +84,7 @@ const serializeError = (error: unknown) => {
 
 const stringifySseData = (data: unknown) => JSON.stringify(data);
 
-const getChatHistoryPage = async (input: {
+export const getChatHistoryPage = async (input: {
   clientId: string;
   clientPlatform: Parameters<typeof createUserDoName>[1];
   userId: string;
@@ -217,8 +195,8 @@ export const verifyChatAuth = async (
   }
 };
 
-const streamChat = async (
-  c: Context<AppBindings>,
+export const streamChat = async <E extends AppBindings>(
+  c: Context<E>,
   body: ParsedChatRequest,
   userInfo: ChatUserInfo,
   platform: ClientPlatform,
@@ -494,78 +472,5 @@ export const chatRoute = new Hono<AppBindings>()
       }),
       platform,
       basicSettings.additionalSystemPrompt,
-    );
-  })
-  .use("/api/internal/chat", requireAdmin)
-  .use("/api/internal/chat/*", requireAdmin)
-  .get("/api/internal/chat/history", async (c) => {
-    const user = c.get("user");
-
-    if (!user) {
-      return c.json(parseResponse(errorResponseSchema, { error: "Unauthorized" }), 401);
-    }
-
-    const queryResult = internalChatHistoryQuerySchema.safeParse(c.req.query());
-
-    if (!queryResult.success) {
-      return c.json({ error: "Invalid query", issues: z.treeifyError(queryResult.error) }, 400);
-    }
-
-    return c.json(
-      await getChatHistoryPage({
-        clientId: "internal-web",
-        clientPlatform: "web",
-        userId: user.id,
-        sessionId: queryResult.data.sessionId,
-        cursor: queryResult.data.cursor,
-        limit: queryResult.data.limit,
-      }),
-    );
-  })
-  .delete("/api/internal/chat/session", async (c) => {
-    const user = c.get("user");
-    if (!user) {
-      return c.json(parseResponse(errorResponseSchema, { error: "Unauthorized" }), 401);
-    }
-
-    const queryResult = z.object({ sessionId: z.string().trim().min(1) }).safeParse(c.req.query());
-    if (!queryResult.success) {
-      return c.json({ error: "Invalid query", issues: z.treeifyError(queryResult.error) }, 400);
-    }
-
-    const userDO = getAsyncContext().env.USER_DO.getByName(
-      createUserDoName("internal-web", "web", user.id),
-    );
-    return c.json(await userDO.deleteSession(queryResult.data.sessionId));
-  })
-  .post("/api/internal/chat", async (c) => {
-    const user = c.get("user");
-
-    if (!user) {
-      return c.json(parseResponse(errorResponseSchema, { error: "Unauthorized" }), 401);
-    }
-
-    const bodyResult = internalChatRequestSchema.safeParse(await c.req.json().catch(() => null));
-
-    if (!bodyResult.success) {
-      return c.json(
-        {
-          error: "Invalid body",
-          issues: z.treeifyError(bodyResult.error),
-        },
-        400,
-      );
-    }
-
-    return streamChat(
-      c,
-      bodyResult.data,
-      createChatUserInfo({
-        userId: user.id,
-        name: user.name,
-        email: user.email,
-        clientId: "internal-web",
-      }),
-      "web",
     );
   });

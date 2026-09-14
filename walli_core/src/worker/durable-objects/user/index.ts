@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { and, asc, desc, eq, gt, gte, lt, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/durable-sqlite";
 import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import type { ModelMessage } from "ai";
@@ -378,6 +378,7 @@ export class UserDO extends DurableObject<Env> {
         .get();
 
       if (savedSession) {
+        if (savedSession.deletedAt !== null) throw new Error("Session not found");
         return toChatSession(savedSession);
       }
     }
@@ -386,7 +387,8 @@ export class UserDO extends DurableObject<Env> {
   }
 
   async getSession(sessionId: string): Promise<ChatSession | undefined> {
-    const row = this.db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1).get();
+    const row = this.db.select().from(sessions)
+      .where(and(eq(sessions.id, sessionId), isNull(sessions.deletedAt))).limit(1).get();
     return row ? toChatSession(row) : undefined;
   }
 
@@ -394,11 +396,47 @@ export class UserDO extends DurableObject<Env> {
     const orderedQuery = this.db
       .select()
       .from(sessions)
-      .orderBy(desc(sessions.createdAt))
+      .where(isNull(sessions.deletedAt))
+      .orderBy(desc(sessions.createdAt), desc(sessions.id))
       .$dynamic();
     const limitedQuery = limit === undefined ? orderedQuery : orderedQuery.limit(limit);
 
     return limitedQuery.all().map(toChatSession);
+  }
+
+  async listSessionsPage(input: {
+    cursor?: { createdAt: number; id: string };
+    limit?: number;
+  } = {}): Promise<{ sessions: ChatSession[]; nextCursor: string | null }> {
+    const limit = Math.max(1, Math.min(100, Math.trunc(input.limit ?? 20)));
+    const cursor = input.cursor;
+    const rows = this.db.select().from(sessions)
+      .where(and(
+        isNull(sessions.deletedAt),
+        cursor ? or(
+          lt(sessions.createdAt, cursor.createdAt),
+          and(eq(sessions.createdAt, cursor.createdAt), lt(sessions.id, cursor.id)),
+        ) : undefined,
+      ))
+      .orderBy(desc(sessions.createdAt), desc(sessions.id))
+      .limit(limit + 1)
+      .all();
+    const page = rows.slice(0, limit);
+    const last = page.at(-1);
+    return {
+      sessions: page.map(toChatSession),
+      nextCursor: rows.length > limit && last
+        ? JSON.stringify({ createdAt: last.createdAt, id: last.id })
+        : null,
+    };
+  }
+
+  async softDeleteSession(sessionId: string): Promise<{ deletedSessionCount: number }> {
+    const row = this.db.update(sessions)
+      .set({ deletedAt: Date.now() })
+      .where(and(eq(sessions.id, sessionId), isNull(sessions.deletedAt)))
+      .returning({ id: sessions.id }).get();
+    return { deletedSessionCount: row ? 1 : 0 };
   }
 
   async setSessionTitleIfEmpty(sessionId: string, title: string): Promise<ChatSession | undefined> {
@@ -408,7 +446,7 @@ export class UserDO extends DurableObject<Env> {
     const row = this.db
       .update(sessions)
       .set({ summary: normalizedTitle })
-      .where(and(eq(sessions.id, sessionId), eq(sessions.summary, "")))
+      .where(and(eq(sessions.id, sessionId), isNull(sessions.deletedAt), eq(sessions.summary, "")))
       .returning()
       .get();
 
@@ -762,6 +800,7 @@ export class UserDO extends DurableObject<Env> {
     const savedSession = this.db.select().from(sessions).where(eq(sessions.id, id)).limit(1).get();
 
     if (savedSession) {
+      if (savedSession.deletedAt !== null) throw new Error("Session not found");
       return toChatSession(savedSession);
     }
 
@@ -1069,12 +1108,12 @@ export class UserDO extends DurableObject<Env> {
       timeZone: settings.timeZone,
     };
 
+    // Initialization also runs before alarms; keep the existing cleanup deadline.
     if (pendingTask) {
       this.db
         .update(scheduledTasks)
         .set({
           payload: JSON.stringify(payload),
-          scheduledAt,
           updatedAt: now,
         })
         .where(and(eq(scheduledTasks.id, pendingTask.id), eq(scheduledTasks.status, "pending")))

@@ -6,11 +6,14 @@ import { readFileSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { walliChatUnoCss } from "../walli_chat/vite.config.ts";
 
+import { walliChatBlocksUnoCss } from "../walli_chat_blocks/vite.config.ts";
+
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
     walliChatUnoCss(),
+    walliChatBlocksUnoCss(),
     {
       name: "durable-object-sql-migration-loader",
       load(id) {
@@ -35,6 +38,11 @@ export default defineConfig({
   resolve: {
     dedupe: ["react", "react-dom"],
     alias: [
+      {
+        find: /^@wallilabs\/chat-blocks\/theme\.css$/,
+        replacement: resolve("../walli_chat_blocks/src/theme.css"),
+      },
+      { find: /^@wallilabs\/chat-blocks$/, replacement: resolve("../walli_chat_blocks/src/index.ts") },
       {
         find: /^@wallilabs\/chat\/theme\.css$/,
         replacement: resolve("../walli_chat/src/theme.css"),

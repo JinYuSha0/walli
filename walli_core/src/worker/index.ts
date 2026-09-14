@@ -1,3 +1,4 @@
+import { webChatRoute } from "./api/web-chat";
 import { Hono } from "hono";
 import { createAuth, type AppSession, type AppUser } from "./api/helper/auth";
 import { chatRoute } from "./api/chat";
@@ -51,6 +52,7 @@ const routes = app
   .route("/", meRoute)
   .route("/", toolsRoute)
   .route("/", chatRoute)
+  .route("/", webChatRoute)
   .route("/", clientsRoute)
   .route("/", telegramRoute)
   .route("/", uploadRoute)

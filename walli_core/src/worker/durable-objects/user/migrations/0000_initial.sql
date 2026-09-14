@@ -60,7 +60,10 @@ CREATE TABLE `sessions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`client_id` text NOT NULL,
 	`summary` text NOT NULL,
-	`created_at` integer NOT NULL
+	`created_at` integer NOT NULL,
+	`deleted_at` integer
 );
 --> statement-breakpoint
 CREATE INDEX `idx_sessions_created_at` ON `sessions` (`created_at`);
+--> statement-breakpoint
+CREATE INDEX `idx_sessions_active_page` ON `sessions` (`deleted_at`,`created_at`,`id`);

@@ -1,7 +1,6 @@
 import { Hono, type Context } from "hono";
 import { getClientAuthSettings, getClientBasicSettings } from "./clients";
 import { handleCors } from "./helper/cors";
-import { requireAdmin } from "./helper/middleware";
 import type { AppBindings } from "./types";
 import { verifyChatAuth } from "./chat";
 import { getClientFromClientId } from "./clients";
@@ -20,7 +19,7 @@ const AUDIO_TYPES = new Set([
 ]);
 
 
-const transcribe = async (c: Context<AppBindings>, form: FormData, exposeError = false) => {
+export const transcribe = async <E extends AppBindings>(c: Context<E>, form: FormData, exposeError = false) => {
   const audio = form.get("audio");
   if (!(audio instanceof File)) return c.json({ error: "An audio file is required" }, 400);
 
@@ -68,7 +67,7 @@ export const transcribeRoute = new Hono<AppBindings>()
     if (!client || typeof userId !== "string") return c.json({ error: "Invalid client" }, 403);
 
     const basicSettings = await getClientBasicSettings(client.id);
-    if (!basicSettings.enabled) return c.json({ error: "Client disabled" }, 403);
+    if (!basicSettings.enabled) return c.json({ error: "Client disabled" }, 401);
 
     const authSettings = await getClientAuthSettings(client.id);
     if (!authSettings.authEnabled) {
@@ -82,7 +81,4 @@ export const transcribeRoute = new Hono<AppBindings>()
     if (!auth.authorized) return c.json({ error: "Forbidden" }, 403);
 
     return transcribe(c, form);
-  })
-  .post("/api/internal/transcribe", requireAdmin, async (c) =>
-    transcribe(c, await c.req.formData(), true),
-  );
+  });

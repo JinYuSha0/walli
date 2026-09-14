@@ -3,7 +3,6 @@ import { Link } from "@tanstack/react-router";
 import {
   IconDashboard,
   IconKey,
-  IconMessages,
   IconSettings,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
@@ -56,12 +55,6 @@ export function AppSidebar({
         title: t("navKeys"),
         to: "/clients",
         icon: IconKey,
-      },
-      {
-        activePrefix: "/chat-test",
-        title: t("navChatTest"),
-        to: "/chat-test",
-        icon: IconMessages,
       },
     ],
     navSecondary: [],

@@ -1,13 +1,17 @@
-import { lazy, type ComponentType, Suspense } from "react";
+import { lazy, type ComponentType, type ReactNode, Suspense } from "react";
 
+import { WebChatLoading } from "@/components/chat/web-chat-loading";
 import { RouteLoading } from "./route-loading";
 
-const createLazyRoute = (loader: () => Promise<{ default: ComponentType }>) => {
+const createLazyRoute = (
+  loader: () => Promise<{ default: ComponentType }>,
+  fallback: ReactNode = <RouteLoading />,
+) => {
   const Route = lazy(loader);
 
   return function LazyRoute() {
     return (
-      <Suspense fallback={<RouteLoading />}>
+      <Suspense fallback={fallback}>
         <Route />
       </Suspense>
     );
@@ -17,29 +21,28 @@ const createLazyRoute = (loader: () => Promise<{ default: ComponentType }>) => {
 export const LazyDashboardRoute = createLazyRoute(() =>
   import("./dashboard-route").then((module) => ({
     default: module.DashboardRoute,
-  }))
+  })),
 );
 
 export const LazyClientsRoute = createLazyRoute(() =>
   import("./keys-route").then((module) => ({
     default: module.ClientsRoute,
-  }))
-);
-
-export const LazyChatTestRoute = createLazyRoute(() =>
-  import("./chat-test-route").then((module) => ({
-    default: module.ChatTestRoute,
-  }))
+  })),
 );
 
 export const LazyLoginRoute = createLazyRoute(() =>
   import("./login-route").then((module) => ({
     default: module.LoginRoute,
-  }))
+  })),
 );
 
 export const LazySettingsRoute = createLazyRoute(() =>
   import("./settings/settings-route").then((module) => ({
     default: module.SettingsRoute,
-  }))
+  })),
+);
+
+export const LazyWebChatRoute = createLazyRoute(
+  () => import("./web-chat-route").then((module) => ({ default: module.WebChatRoute })),
+  <WebChatLoading />,
 );

@@ -15,7 +15,7 @@ export type NavMainItem =
       icon?: Icon;
       title: string;
     } & (
-      | { params?: never; to: "/" | "/chat-test" | "/clients" }
+      | { params?: never; to: "/" | "/clients" }
       | { params: { tab: string }; to: "/settings/$tab" }
       | { params: { platform: string; tab: string }; to: "/clients/$platform/$tab" }
     );
@@ -32,7 +32,7 @@ export function NavMain({
       ? location.pathname === "/"
       : location.pathname.startsWith(activePrefix);
   const getHref = (item: (typeof items)[number]) => {
-    if (item.to === "/" || item.to === "/chat-test" || item.to === "/clients") {
+    if (item.to === "/" || item.to === "/clients") {
       return item.to;
     }
 
@@ -61,7 +61,7 @@ export function NavMain({
 
     event.preventDefault();
 
-    if (item.to === "/" || item.to === "/chat-test" || item.to === "/clients") {
+    if (item.to === "/" || item.to === "/clients") {
       void navigate({ to: item.to });
       return;
     }

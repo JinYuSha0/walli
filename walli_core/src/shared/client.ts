@@ -35,7 +35,20 @@ export const clientBasicSettingsSchema = z
   })
   .strict();
 
+export const clientWebSettingsSchema = z.object({
+  webAccessEnabled: z.boolean(),
+  loginMethod: z.enum(["none", "google"]).default("none"),
+  turnstileEnabled: z.boolean().default(false),
+}).strict();
+export const clientWebSettingsPatchSchema = z.object({
+  webAccessEnabled: z.boolean().optional(),
+  loginMethod: z.enum(["none", "google"]).optional(),
+  turnstileEnabled: z.boolean().optional(),
+}).strict().refine((value) => Object.keys(value).length > 0);
+export type ClientWebSettings = z.output<typeof clientWebSettingsSchema>;
+
 export const clientBasicSettingsPatchSchema = clientBasicSettingsSchema
+  .extend({ name: clientSchema.shape.name })
   .partial()
   .refine(
     (settings) => Object.keys(settings).length > 0,
@@ -44,7 +57,9 @@ export const clientBasicSettingsPatchSchema = clientBasicSettingsSchema
 
 export const clientDialogSettingsSchema = z
   .object({
-    dialogSystemPrompt: z.string(),
+    assistantIdentityEnabled: z.boolean(),
+    assistantNickname: z.string().trim().max(100),
+    assistantAvatar: z.string().regex(/^$|^\/api\/assistant-avatars\/[0-9a-f-]{36}$/),
     dialogOpeningMessage: z.string(),
     dialogInputMaxLength: z.number().int().min(1),
     dialogPlaceholder: z.string(),
@@ -222,6 +237,8 @@ export const webClientConfigResponseSchema = baseClientConfigResponseSchema.exte
   platform: z.literal("web"),
   dialogSettings: clientDialogSettingsSchema,
   corsSettings: clientCorsSettingsSchema,
+  webSettings: clientWebSettingsSchema,
+  turnstileConfigured: z.boolean(),
 });
 
 export const clientConfigResponseSchema = z.union([

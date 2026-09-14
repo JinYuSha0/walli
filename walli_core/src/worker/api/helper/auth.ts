@@ -1,3 +1,4 @@
+import { and, eq } from "drizzle-orm";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { betterAuth } from "better-auth";
 import { admin } from "better-auth/plugins/admin";
@@ -110,3 +111,9 @@ export const createAuth = () => {
     ],
   });
 };
+
+export const hasGoogleAccount = async (userId: string) => !!(await createDb()
+  .select({ id: schema.account.id })
+  .from(schema.account)
+  .where(and(eq(schema.account.userId, userId), eq(schema.account.providerId, "google")))
+  .get());

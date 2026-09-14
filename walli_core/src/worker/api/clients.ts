@@ -1,3 +1,4 @@
+import { isTurnstileConfigured } from "./helper/turnstile";
 import { Hono } from "hono";
 import { z } from "zod";
 import { asc, eq } from "drizzle-orm";
@@ -11,6 +12,8 @@ import {
   clientAuthSettingsPatchSchema,
   clientAuthSettingsSchema,
   clientBasicSettingsPatchSchema,
+  clientWebSettingsSchema,
+  clientWebSettingsPatchSchema,
   clientBasicSettingsSchema,
   clientCorsSettingsPatchSchema,
   clientCorsSettingsSchema,
@@ -44,6 +47,7 @@ const clientUsageLimitKey = (clientId: string) => `${clientSettingsPrefix(client
 
 const clientAuthSettingsKey = (clientId: string) => `${clientSettingsPrefix(clientId)}:auth-settings`;
 
+const webSettingsKey = (clientId: string) => `${clientSettingsPrefix(clientId)}:web-settings`;
 const webCorsSettingsKey = (clientId: string) => `${clientSettingsPrefix(clientId)}:cors-settings`;
 
 const telegramSettingsKey = (clientId: string) => `${clientSettingsPrefix(clientId)}:telegram-settings`;
@@ -105,11 +109,18 @@ export const getClientBasicSettings = async (clientId: string) => {
   };
 };
 
-const getDefaultDialogSettings = async (): Promise<ClientDialogSettings> => {
-  const settings = await getSettings();
+// Keep existing web clients accessible until their independent web switch is changed.
+export const getClientWebSettings = async (clientId: string) => {
+  const saved = await getAsyncContext().env.APP_KV.get(webSettingsKey(clientId), "json");
+  const parsed = clientWebSettingsSchema.safeParse(saved);
+  return parsed.success ? parsed.data : clientWebSettingsSchema.parse({ webAccessEnabled: true });
+};
 
+const getDefaultDialogSettings = async (): Promise<ClientDialogSettings> => {
   return {
-    dialogSystemPrompt: settings.dialogSystemPrompt,
+    assistantIdentityEnabled: false,
+    assistantNickname: "",
+    assistantAvatar: "",
     dialogOpeningMessage: "",
     dialogInputMaxLength: 300,
     dialogPlaceholder: "",
@@ -118,11 +129,11 @@ const getDefaultDialogSettings = async (): Promise<ClientDialogSettings> => {
   };
 };
 
-const getClientDialogSettings = async (clientId: string) => {
+export const getClientDialogSettings = async (clientId: string) => {
   const appKv = getAsyncContext().env.APP_KV;
   const defaultDialogSettings = await getDefaultDialogSettings();
   const savedSettings = await appKv.get(clientDialogSettingsKey(clientId), "json");
-  const result = clientDialogSettingsSchema.partial().safeParse(savedSettings);
+  const result = clientDialogSettingsSchema.partial().strip().safeParse(savedSettings);
 
   if (!result.success) {
     return defaultDialogSettings;
@@ -313,6 +324,8 @@ const getClientConfigResponse = async (client: Client) => {
       authSettings,
       dialogSettings,
       corsSettings,
+      webSettings: await getClientWebSettings(client.id),
+      turnstileConfigured: isTurnstileConfigured(),
       usageLimit,
     });
   }
@@ -345,7 +358,7 @@ const resetClientSettings = async (client: Client) => {
   }
 
   if (platform === "web") {
-    keys.push(webCorsSettingsKey(id));
+    keys.push(webCorsSettingsKey(id), webSettingsKey(id));
   }
 
   await Promise.all(keys.map((key) => appKv.delete(key)));
@@ -362,11 +375,16 @@ export const clientsRoute = new Hono<AppBindings>()
     }
     const client = { id: crypto.randomUUID(), ...result.data } satisfies Client;
     const now = Date.now();
+    try {
     await createDb().insert(clientTable).values({
       ...client,
       createdAt: now,
       updatedAt: now,
     }).run();
+    } catch (error) {
+      if ((await getClientBySlug(client.slug))) return c.json({ error: "Slug already exists" }, 409);
+      throw error;
+    }
     return c.json(await getClientConfigResponse(client), 201);
   })
   .get("/api/admin/clients/:clientId", async (c) => {
@@ -398,6 +416,11 @@ export const clientsRoute = new Hono<AppBindings>()
     const platform = client.platform;
     const clientId = client.id;
     const body = await c.req.json().catch(() => null);
+    if (body && typeof body === "object" && "slug" in body) {
+      return c.json({ error: "Slug cannot be changed" }, 400);
+    }
+    const webSettingsResult = clientWebSettingsPatchSchema.safeParse(body);
+    const isWebSettingsPatch = platform === "web" && webSettingsResult.success;
     const basicSettingsResult = clientBasicSettingsPatchSchema.safeParse(body);
     const authSettingsResult = clientAuthSettingsPatchSchema.safeParse(body);
     const corsSettingsResult = clientCorsSettingsPatchSchema.safeParse(body);
@@ -412,6 +435,7 @@ export const clientsRoute = new Hono<AppBindings>()
     const isTelegramSettingsPatch = platform === "telegram" && telegramSettingsResult.success;
 
     if (
+      !isWebSettingsPatch &&
       !isAuthSettingsPatch &&
       !isBasicSettingsPatch &&
       !isCorsSettingsPatch &&
@@ -447,6 +471,12 @@ export const clientsRoute = new Hono<AppBindings>()
       );
     }
 
+    const webSettings = platform === "web"
+      ? { ...await getClientWebSettings(clientId), ...(isWebSettingsPatch ? webSettingsResult.data : {}) }
+      : undefined;
+    if (isWebSettingsPatch && webSettingsResult.data.turnstileEnabled === true && !isTurnstileConfigured()) {
+      return c.json({ error: "Turnstile is not configured for this hostname" }, 400);
+    }
     const currentUsageLimit = await getClientUsageLimit(clientId);
     const currentBasicSettings = await getClientBasicSettings(clientId);
     const currentAuthSettings = await getClientAuthSettings(clientId);
@@ -456,7 +486,7 @@ export const clientsRoute = new Hono<AppBindings>()
     const canPatchTelegramSettings = platform === "telegram" && isTelegramSettingsPatch;
     const basicSettingsPatch = isBasicSettingsPatch
       ? {
-          ...basicSettingsResult.data,
+          ...(basicSettingsResult.data.enabled === undefined ? {} : { enabled: basicSettingsResult.data.enabled }),
           ...(basicSettingsResult.data.additionalSystemPrompt === undefined
             ? {}
             : {
@@ -501,7 +531,24 @@ export const clientsRoute = new Hono<AppBindings>()
         : currentDialogSettings;
     }
 
+    if (dialogSettings?.assistantIdentityEnabled && !dialogSettings.assistantNickname.trim()) {
+      return c.json({ error: "Assistant nickname is required when identity is enabled" }, 400);
+    }
+
+    const name = isBasicSettingsPatch
+      ? basicSettingsResult.data.name ?? client.name
+      : client.name;
     await Promise.all([
+      isWebSettingsPatch
+        ? getAsyncContext().env.APP_KV.put(webSettingsKey(clientId), JSON.stringify(webSettings))
+        : Promise.resolve(),
+      name !== client.name
+        ? createDb()
+            .update(clientTable)
+            .set({ name, updatedAt: Date.now() })
+            .where(eq(clientTable.id, clientId))
+            .run()
+        : Promise.resolve(),
       isBasicSettingsPatch
         ? getAsyncContext().env.APP_KV.put(clientBasicSettingsKey(clientId), JSON.stringify(basicSettings))
         : Promise.resolve(),
@@ -528,7 +575,7 @@ export const clientsRoute = new Hono<AppBindings>()
       return c.json(
         parseResponse(clientConfigResponseSchema, {
           id: client.id,
-          name: client.name,
+          name,
           slug: client.slug,
           platform: "telegram",
           basicSettings,
@@ -547,7 +594,7 @@ export const clientsRoute = new Hono<AppBindings>()
     }
 
     if (platform === "web") {
-      if (!corsSettings) {
+      if (!corsSettings || !webSettings) {
         return c.json(
           parseResponse(errorResponseSchema, { error: "CORS settings unavailable" }),
           500,
@@ -557,13 +604,15 @@ export const clientsRoute = new Hono<AppBindings>()
       return c.json(
         parseResponse(clientConfigResponseSchema, {
           id: client.id,
-          name: client.name,
+          name,
           slug: client.slug,
           platform: "web",
           basicSettings,
           authSettings,
           dialogSettings,
           corsSettings,
+          webSettings,
+          turnstileConfigured: isTurnstileConfigured(),
           usageLimit,
         }),
       );
@@ -572,7 +621,7 @@ export const clientsRoute = new Hono<AppBindings>()
     return c.json(
       parseResponse(clientConfigResponseSchema, {
         id: client.id,
-        name: client.name,
+        name,
         slug: client.slug,
         platform,
         basicSettings,

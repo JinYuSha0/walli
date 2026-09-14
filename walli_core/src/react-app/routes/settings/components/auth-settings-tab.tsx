@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import type { ClientAuthSettings } from "@/api";
 import { Button } from "@/components/ui/button";
+import { JavaScriptCode } from "@/components/ui/javascript-code";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -181,7 +182,7 @@ export function AuthSettingsTab({ settings, onSave }: AuthSettingsTabProps) {
           </h2>
         </div>
         <pre className="overflow-x-auto rounded-lg border border-border bg-muted/40 p-4 text-sm leading-6">
-          <code>{createNodeExample(authEndpointUrl)}</code>
+          <JavaScriptCode code={createNodeExample(authEndpointUrl)} />
         </pre>
       </section>
 

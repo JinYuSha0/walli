@@ -391,6 +391,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -404,6 +411,15 @@
           "name": "idx_sessions_created_at",
           "columns": [
             "created_at"
+          ],
+          "isUnique": false
+        },
+        "idx_sessions_active_page": {
+          "name": "idx_sessions_active_page",
+          "columns": [
+            "deleted_at",
+            "created_at",
+            "id"
           ],
           "isUnique": false
         }

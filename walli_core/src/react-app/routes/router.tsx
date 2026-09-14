@@ -7,7 +7,7 @@ import {
 import { AppLayout } from "./app-layout";
 import {
   LazyDashboardRoute,
-  LazyChatTestRoute,
+  LazyWebChatRoute,
   LazyClientsRoute,
   LazyLoginRoute,
   LazySettingsRoute,
@@ -68,12 +68,6 @@ const clientsPlatformTabRoute = createRoute({
   component: LazyClientsRoute,
 });
 
-const chatTestRoute = createRoute({
-  getParentRoute: () => appLayoutRoute,
-  path: "/chat-test",
-  component: LazyChatTestRoute,
-});
-
 const legacyKeysRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: "/keys",
@@ -88,7 +82,12 @@ const loginRoute = createRoute({
   component: LazyLoginRoute,
 });
 
+const webChatRoute = createRoute({ getParentRoute: () => rootRoute, path: "/chat/$slug", component: LazyWebChatRoute });
+
+const webChatSessionRoute = createRoute({ getParentRoute: () => webChatRoute, path: "$sessionId" });
+
 const routeTree = rootRoute.addChildren([
+  webChatRoute.addChildren([webChatSessionRoute]),
   appLayoutRoute.addChildren([
     indexRoute,
     settingsRoute,
@@ -96,7 +95,6 @@ const routeTree = rootRoute.addChildren([
     clientsRoute,
     clientsPlatformRoute,
     clientsPlatformTabRoute,
-    chatTestRoute,
     legacyKeysRoute,
   ]),
   loginRoute,

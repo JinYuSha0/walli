@@ -31,6 +31,10 @@ Do not run a full build after every small change. Prefer lint or a targeted ligh
 
 API response `message` fields must be written in English, including error and guidance messages. Keep localized copy in frontend locale files, not Worker API responses.
 
+## UI Descriptions
+
+Keep settings descriptions short, natural, and focused on the user-visible result. Avoid status codes, API terminology, and implementation details unless they are necessary for the user to make a decision. For example, use “关闭后无法访问” instead of explaining HTTP 401 responses and individual access paths.
+
 ## Node.js Compatibility
 
 https://developers.cloudflare.com/workers/runtime-apis/nodejs/
@@ -62,3 +66,7 @@ If the application uses Durable Objects or Workflows, refer to the relevant best
 
 - Durable Objects: https://developers.cloudflare.com/durable-objects/best-practices/rules-of-durable-objects/
 - Workflows: https://developers.cloudflare.com/workflows/build/rules-of-workflows/
+
+## Development Database Changes
+
+During development, keep one initial SQL file per existing database/migration directory. Edit that initial SQL directly for schema changes; do not generate new incremental SQL files (such as `0001_*.sql`). Keep the schema, initial snapshot, journal, and bundled migration imports synchronized. D1, UserDO, and LangGraph have separate databases and retain their own initial SQL files. Do not run migration-generation commands as part of development changes unless the user explicitly requests incremental migrations. Consolidating SQL does not authorize deleting or resetting existing local or remote database data.

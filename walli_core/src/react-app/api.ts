@@ -3,6 +3,7 @@ import type { AppType } from "@worker/index";
 import type {
   ClientAuthSettingsPatch,
   ClientBasicSettingsPatch,
+  ClientWebSettings,
   ClientConfigResponse,
   ClientCorsSettingsPatch,
   ClientDialogSettingsPatch,
@@ -23,6 +24,7 @@ export type {
   ClientAuthSettingsPatch,
   ClientBasicSettings,
   ClientBasicSettingsPatch,
+  ClientWebSettings,
   ClientCorsSettings,
   ClientCorsSettingsPatch,
   ClientDialogSettings,
@@ -68,152 +70,6 @@ export const getApiInfo = query(() => apiClient.api.index.$get());
 
 export const getMe = query(() => apiClient.api.me.$get());
 
-export type UploadedAsset = {
-  id: string;
-  name: string;
-  size: number;
-  type: string;
-  url: string;
-};
-
-export type UploadProgressCallback = (progress: number) => void;
-
-export type ChatHistoryMessage = {
-  id: string;
-  role: "assistant" | "user";
-  markdown: string;
-  createdAt: number;
-};
-
-export type ChatHistoryPage = {
-  sessionId: string;
-  title: string;
-  messages: ChatHistoryMessage[];
-  nextCursor: number | null;
-};
-
-export const getChatHistory = async (
-  sessionId: string,
-  cursor?: number,
-  limit = 30,
-  signal?: AbortSignal,
-): Promise<ChatHistoryPage> => {
-  const search = new URLSearchParams({ limit: String(limit), sessionId });
-  if (cursor !== undefined) search.set("cursor", String(cursor));
-
-  const response = await fetch(`/api/internal/chat/history?${search}`, {
-    credentials: "include",
-    signal,
-  });
-  const payload = (await response.json().catch(() => undefined)) as
-    | ChatHistoryPage
-    | { error?: unknown }
-    | undefined;
-
-  if (!response.ok) {
-    throw new Error(
-      payload && "error" in payload && typeof payload.error === "string"
-        ? payload.error
-        : `Loading chat history failed (${response.status})`,
-    );
-  }
-
-  return payload as ChatHistoryPage;
-};
-
-export const deleteChatSession = async (sessionId: string): Promise<void> => {
-  const search = new URLSearchParams({ sessionId });
-  const response = await fetch(`/api/internal/chat/session?${search}`, {
-    credentials: "include",
-    method: "DELETE",
-  });
-
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => undefined)) as
-      | { error?: unknown }
-      | undefined;
-    throw new Error(
-      typeof payload?.error === "string"
-        ? payload.error
-        : `Deleting chat session failed (${response.status})`,
-    );
-  }
-};
-
-export const transcribeAudio = async (audio: Blob, signal?: AbortSignal): Promise<string> => {
-  const form = new FormData();
-  form.set("audio", audio, "recording.webm");
-  const response = await fetch("/api/internal/transcribe", {
-    body: form,
-    credentials: "include",
-    method: "POST",
-    signal,
-  });
-  const payload = (await response.json().catch(() => undefined)) as
-    | { error?: unknown; text?: unknown }
-    | undefined;
-
-  if (!response.ok || typeof payload?.text !== "string") {
-    throw new Error(
-      typeof payload?.error === "string"
-        ? payload.error
-        : `Transcription failed (${response.status})`,
-    );
-  }
-
-  return payload.text;
-};
-
-export const uploadAsset = (
-  file: File,
-  onProgress?: UploadProgressCallback,
-): Promise<UploadedAsset> => {
-  const formData = new FormData();
-  formData.set("file", file);
-  const kind = file.type.startsWith("image/") ? "image" : "file";
-
-  return new Promise((resolve, reject) => {
-    const request = new XMLHttpRequest();
-    request.open("POST", `/api/upload/${kind}`);
-    request.withCredentials = true;
-
-    request.upload.addEventListener("progress", (event) => {
-      if (!event.lengthComputable) return;
-      onProgress?.(Math.min(100, Math.max(0, (event.loaded / event.total) * 100)));
-    });
-
-    request.addEventListener("load", () => {
-      let payload: UploadedAsset | { error?: unknown } | undefined;
-      try {
-        payload = JSON.parse(request.responseText) as UploadedAsset | { error?: unknown };
-      } catch {
-        payload = undefined;
-      }
-
-      if (request.status < 200 || request.status >= 300) {
-        reject(
-          new Error(
-            payload && "error" in payload && typeof payload.error === "string"
-              ? payload.error
-              : `Upload failed (${request.status})`,
-          ),
-        );
-        return;
-      }
-      if (!payload || !("url" in payload) || typeof payload.url !== "string") {
-        reject(new Error("Upload response did not include a file URL"));
-        return;
-      }
-
-      onProgress?.(100);
-      resolve(payload as UploadedAsset);
-    });
-    request.addEventListener("error", () => reject(new Error("Upload failed (network error)")));
-    request.addEventListener("abort", () => reject(new Error("Upload was aborted")));
-    request.send(formData);
-  });
-};
-
 export const getSettings = async (): Promise<SettingsResponse> =>
   parseResponse(apiClient.api.settings.$get());
 
@@ -253,6 +109,7 @@ const patchClientConfig = async (
   clientId: string,
   json:
     | ClientAuthSettingsPatch
+    | ClientWebSettings
     | ClientBasicSettingsPatch
     | ClientCorsSettingsPatch
     | ClientDialogSettingsPatch
@@ -349,3 +206,14 @@ export const deleteTelegramWhitelistEntry = async ({
     }),
   );
 };
+
+export const uploadAssistantAvatar = async (file: File): Promise<string> => {
+  const form = new FormData();
+  form.set("file", file);
+  const response = await fetch("/api/admin/assistant-avatar", { method: "POST", body: form });
+  if (!response.ok) throw new Error("Avatar upload failed");
+  const result = await response.json() as { url: string };
+  return result.url;
+};
+
+export const updateClientWebSettings = (clientId: string, json: ClientWebSettings) => patchClientConfig(clientId, json);

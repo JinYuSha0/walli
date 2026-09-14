@@ -1,6 +1,6 @@
 import { Hono, type Context } from "hono";
 import { z } from "zod";
-import { requireUser } from "./helper/middleware";
+import { requireAdmin, requireUser } from "./helper/middleware";
 import { errorResponseSchema, parseResponse } from "./helper/validation";
 import type { AppBindings } from "./types";
 import { getAsyncContext } from "@worker/lib/async-context";
@@ -45,6 +45,31 @@ const uploadResponseSchema = z
 const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
 
 export const uploadRoute = new Hono<AppBindings>()
+  .post("/api/admin/assistant-avatar", requireAdmin, async (c) => {
+    const body = await c.req.raw.formData().catch(() => null);
+    const file = body?.get("file");
+    if (!(file instanceof File) || file.size === 0) return c.json({ error: "An image is required" }, 400);
+    if (file.size > 2 * MB) return c.json({ error: "Avatar exceeds the 2 MB limit" }, 413);
+    if (!uploadRules.image.types.has(file.type) || !(await hasValidImageSignature(file, file.type))) {
+      return c.json({ error: "Invalid image content or type" }, 415);
+    }
+    const id = crypto.randomUUID();
+    await getAsyncContext().env.R2.put(`assistant-avatars/${id}`, file.stream(), {
+      httpMetadata: { contentType: file.type },
+    });
+    return c.json({ url: `/api/assistant-avatars/${id}` }, 201);
+  })
+  .get("/api/assistant-avatars/:id", async (c) => {
+    const id = z.uuid().safeParse(c.req.param("id"));
+    if (!id.success) return c.json({ error: "Avatar not found" }, 404);
+    const object = await getAsyncContext().env.R2.get(`assistant-avatars/${id.data}`);
+    if (!object) return c.json({ error: "Avatar not found" }, 404);
+    const headers = new Headers();
+    object.writeHttpMetadata(headers);
+    headers.set("Cache-Control", "public, max-age=31536000, immutable");
+    headers.set("X-Content-Type-Options", "nosniff");
+    return new Response(object.body, { headers });
+  })
   .post("/api/upload/image", requireUser, (c) => upload(c, "image"))
   .post("/api/upload/file", requireUser, (c) => upload(c, "file"))
   .get("/api/assets/:userId/:kind/:id", async (c) => {
@@ -88,8 +113,7 @@ export const uploadRoute = new Hono<AppBindings>()
     return new Response(object.body, { headers });
   });
 
-async function upload(c: Context<AppBindings>, kind: AssetKind) {
-  const user = c.get("user")!;
+export async function upload<E extends AppBindings>(c: Context<E>, kind: AssetKind, ownerId = c.get("user")!.id) {
   const body = await c.req.raw.formData().catch(() => null);
   const file = body?.get("file");
 
@@ -118,9 +142,9 @@ async function upload(c: Context<AppBindings>, kind: AssetKind) {
   }
 
   const id = crypto.randomUUID();
-  const key = createObjectKey(user.id, kind, id);
+  const key = createObjectKey(ownerId, kind, id);
   await getAsyncContext().env.R2.put(key, file.stream(), {
-    customMetadata: { kind, name: file.name, userId: user.id },
+    customMetadata: { kind, name: file.name, userId: ownerId },
     httpMetadata: { contentType },
   });
 
@@ -130,7 +154,7 @@ async function upload(c: Context<AppBindings>, kind: AssetKind) {
       name: file.name,
       size: file.size,
       type: contentType,
-      url: new URL(`/api/assets/${user.id}/${kind}/${id}`, c.req.url).toString(),
+      url: new URL(`/api/assets/${ownerId}/${kind}/${id}`, c.req.url).toString(),
     }),
     201,
   );
@@ -152,7 +176,7 @@ async function hasValidImageSignature(file: File, contentType: string): Promise<
     case "image/jpeg":
       return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
     case "image/png":
-      return bytes
+      return bytes.length >= 8 && bytes
         .slice(0, 8)
         .every((byte, index) => byte === [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a][index]);
     case "image/gif":

@@ -20,6 +20,7 @@
       "@/*": ["./src/react-app/*"],
       "@shared/*": ["./src/shared/*"],
       "@worker/*": ["./src/worker/*"],
+      "@wallilabs/chat-blocks": ["../walli_chat_blocks/dist/index.d.ts"],
       "@wallilabs/chat": ["../walli_chat/dist/types/index.d.ts"],
       "@wallilabs/chat/react": ["../walli_chat/dist/types/react/index.d.ts"]
     },

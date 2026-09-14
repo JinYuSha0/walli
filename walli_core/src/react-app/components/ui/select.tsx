@@ -9,7 +9,7 @@ function Select({ className, ...props }: React.ComponentProps<"select">) {
       <select
         data-slot="select"
         className={cn(
-          "h-9 w-full appearance-none rounded-lg border border-input bg-input/30 py-1 pl-3 pr-10 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
+          "h-9 w-full appearance-none rounded-lg border border-input bg-background py-1 pl-3 pr-10 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:border-transparent disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:opacity-100 aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
           className,
         )}
         {...props}

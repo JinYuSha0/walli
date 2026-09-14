@@ -78,14 +78,12 @@ export function AppLayout() {
     "/": t("routeDashboard"),
     "/settings": t("routeSettings"),
     "/clients": t("routeKeys"),
-    "/chat-test": t("routeChatTest"),
   };
   const title = location.pathname.startsWith("/settings/")
     ? t("routeSettings")
     : location.pathname.startsWith("/clients/")
       ? t("routeKeys")
       : routeTitles[location.pathname] ?? t("routeConsole");
-  const isChatTest = location.pathname === "/chat-test";
 
   return (
     <SidebarProvider
@@ -99,10 +97,10 @@ export function AppLayout() {
     >
       <AppSidebar user={user} onSignOut={signOut} variant="inset" />
       <SidebarInset className="min-h-0 overflow-hidden">
-        {!isChatTest && <SiteHeader title={title} />}
+        <SiteHeader title={title} />
         <div
           className={
-            isForbidden || isChatTest
+            isForbidden
               ? "min-h-0 flex-1 overflow-hidden"
               : "min-h-0 flex-1 overflow-auto"
           }

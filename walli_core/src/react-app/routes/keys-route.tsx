@@ -22,13 +22,13 @@ import {
   getTelegramWhitelistEntries,
   updateClientAuthSettings,
   updateClientBasicSettings,
+  updateClientWebSettings,
   updateClientCorsSettings,
   updateClientDialogSettings,
   updateClientUsageLimit,
   updateTelegramSettings,
   type ClientAuthSettings,
   type ClientBasicSettings,
-  type ClientBasicSettingsPatch,
   type ClientConfigResponse,
   type ClientCreate,
   type ClientCorsSettings,
@@ -62,6 +62,7 @@ import {
   TELEGRAM_WHITELIST_REMARK_MAX_LENGTH,
 } from "@shared/client";
 import { AuthSettingsTab } from "./settings/components/auth-settings-tab";
+import { WebSettingsTab } from "./settings/components/web-settings-tab";
 import { CorsSettingsTab } from "./settings/components/cors-settings-tab";
 import { DialogSettingsTab } from "./settings/components/dialog-settings-tab";
 import { RouteLoading } from "./route-loading";
@@ -98,7 +99,6 @@ type ClientUsageSettingsForm = {
     perUserDailyInputLimit: string;
     perUserDailyOutputLimit: string;
     historyMessageLimit: string;
-    autoDeletePeriod: ClientUsageLimit["autoDeletePeriod"];
   };
 };
 
@@ -119,9 +119,9 @@ type TelegramWhitelistCreateForm = {
 type ClientBasicSettingsForm = Pick<
   ClientBasicSettings,
   "enabled" | "additionalSystemPrompt"
->;
+> & { name: string; autoDeletePeriod: ClientUsageLimit["autoDeletePeriod"] };
 
-const clientTabs = ["basic", "dialog-settings", "auth", "cors", "usage"] as const;
+const clientTabs = ["basic", "web-settings", "dialog-settings", "auth", "cors", "usage"] as const;
 
 type ClientTab = (typeof clientTabs)[number];
 
@@ -158,7 +158,6 @@ const toUsageFormValues = (usageLimit: ClientUsageLimit): ClientUsageSettingsFor
     perUserDailyInputLimit: toLimitValue(usageLimit.perUserDailyInputLimit),
     perUserDailyOutputLimit: toLimitValue(usageLimit.perUserDailyOutputLimit),
     historyMessageLimit: toLimitValue(usageLimit.historyMessageLimit),
-    autoDeletePeriod: usageLimit.autoDeletePeriod,
   },
 });
 
@@ -254,6 +253,9 @@ function DeleteClientButton({
 function ClientBasicSettingsTab({
   platform,
   basicSettings,
+  autoDeletePeriod,
+  name,
+  slug,
   clientId,
   disabled,
   showSaveButton = true,
@@ -264,22 +266,29 @@ function ClientBasicSettingsTab({
 }: {
   platform: ClientPlatform;
   basicSettings: ClientBasicSettings;
+  autoDeletePeriod: ClientUsageLimit["autoDeletePeriod"];
+  name: string;
+  slug: string;
   clientId: string;
   disabled?: boolean;
   showSaveButton?: boolean;
   skipUnsavedPrompt?: boolean;
   onDraftChange?: (values: ClientBasicSettingsForm) => void;
-  onSaveBasicSettings: (values: ClientBasicSettingsPatch) => Promise<ClientBasicSettings>;
+  onSaveBasicSettings: (values: ClientBasicSettingsForm) => Promise<ClientBasicSettingsForm>;
   onDelete: () => Promise<void>;
 }) {
   const { t } = useTranslation();
   const form = useForm<ClientBasicSettingsForm>({
     defaultValues: {
+      name,
+      autoDeletePeriod,
       enabled: basicSettings.enabled,
       additionalSystemPrompt: basicSettings.additionalSystemPrompt,
     },
   });
   const savedBasicSettings: ClientBasicSettingsForm = {
+    name,
+    autoDeletePeriod,
     enabled: basicSettings.enabled,
     additionalSystemPrompt: basicSettings.additionalSystemPrompt,
   };
@@ -287,35 +296,45 @@ function ClientBasicSettingsTab({
     mutationFn: onSaveBasicSettings,
     onSuccess: (values) => {
       form.reset({
+        name: values.name,
+        autoDeletePeriod: values.autoDeletePeriod,
         enabled: values.enabled,
         additionalSystemPrompt: values.additionalSystemPrompt,
       });
       toast.success(t("clientsBasicSettingsSaveSuccess"));
     },
+    onError: () => toast.error(t("clientsUpdateFailed")),
   });
   const pending = disabled || saveMutation.isPending;
   const watchedBasicSettings = useWatch({
     control: form.control,
     defaultValue: savedBasicSettings,
   }) as ClientBasicSettingsForm;
+  const watchedName = watchedBasicSettings.name;
   const watchedEnabled = watchedBasicSettings.enabled;
   const watchedAdditionalSystemPrompt = watchedBasicSettings.additionalSystemPrompt;
 
   useEffect(() => {
     form.reset({
+      name,
+      autoDeletePeriod,
       enabled: basicSettings.enabled,
       additionalSystemPrompt: basicSettings.additionalSystemPrompt,
     });
-  }, [basicSettings.additionalSystemPrompt, basicSettings.enabled, form]);
+  }, [autoDeletePeriod, basicSettings.additionalSystemPrompt, basicSettings.enabled, name, form]);
 
   useEffect(() => {
     onDraftChange?.({
+      autoDeletePeriod: watchedBasicSettings.autoDeletePeriod,
+      name: watchedName,
       enabled: watchedEnabled,
       additionalSystemPrompt: watchedAdditionalSystemPrompt,
     });
   }, [
     onDraftChange,
+    watchedBasicSettings.autoDeletePeriod,
     watchedAdditionalSystemPrompt,
+    watchedName,
     watchedEnabled,
   ]);
 
@@ -331,15 +350,24 @@ function ClientBasicSettingsTab({
 
   return (
     <section className="grid gap-8">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label htmlFor={`client-name-${platform}`}>{t("clientsName")}</Label>
+          <Input id={`client-name-${platform}`} required maxLength={100} disabled={pending}
+            {...form.register("name", { required: true, validate: (value) => value.trim().length > 0 })} />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor={`client-slug-${platform}`}>Slug</Label>
+          <Input id={`client-slug-${platform}`} readOnly value={slug} />
+        </div>
+      </div>
       <div className="grid gap-4">
         <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
-          <div className="grid gap-1">
+          <div className="grid min-w-0 gap-1">
             <Label htmlFor={`client-enabled-${platform}`}>
               {t("clientsBasicSettingsEnabled")}
             </Label>
-            <p className="text-sm text-muted-foreground">
-              {t("clientsBasicSettingsEnabledDescription")}
-            </p>
+            <p className="text-sm text-muted-foreground">{t("clientsBasicSettingsEnabledDescription")}</p>
           </div>
           <Controller
             control={form.control}
@@ -398,6 +426,36 @@ function ClientBasicSettingsTab({
         />
       </section>
 
+      <section className="grid gap-4">
+        <div className="grid gap-1">
+          <h2 className="text-sm font-medium">{t("usageSettingsConversationCleanupTitle")}</h2>
+        </div>
+
+        <div className="grid gap-4 rounded-lg border border-border p-4">
+          <div className="grid gap-2 lg:max-w-[calc(50%-0.5rem)]">
+            <Label htmlFor={`client-usage-auto-delete-${platform}`}>
+              {t("usageSettingsConversationCleanupPeriod")}
+            </Label>
+            <Controller
+              control={form.control}
+              name="autoDeletePeriod"
+              render={({ field }) => (
+                <Select
+                  id={`client-usage-auto-delete-${platform}`}
+                  disabled={pending}
+                  {...field}
+                >
+                  <option value="never">{t("usageSettingsAutoDeletePeriod.never")}</option>
+                  <option value="day">{t("usageSettingsAutoDeletePeriod.day")}</option>
+                  <option value="week">{t("usageSettingsAutoDeletePeriod.week")}</option>
+                  <option value="month">{t("usageSettingsAutoDeletePeriod.month")}</option>
+                </Select>
+              )}
+            />
+          </div>
+        </div>
+      </section>
+
       {showSaveButton ? (
         <div className="flex justify-end gap-2 border-t border-border pt-8">
           <DeleteClientButton
@@ -427,11 +485,13 @@ function TelegramBasicSettingsTab({
 }: {
   config: Extract<ClientConfigResponse, { platform: "telegram" }>;
   onSave: (values: TelegramSettingsForm) => Promise<ClientConfigResponse>;
-  onSaveBasicSettings: (values: ClientBasicSettingsPatch) => Promise<ClientBasicSettings>;
+  onSaveBasicSettings: (values: ClientBasicSettingsForm) => Promise<ClientBasicSettingsForm>;
   onDelete: () => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [basicSettingsDraft, setBasicSettingsDraft] = useState<ClientBasicSettingsForm>({
+    name: config.name,
+    autoDeletePeriod: config.usageLimit.autoDeletePeriod,
     enabled: config.basicSettings.enabled,
     additionalSystemPrompt: config.basicSettings.additionalSystemPrompt,
   });
@@ -447,13 +507,15 @@ function TelegramBasicSettingsTab({
   });
   const saveMutation = useMutation({
     mutationFn: async (values: TelegramSettingsForm) => {
-      const basicSettings = await onSaveBasicSettings(basicSettingsDraftRef.current);
+      const { name, autoDeletePeriod, ...basicSettings } = await onSaveBasicSettings(basicSettingsDraftRef.current);
 
       const botToken = values.botToken.trim();
 
       if (!botToken || botToken === config.telegramSettings.botTokenMask) {
         return {
           ...config,
+          name,
+          usageLimit: { ...config.usageLimit, autoDeletePeriod },
           basicSettings,
         };
       }
@@ -464,6 +526,8 @@ function TelegramBasicSettingsTab({
 
       return {
         ...updatedConfig,
+        name,
+        usageLimit: { ...updatedConfig.usageLimit, autoDeletePeriod },
         basicSettings,
       };
     },
@@ -476,6 +540,7 @@ function TelegramBasicSettingsTab({
       });
       toast.success(t("clientsBasicSettingsSaveSuccess"));
     },
+    onError: () => toast.error(t("clientsUpdateFailed")),
   });
   const watchedBotToken = useWatch({
     control: form.control,
@@ -495,6 +560,8 @@ function TelegramBasicSettingsTab({
     },
     saved: {
       basicSettings: {
+        name: config.name,
+        autoDeletePeriod: config.usageLimit.autoDeletePeriod,
         enabled: config.basicSettings.enabled,
         additionalSystemPrompt: config.basicSettings.additionalSystemPrompt,
       },
@@ -508,6 +575,9 @@ function TelegramBasicSettingsTab({
       <ClientBasicSettingsTab
         platform="telegram"
         basicSettings={config.basicSettings}
+        autoDeletePeriod={config.usageLimit.autoDeletePeriod}
+        name={config.name}
+        slug={config.slug}
         clientId={config.id}
         disabled={saveMutation.isPending}
         showSaveButton={false}
@@ -1001,7 +1071,7 @@ function ClientUsageSettingsTab({
       perUserDailyInputLimit: parseLimit(values.usageLimit.perUserDailyInputLimit),
       perUserDailyOutputLimit: parseLimit(values.usageLimit.perUserDailyOutputLimit),
       historyMessageLimit: parseLimit(values.usageLimit.historyMessageLimit),
-      autoDeletePeriod: values.usageLimit.autoDeletePeriod,
+      autoDeletePeriod: usageLimit.autoDeletePeriod,
     });
   };
   useUnsavedChangesPrompt({
@@ -1129,36 +1199,6 @@ function ClientUsageSettingsTab({
                   disabled={saveMutation.isPending}
                   {...field}
                 />
-              )}
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-4">
-        <div className="grid gap-1">
-          <h2 className="text-sm font-medium">{t("usageSettingsConversationCleanupTitle")}</h2>
-        </div>
-
-        <div className="grid gap-4 rounded-lg border border-border p-4">
-          <div className="grid gap-2 lg:max-w-[calc(50%-0.5rem)]">
-            <Label htmlFor={`client-usage-auto-delete-${platform}`}>
-              {t("usageSettingsConversationCleanupPeriod")}
-            </Label>
-            <Controller
-              control={form.control}
-              name="usageLimit.autoDeletePeriod"
-              render={({ field }) => (
-                <Select
-                  id={`client-usage-auto-delete-${platform}`}
-                  disabled={saveMutation.isPending}
-                  {...field}
-                >
-                  <option value="never">{t("usageSettingsAutoDeletePeriod.never")}</option>
-                  <option value="day">{t("usageSettingsAutoDeletePeriod.day")}</option>
-                  <option value="week">{t("usageSettingsAutoDeletePeriod.week")}</option>
-                  <option value="month">{t("usageSettingsAutoDeletePeriod.month")}</option>
-                </Select>
               )}
             />
           </div>
@@ -1416,10 +1456,6 @@ export function ClientsRoute() {
                   <RouteLoading />
                 ) : clientConfigQuery.data ? (
                   <div className="grid gap-4">
-                  <div className="rounded-lg border border-border p-4">
-                    <div className="font-medium">{clientConfigQuery.data.name}</div>
-                    <div className="mt-1 text-sm text-muted-foreground">slug: {clientConfigQuery.data.slug}</div>
-                  </div>
                   <Tabs
                     activationMode="manual"
                     value={activeTab}
@@ -1441,6 +1477,9 @@ export function ClientsRoute() {
                       <TabsTrigger value="basic">
                         {t("clientsBasicSettingsTab")}
                       </TabsTrigger>
+                      {availableTabs.includes("web-settings") && (
+                        <TabsTrigger value="web-settings">{t("clientsWebSettingsTab")}</TabsTrigger>
+                      )}
                       {availableTabs.includes("dialog-settings") && (
                         <TabsTrigger value="dialog-settings">
                           {t("clientsDialogSettingsTab")}
@@ -1458,6 +1497,22 @@ export function ClientsRoute() {
                         {t("usageSettingsTab")}
                       </TabsTrigger>
                     </TabsList>
+
+                    {clientConfigQuery.data.platform === "web" && (
+                      <TabsContent value="web-settings">
+                        <WebSettingsTab
+                          settings={clientConfigQuery.data.webSettings}
+                          turnstileConfigured={clientConfigQuery.data.turnstileConfigured}
+                          slug={clientConfigQuery.data.slug}
+                          onSave={async (values) => {
+                            const updated = await updateClientWebSettings(selectedClient.id, values);
+                            queryClient.setQueryData(["client-config", selectedClient.id], updated);
+                            if (updated.platform !== "web") throw new Error("Invalid client platform");
+                            return updated.webSettings;
+                          }}
+                        />
+                      </TabsContent>
+                    )}
 
                     <TabsContent value="basic">
                       {clientConfigQuery.data.platform === "telegram" ? (
@@ -1484,7 +1539,7 @@ export function ClientsRoute() {
 
                             return mergedClientConfig;
                           }}
-                          onSaveBasicSettings={async (values: ClientBasicSettingsPatch) => {
+                          onSaveBasicSettings={async (values: ClientBasicSettingsForm) => {
                             const updatedClientConfig = await updateClientBasicSettings(
                               selectedClient.id,
                               values,
@@ -1495,7 +1550,8 @@ export function ClientsRoute() {
                               updatedClientConfig,
                             );
 
-                            return updatedClientConfig.basicSettings;
+                            await queryClient.invalidateQueries({ queryKey: ["clients"] });
+                            return { ...updatedClientConfig.basicSettings, name: updatedClientConfig.name, autoDeletePeriod: updatedClientConfig.usageLimit.autoDeletePeriod };
                           }}
                           onDelete={handleDeleteClient}
                         />
@@ -1503,8 +1559,11 @@ export function ClientsRoute() {
                         <ClientBasicSettingsTab
                           platform={platform}
                           basicSettings={clientConfigQuery.data.basicSettings}
+                          autoDeletePeriod={clientConfigQuery.data.usageLimit.autoDeletePeriod}
+                          name={clientConfigQuery.data.name}
+                          slug={clientConfigQuery.data.slug}
                           clientId={clientConfigQuery.data.id}
-                          onSaveBasicSettings={async (values: ClientBasicSettingsPatch) => {
+                          onSaveBasicSettings={async (values: ClientBasicSettingsForm) => {
                             const updatedClientConfig = await updateClientBasicSettings(
                               selectedClient.id,
                               values,
@@ -1515,7 +1574,8 @@ export function ClientsRoute() {
                               updatedClientConfig,
                             );
 
-                            return updatedClientConfig.basicSettings;
+                            await queryClient.invalidateQueries({ queryKey: ["clients"] });
+                            return { ...updatedClientConfig.basicSettings, name: updatedClientConfig.name, autoDeletePeriod: updatedClientConfig.usageLimit.autoDeletePeriod };
                           }}
                           onDelete={handleDeleteClient}
                         />
