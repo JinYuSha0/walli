@@ -201,6 +201,7 @@ export const WalliChatComposer = forwardRef<WalliChatComposerRef, WalliChatCompo
 export type WalliChatProps = {
   responsive?: WalliChatElement["responsive"];
   actionConfig?: WalliChatActionConfig;
+  topOcclusionHeight?: number;
   bottomOcclusionHeight?: number;
   children?: ReactNode;
   className?: string;
@@ -244,6 +245,7 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
   {
     responsive,
     actionConfig,
+    topOcclusionHeight,
     bottomOcclusionHeight,
     children,
     className,
@@ -296,7 +298,11 @@ export const WalliChat = forwardRef<WalliChatRef, WalliChatProps>(function Walli
   }, [loading]);
 
   useEffect(() => {
-    if (elementRef.current && bottomOcclusionHeight !== undefined) {
+    if (elementRef.current) elementRef.current.topOcclusionHeight = topOcclusionHeight;
+  }, [topOcclusionHeight]);
+
+  useEffect(() => {
+    if (elementRef.current) {
       elementRef.current.bottomOcclusionHeight = bottomOcclusionHeight;
     }
   }, [bottomOcclusionHeight]);

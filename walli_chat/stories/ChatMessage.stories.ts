@@ -37,6 +37,7 @@ type Args = Pick<
   | "locales"
   | "responsive"
   | "actionConfig"
+  | "topOcclusionHeight"
   | "bottomOcclusionHeight"
   | "defaultScrollToBottom"
   | "defaultScrollToIndex"
@@ -489,7 +490,8 @@ const meta: Meta<Args> = {
   },
   args: {
     responsive: undefined,
-    bottomOcclusionHeight: 8,
+    topOcclusionHeight: getCommonStyle("topOcclusionHeight"),
+    bottomOcclusionHeight: getCommonStyle("bottomOcclusionHeight"),
     defaultScrollToBottom: true,
     defaultScrollToIndex: undefined,
     loading: false,
@@ -525,10 +527,15 @@ const meta: Meta<Args> = {
         },
       },
     },
+    topOcclusionHeight: {
+      control: { min: 0, type: "number" },
+      description: "Top space inside the scrollable message content, in pixels. Omit to use the default.",
+      table: { defaultValue: { summary: "8" }, type: { summary: "number | undefined" } },
+    },
     bottomOcclusionHeight: {
       control: { min: 0, type: "number" },
-      description: "Bottom viewport area, in pixels, excluded from visible-range calculations.",
-      table: { defaultValue: { summary: "8" }, type: { summary: "number" } },
+      description: "Bottom space inside the scrollable message content, in pixels. Omit to use the default.",
+      table: { defaultValue: { summary: "8" }, type: { summary: "number | undefined" } },
     },
     defaultScrollToBottom: {
       control: "boolean",
@@ -588,6 +595,7 @@ const meta: Meta<Args> = {
         .responsive=${args.responsive}
         .locales=${args.locales ?? {}}
         .actionConfig=${args.actionConfig ?? {}}
+        .topOcclusionHeight=${args.topOcclusionHeight}
         .bottomOcclusionHeight=${args.bottomOcclusionHeight}
         .defaultScrollToBottom=${args.defaultScrollToBottom}
         .defaultScrollToIndex=${args.defaultScrollToIndex}
@@ -3128,3 +3136,43 @@ async function assertIncomingInsertion(canvasElement: HTMLElement): Promise<void
   chat.messages = originalMessages;
   chat.intervalSeconds = intervalSeconds;
 }
+
+export const TopOcclusionHeight: Story = {
+  render: () => html`
+    <walli-chat style="display:block;width:400px;height:300px"
+      .defaultScrollToBottom=${false}
+      .messages=${Array.from({ length: 12 }, (_, index) => ({
+        id: `top-space-${index}`, role: "assistant", markdown: `Message ${index + 1}`,
+      }))}></walli-chat>`,
+  play: async ({ canvasElement }) => {
+    const chat = canvasElement.querySelector<WalliChatElement>("walli-chat")!;
+    await waitFor(() => expect(chat.shadowRoot?.querySelector("walli-message")).toBeTruthy());
+    const viewport = chat.shadowRoot!.querySelector<HTMLElement>(".chat-viewport")!;
+    const height = viewport.clientHeight;
+    const scrollHeight = viewport.scrollHeight;
+    const defaultSpace = getCommonStyle("topOcclusionHeight");
+    chat.topOcclusionHeight = defaultSpace + 56;
+    await waitFor(() => {
+      expect(viewport.clientHeight).toBe(height);
+      expect(viewport.scrollHeight).toBe(scrollHeight + 56);
+    });
+    viewport.scrollTop = 56;
+    expect(viewport.scrollTop).toBe(56);
+    chat.bottomOcclusionHeight = getCommonStyle("bottomOcclusionHeight") + 24;
+    await waitFor(() => {
+      expect(viewport.clientHeight).toBe(height);
+      expect(viewport.scrollHeight).toBe(scrollHeight + 80);
+    });
+    chat.bottomOcclusionHeight = undefined;
+    await waitFor(() => expect(viewport.scrollHeight).toBe(scrollHeight + 56));
+    chat.setAttribute("bottom-occlusion-height", String(getCommonStyle("bottomOcclusionHeight") + 24));
+    await waitFor(() => expect(viewport.scrollHeight).toBe(scrollHeight + 80));
+    chat.removeAttribute("bottom-occlusion-height");
+    await waitFor(() => expect(viewport.scrollHeight).toBe(scrollHeight + 56));
+    chat.topOcclusionHeight = undefined;
+    await waitFor(() => {
+      expect(viewport.clientHeight).toBe(height);
+      expect(viewport.scrollHeight).toBe(scrollHeight);
+    });
+  },
+};

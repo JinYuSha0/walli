@@ -159,6 +159,7 @@ export const WalliChat = defineComponent({
   props: {
     responsive: String as PropType<WalliChatElement["responsive"]>,
     actionConfig: Object as PropType<WalliChatActionConfig>,
+    topOcclusionHeight: Number,
     bottomOcclusionHeight: Number,
     class: String,
     defaultScrollToBottom: { default: true, type: Boolean },
@@ -186,6 +187,7 @@ export const WalliChat = defineComponent({
     watchEffect(() => {
       const chat = element.value;
       if (!chat) return;
+      chat.topOcclusionHeight = props.topOcclusionHeight;
       chat.responsive = props.responsive;
       chat.defaultScrollToBottom = props.defaultScrollToBottom;
       chat.actionConfig = props.actionConfig ?? {};
@@ -196,9 +198,7 @@ export const WalliChat = defineComponent({
       chat.loading = props.loading;
       chat.timeFormatter = props.timeFormatter;
       chat.intervalSeconds = props.intervalSeconds;
-      if (props.bottomOcclusionHeight !== undefined) {
-        chat.bottomOcclusionHeight = props.bottomOcclusionHeight;
-      }
+      chat.bottomOcclusionHeight = props.bottomOcclusionHeight;
       chat.onEndReached = props.onEndReached;
       chat.onAction = async (action) => {
         await props.onAction?.(action);

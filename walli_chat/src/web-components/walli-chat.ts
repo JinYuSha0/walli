@@ -126,8 +126,8 @@ export class WalliChatElement extends LitElement {
   @property({ attribute: false }) accessor onEndReachedThreshold = 0;
   @property({ attribute: "interval-seconds", type: Number }) accessor intervalSeconds = 0;
   @property({ attribute: false }) accessor timeFormatter: WalliChatTimeFormatter | undefined;
-  @property({ attribute: false }) accessor bottomOcclusionHeight =
-    getCommonStyle("bottomOcclusionHeight");
+  @property({ attribute: "top-occlusion-height", type: Number }) accessor topOcclusionHeight: number | undefined;
+  @property({ attribute: "bottom-occlusion-height", type: Number }) accessor bottomOcclusionHeight: number | undefined;
   private _messages: readonly WalliChatMessage[] = [];
   private readonly blockStates = new Map<string, WalliChatMessageBlockState>();
   private preparedMessages: PreparedChatMessage[] = [];
@@ -914,6 +914,7 @@ export class WalliChatElement extends LitElement {
       this.messageLayoutCache.clear();
       this.invalidateFrame();
     }
+    if (changedProperties.has("topOcclusionHeight")) this.invalidateFrame();
     if (changedProperties.has("bottomOcclusionHeight")) {
       this.handleBottomOcclusionChange();
     }
@@ -1301,8 +1302,8 @@ export class WalliChatElement extends LitElement {
     const viewportHeight = this.viewportElement?.clientHeight ?? this.containerSize.height;
     const scrollTop = this.viewportElement?.scrollTop ?? this.viewportScrollTop;
     this.viewportScrollTop = scrollTop;
-    const topOcclusionHeight = getCommonStyle("topOcclusionHeight");
-    const bottomOcclusionHeight = this.bottomOcclusionHeight;
+    const topOcclusionHeight = this.topOcclusionHeight ?? getCommonStyle("topOcclusionHeight");
+    const bottomOcclusionHeight = this.bottomOcclusionHeight ?? getCommonStyle("bottomOcclusionHeight");
 
     const chatWidth = getMaxChatWidth(getContentWidth(this.viewportElement, viewportWidth));
     if (this.composerShellElement) {
@@ -1424,8 +1425,8 @@ export class WalliChatElement extends LitElement {
 
   private prepareFrameForScroll(): ConversationFrame {
     const viewportWidth = this.viewportElement?.clientWidth ?? this.containerSize.width;
-    const topOcclusionHeight = getCommonStyle("topOcclusionHeight");
-    const bottomOcclusionHeight = this.bottomOcclusionHeight;
+    const topOcclusionHeight = this.topOcclusionHeight ?? getCommonStyle("topOcclusionHeight");
+    const bottomOcclusionHeight = this.bottomOcclusionHeight ?? getCommonStyle("bottomOcclusionHeight");
     const chatWidth = getMaxChatWidth(getContentWidth(this.viewportElement, viewportWidth));
     const previousFrame = this.frame;
     const frame =

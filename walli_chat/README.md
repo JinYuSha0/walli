@@ -140,6 +140,18 @@ Custom blocks are available from [`@wallilabs/chat-blocks`](https://www.npmjs.co
 
 ## Responsive breakpoint
 
+`topOcclusionHeight` and `bottomOcclusionHeight` optionally reserve space at the
+start and end of the scrollable message content, in pixels. This does not shrink the viewport or add fixed padding
+outside the list. Omit either prop to keep its default; the normal message padding is
+added separately. This is useful for floating controls above the message list.
+
+```tsx
+<WalliChat messages={messages} topOcclusionHeight={56} bottomOcclusionHeight={24} />
+```
+
+Native web components also accept `top-occlusion-height="56"` and
+`bottom-occlusion-height="24"`.
+
 Set `responsive` to select the shared global breakpoint. Supported values:
 `base`, `sm`, `md`, `lg`, `xl`, `2xl`. Without an override, viewport media queries apply.
 

@@ -97,7 +97,16 @@ const meta = {
         },
       },
     },
-    bottomOcclusionHeight: { control: "number" },
+    topOcclusionHeight: {
+      control: { min: 0, type: "number" },
+      description: "Top space inside the scrollable message content, in pixels. Omit to use the default.",
+      table: { defaultValue: { summary: "8" }, type: { summary: "number | undefined" } },
+    },
+    bottomOcclusionHeight: {
+      control: { min: 0, type: "number" },
+      description: "Bottom space inside the scrollable message content, in pixels. Omit to use the default.",
+      table: { defaultValue: { summary: "8" }, type: { summary: "number | undefined" } },
+    },
     children: { control: false },
     className: { control: "text" },
     defaultScrollToBottom: { control: "boolean" },
