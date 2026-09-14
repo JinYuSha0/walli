@@ -6,7 +6,8 @@ import {
   type ToolSchemaField,
   type ToolSchemaFieldType,
 } from "../../shared/const";
-import { adaptBuiltInToolModelInput, adaptBuiltInToolModelOutput } from "../../shared/tools";
+import { adaptBuiltInToolModelOutput } from "../../shared/tools";
+import { adaptBuiltInToolModelInput } from "../tools/tool-media";
 import { createTemporaryAssetUrl } from "../utils/llm";
 import { toolsRoute } from "../tools";
 import { bindAsyncContext, getAsyncContext } from "./async-context";
@@ -115,7 +116,6 @@ const createApiInvocationInput = (toolConfig: ToolConfig, input: unknown) => {
   };
 };
 
-
 const createToolPlanningContext = (taskContext: unknown) => {
   const now = Date.now();
 
@@ -136,17 +136,17 @@ const runConfiguredTool = async (toolConfig: ToolConfig, input: unknown): Promis
 
   if (toolConfig.invocation.type === "model") {
     const resolvedInput = await addTemporaryImageAccess(toolConfig.name, parsedInput);
-    const modelInput = adaptBuiltInToolModelInput(toolConfig.name, resolvedInput);
+    const modelInput = await adaptBuiltInToolModelInput(
+      toolConfig.name,
+      resolvedInput,
+    );
     const output = await env.AI.run(toolConfig.invocation.model, modelInput);
 
     return adaptBuiltInToolModelOutput(toolConfig.name, output);
   }
 
   const url = new URL(toolConfig.invocation.url);
-  const apiInput = createApiInvocationInput(
-    toolConfig,
-    parsedInput,
-  );
+  const apiInput = createApiInvocationInput(toolConfig, parsedInput);
   const headers = Object.fromEntries(
     toolConfig.invocation.headers.map((header) => [header.name, header.defaultValue]),
   );

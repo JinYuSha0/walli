@@ -240,7 +240,7 @@ const getTelegramFilePath = async (token: string, fileId: string) => {
   return filePath;
 };
 
-const createTelegramDeps = async (
+export const createTelegramDeps = async (
   origin: string,
   clientId: string,
 ): Promise<TelegramWebhookDeps> => {

@@ -7,7 +7,7 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
 import { createChatUserInfo, runChatCompletion } from "../../lib/chat-runner";
 import { createNotificationTools } from "../../tools/tool-notification";
-import { getClientUsageLimit } from "../../api/clients";
+import { getClientBasicSettings } from "../../api/clients";
 import { getSettings, isMultiSessionClient } from "../../api/settings";
 import { getNextCronScheduledAt } from "../../utils/cron";
 import userDoMigrations from "./migrations/migrations";
@@ -1044,8 +1044,8 @@ export class UserDO extends DurableObject<Env> {
     }
 
     const clientId = notificationChannel.clientId;
-    const usageLimit = await getClientUsageLimit(clientId);
-    const retentionDays = getConversationCleanupRetentionDays(usageLimit.autoDeletePeriod);
+    const basicSettings = await getClientBasicSettings(clientId);
+    const retentionDays = getConversationCleanupRetentionDays(basicSettings.autoDeletePeriod);
 
     if (retentionDays === undefined) {
       return;
@@ -1067,7 +1067,7 @@ export class UserDO extends DurableObject<Env> {
     }
 
     const clientId = notificationChannel.clientId;
-    const usageLimit = await getClientUsageLimit(clientId);
+    const basicSettings = await getClientBasicSettings(clientId);
     const pendingTask = this.db
       .select({
         id: scheduledTasks.id,
@@ -1084,7 +1084,7 @@ export class UserDO extends DurableObject<Env> {
       .get();
     const now = Date.now();
 
-    if (usageLimit.autoDeletePeriod === "never") {
+    if (basicSettings.autoDeletePeriod === "never") {
       if (pendingTask) {
         this.db
           .update(scheduledTasks)
@@ -1104,7 +1104,7 @@ export class UserDO extends DurableObject<Env> {
     const settings = await getSettings();
     const scheduledAt = getNextStartOfDayAt(now, settings.timeZone);
     const payload = {
-      autoDeletePeriod: usageLimit.autoDeletePeriod,
+      autoDeletePeriod: basicSettings.autoDeletePeriod,
       timeZone: settings.timeZone,
     };
 

@@ -27,7 +27,7 @@ vi.mock("@worker/lib/async-context", () => ({
   getAsyncContext: () => ({ env: { APP_KV: { get: mocks.kvGet, put: mocks.kvPut } } }),
 }));
 vi.mock("./helper/turnstile", () => ({ isTurnstileConfigured: mocks.turnstileReady }));
-import { clientsRoute, getClientWebSettings } from "./clients";
+import { clientsRoute, getClientWebSettings, getClientBasicSettings, getClientUsageLimit } from "./clients";
 
 const client = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -57,7 +57,7 @@ it("saves name and basic settings together without changing slug", async () => {
     basicSettings: { enabled: true, additionalSystemPrompt: "Prompt" },
   });
   expect(mocks.set).toHaveBeenCalledWith({ name: "Renamed", updatedAt: expect.any(Number) });
-  expect(mocks.kvPut).toHaveBeenCalledWith(expect.any(String), JSON.stringify({ enabled: true, additionalSystemPrompt: "Prompt" }));
+  expect(mocks.kvPut).toHaveBeenCalledWith(expect.any(String), JSON.stringify({ enabled: true, autoDeletePeriod: "never", additionalSystemPrompt: "Prompt" }));
 });
 it("rejects any slug update without writing settings", async () => {
   mocks.get.mockResolvedValue({ ...client });
@@ -154,4 +154,27 @@ it("keeps Turnstile enablement isolated by client ID", async () => {
     : { webAccessEnabled: true, turnstileEnabled: false });
   expect((await getClientWebSettings("protected")).turnstileEnabled).toBe(true);
   expect((await getClientWebSettings("unprotected")).turnstileEnabled).toBe(false);
+});
+
+it("saves the client switch and retention period in one basic settings write", async () => {
+  mocks.get.mockResolvedValue({ ...client });
+  const response = await patch({ name: "Original", enabled: true, additionalSystemPrompt: "", autoDeletePeriod: "day" });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ basicSettings: { enabled: true, autoDeletePeriod: "day" } });
+  expect(mocks.kvPut).toHaveBeenCalledTimes(1);
+  expect(mocks.kvPut).toHaveBeenCalledWith(`client:${client.id}:basic-settings`, JSON.stringify({ enabled: true, autoDeletePeriod: "day", additionalSystemPrompt: "" }));
+});
+
+it("preserves legacy retention and usage limits while preferring the new basic setting", async () => {
+  mocks.kvGet.mockImplementation(async (key: string) => key.endsWith(":usage-limit")
+    ? { autoDeletePeriod: "never", historyMessageLimit: 42 }
+    : { enabled: true });
+  expect(await getClientBasicSettings(client.id)).toMatchObject({ enabled: true, autoDeletePeriod: "never" });
+  const usage = await getClientUsageLimit(client.id);
+  expect(usage.historyMessageLimit).toBe(42);
+  expect(usage).not.toHaveProperty("autoDeletePeriod");
+  mocks.kvGet.mockImplementation(async (key: string) => key.endsWith(":basic-settings")
+    ? { enabled: true, autoDeletePeriod: "day" }
+    : { autoDeletePeriod: "never" });
+  expect((await getClientBasicSettings(client.id)).autoDeletePeriod).toBe("day");
 });

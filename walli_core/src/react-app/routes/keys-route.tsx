@@ -118,8 +118,8 @@ type TelegramWhitelistCreateForm = {
 
 type ClientBasicSettingsForm = Pick<
   ClientBasicSettings,
-  "enabled" | "additionalSystemPrompt"
-> & { name: string; autoDeletePeriod: ClientUsageLimit["autoDeletePeriod"] };
+  "enabled" | "additionalSystemPrompt" | "autoDeletePeriod"
+> & { name: string };
 
 const clientTabs = ["basic", "web-settings", "dialog-settings", "auth", "cors", "usage"] as const;
 
@@ -253,7 +253,6 @@ function DeleteClientButton({
 function ClientBasicSettingsTab({
   platform,
   basicSettings,
-  autoDeletePeriod,
   name,
   slug,
   clientId,
@@ -266,7 +265,6 @@ function ClientBasicSettingsTab({
 }: {
   platform: ClientPlatform;
   basicSettings: ClientBasicSettings;
-  autoDeletePeriod: ClientUsageLimit["autoDeletePeriod"];
   name: string;
   slug: string;
   clientId: string;
@@ -278,6 +276,7 @@ function ClientBasicSettingsTab({
   onDelete: () => Promise<void>;
 }) {
   const { t } = useTranslation();
+  const { autoDeletePeriod } = basicSettings;
   const form = useForm<ClientBasicSettingsForm>({
     defaultValues: {
       name,
@@ -491,7 +490,7 @@ function TelegramBasicSettingsTab({
   const { t } = useTranslation();
   const [basicSettingsDraft, setBasicSettingsDraft] = useState<ClientBasicSettingsForm>({
     name: config.name,
-    autoDeletePeriod: config.usageLimit.autoDeletePeriod,
+    autoDeletePeriod: config.basicSettings.autoDeletePeriod,
     enabled: config.basicSettings.enabled,
     additionalSystemPrompt: config.basicSettings.additionalSystemPrompt,
   });
@@ -507,7 +506,7 @@ function TelegramBasicSettingsTab({
   });
   const saveMutation = useMutation({
     mutationFn: async (values: TelegramSettingsForm) => {
-      const { name, autoDeletePeriod, ...basicSettings } = await onSaveBasicSettings(basicSettingsDraftRef.current);
+      const { name, ...basicSettings } = await onSaveBasicSettings(basicSettingsDraftRef.current);
 
       const botToken = values.botToken.trim();
 
@@ -515,7 +514,6 @@ function TelegramBasicSettingsTab({
         return {
           ...config,
           name,
-          usageLimit: { ...config.usageLimit, autoDeletePeriod },
           basicSettings,
         };
       }
@@ -527,7 +525,6 @@ function TelegramBasicSettingsTab({
       return {
         ...updatedConfig,
         name,
-        usageLimit: { ...updatedConfig.usageLimit, autoDeletePeriod },
         basicSettings,
       };
     },
@@ -561,7 +558,7 @@ function TelegramBasicSettingsTab({
     saved: {
       basicSettings: {
         name: config.name,
-        autoDeletePeriod: config.usageLimit.autoDeletePeriod,
+        autoDeletePeriod: config.basicSettings.autoDeletePeriod,
         enabled: config.basicSettings.enabled,
         additionalSystemPrompt: config.basicSettings.additionalSystemPrompt,
       },
@@ -575,7 +572,6 @@ function TelegramBasicSettingsTab({
       <ClientBasicSettingsTab
         platform="telegram"
         basicSettings={config.basicSettings}
-        autoDeletePeriod={config.usageLimit.autoDeletePeriod}
         name={config.name}
         slug={config.slug}
         clientId={config.id}
@@ -1071,7 +1067,6 @@ function ClientUsageSettingsTab({
       perUserDailyInputLimit: parseLimit(values.usageLimit.perUserDailyInputLimit),
       perUserDailyOutputLimit: parseLimit(values.usageLimit.perUserDailyOutputLimit),
       historyMessageLimit: parseLimit(values.usageLimit.historyMessageLimit),
-      autoDeletePeriod: usageLimit.autoDeletePeriod,
     });
   };
   useUnsavedChangesPrompt({
@@ -1551,7 +1546,7 @@ export function ClientsRoute() {
                             );
 
                             await queryClient.invalidateQueries({ queryKey: ["clients"] });
-                            return { ...updatedClientConfig.basicSettings, name: updatedClientConfig.name, autoDeletePeriod: updatedClientConfig.usageLimit.autoDeletePeriod };
+                            return { ...updatedClientConfig.basicSettings, name: updatedClientConfig.name };
                           }}
                           onDelete={handleDeleteClient}
                         />
@@ -1559,7 +1554,6 @@ export function ClientsRoute() {
                         <ClientBasicSettingsTab
                           platform={platform}
                           basicSettings={clientConfigQuery.data.basicSettings}
-                          autoDeletePeriod={clientConfigQuery.data.usageLimit.autoDeletePeriod}
                           name={clientConfigQuery.data.name}
                           slug={clientConfigQuery.data.slug}
                           clientId={clientConfigQuery.data.id}
@@ -1575,7 +1569,7 @@ export function ClientsRoute() {
                             );
 
                             await queryClient.invalidateQueries({ queryKey: ["clients"] });
-                            return { ...updatedClientConfig.basicSettings, name: updatedClientConfig.name, autoDeletePeriod: updatedClientConfig.usageLimit.autoDeletePeriod };
+                            return { ...updatedClientConfig.basicSettings, name: updatedClientConfig.name };
                           }}
                           onDelete={handleDeleteClient}
                         />

@@ -31,6 +31,7 @@ export const clientsResponseSchema = z.array(clientSchema);
 export const clientBasicSettingsSchema = z
   .object({
     enabled: z.boolean(),
+    autoDeletePeriod: z.enum(["never", "day", "week", "month"]),
     additionalSystemPrompt: z.string(),
   })
   .strict();
@@ -82,7 +83,6 @@ export const clientUsageLimitSchema = z
     perUserDailyInputLimit: z.number().int().min(0),
     perUserDailyOutputLimit: z.number().int().min(0),
     historyMessageLimit: z.number().int().min(0),
-    autoDeletePeriod: z.enum(["never", "day", "week", "month"]),
   })
   .strict();
 

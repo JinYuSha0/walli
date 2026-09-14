@@ -11,6 +11,7 @@ const AUDIO_TYPES = new Set([
   "audio/flac",
   "audio/mp4",
   "audio/mpeg",
+  "audio/mp3",
   "audio/ogg",
   "audio/opus",
   "audio/wav",
@@ -25,6 +26,7 @@ export const transcribe = async <E extends AppBindings>(c: Context<E>, form: For
 
   const type = audio.type.toLowerCase().split(";", 1)[0] || "audio/webm";
   if (!AUDIO_TYPES.has(type)) return c.json({ error: "Unsupported audio type" }, 415);
+  if (audio.size === 0) return c.json({ error: "Audio is empty" }, 400);
   if (audio.size > MAX_AUDIO_SIZE) return c.json({ error: "Audio exceeds the 25 MB limit" }, 413);
 
   const bytes = new Uint8Array(await audio.arrayBuffer());
@@ -34,7 +36,7 @@ export const transcribe = async <E extends AppBindings>(c: Context<E>, form: For
   }
 
   try {
-    const result = await transcribeVoice({ file: `data:${type};base64,${btoa(binary)}` });
+    const result = await transcribeVoice({ file: `data:${type === "audio/mp3" ? "audio/mpeg" : type};base64,${btoa(binary)}` });
     let text: unknown;
     if (typeof result === "string") text = result;
     if (typeof result === "object" && result !== null && "text" in result) text = result.text;

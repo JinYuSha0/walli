@@ -91,6 +91,7 @@ export const getClientBySlug = async (slug: string) =>
 
 const defaultBasicSettings = {
   enabled: false,
+  autoDeletePeriod: "never",
   additionalSystemPrompt: "",
 } satisfies ClientBasicSettings;
 
@@ -98,14 +99,17 @@ export const getClientBasicSettings = async (clientId: string) => {
   const appKv = getAsyncContext().env.APP_KV;
   const savedSettings = await appKv.get(clientBasicSettingsKey(clientId), "json");
   const result = clientBasicSettingsSchema.partial().safeParse(savedSettings);
-
-  if (!result.success) {
-    return defaultBasicSettings;
+  const basicSettings = result.success ? result.data : {};
+  // Read the old location until this client's basic settings are saved again.
+  if (basicSettings.autoDeletePeriod === undefined) {
+    const legacy = await appKv.get(clientUsageLimitKey(clientId), "json");
+    const cleanup = clientBasicSettingsSchema.pick({ autoDeletePeriod: true }).partial().strip().safeParse(legacy);
+    basicSettings.autoDeletePeriod = cleanup.success ? cleanup.data.autoDeletePeriod : undefined;
   }
-
   return {
     ...defaultBasicSettings,
-    ...result.data,
+    ...basicSettings,
+    autoDeletePeriod: basicSettings.autoDeletePeriod ?? defaultBasicSettings.autoDeletePeriod,
   };
 };
 
@@ -151,13 +155,12 @@ const defaultUsageLimit = {
   perUserDailyInputLimit: 0,
   perUserDailyOutputLimit: 0,
   historyMessageLimit: 20,
-  autoDeletePeriod: "week",
 } satisfies ClientUsageLimit;
 
 export const getClientUsageLimit = async (clientId: string) => {
   const appKv = getAsyncContext().env.APP_KV;
   const savedUsageLimit = await appKv.get(clientUsageLimitKey(clientId), "json");
-  const result = clientUsageLimitSchema.partial().safeParse(savedUsageLimit);
+  const result = clientUsageLimitSchema.partial().strip().safeParse(savedUsageLimit);
 
   if (!result.success) {
     return defaultUsageLimit;
@@ -486,6 +489,7 @@ export const clientsRoute = new Hono<AppBindings>()
     const canPatchTelegramSettings = platform === "telegram" && isTelegramSettingsPatch;
     const basicSettingsPatch = isBasicSettingsPatch
       ? {
+          ...(basicSettingsResult.data.autoDeletePeriod === undefined ? {} : { autoDeletePeriod: basicSettingsResult.data.autoDeletePeriod }),
           ...(basicSettingsResult.data.enabled === undefined ? {} : { enabled: basicSettingsResult.data.enabled }),
           ...(basicSettingsResult.data.additionalSystemPrompt === undefined
             ? {}

@@ -6,7 +6,7 @@ export const voiceToTextTool = {
   description: "A speech-to-text model, output text",
   invocation: {
     type: "model",
-    model: "@cf/openai/whisper-large-v3-turbo",
+    model: "openai/gpt-4o-transcribe",
   },
   schema: {
     fields: [
@@ -46,17 +46,11 @@ export const voiceToTextTool = {
   },
 } satisfies ToolConfig;
 
-export const createVoiceToTextModelInput = (input: Record<string, unknown>) => {
-  const file = input.file;
-  if (typeof file !== "string") return input;
-
-  const audio =
-    file.startsWith("data:") ? file.slice(file.indexOf(",") + 1) : file;
-
-  return {
-    audio,
-    language: input.language,
-    initial_prompt: input.prompt,
-    task: "transcribe",
-  };
+export const createVoiceToTextModelOutput = (output: unknown): unknown => {
+  if (typeof output !== "object" || output === null || !("result" in output)) return output;
+  const result = output.result;
+  if (typeof result === "object" && result !== null && "text" in result && typeof result.text === "string") {
+    return result;
+  }
+  return output;
 };

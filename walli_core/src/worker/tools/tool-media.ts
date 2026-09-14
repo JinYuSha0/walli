@@ -1,8 +1,42 @@
+import { Buffer } from "node:buffer";
+import { getAsyncContext } from "../lib/async-context";
+import { createImageToTextModelInput } from "@shared/tools/image-to-text";
 import { createChatRunnerTools } from "../lib/chat-runner";
 import { createGateway, normalizeGatewayModelId, unified } from "../lib/llm";
 import { runToolWithContext } from "../lib/tool-runner";
 import { getSettings } from "../api/settings";
 import { adaptBuiltInToolModelOutput } from "@shared/tools";
+
+const createVoiceToTextModelInput = async (
+  input: Record<string, unknown>,
+): Promise<Record<string, unknown>> => {
+  if (typeof input.audio !== "string") return input;
+  let audio = input.audio;
+  if (audio.startsWith("https://")) {
+    const url = new URL(audio);
+    const { env, origin } = getAsyncContext();
+    // Keep signature validation without fetching this Worker through its public origin.
+    const response = url.origin === origin && url.pathname.startsWith("/api/telegram/file/")
+      ? await (await import("../api/telegram")).telegramRoute.fetch(new Request(url), env)
+      : await fetch(url);
+    if (!response.ok) throw new Error(`Speech-to-text audio download failed (${response.status})`);
+    audio = Buffer.from(await response.arrayBuffer()).toString("base64");
+    if (!audio) throw new Error("Speech-to-text audio is empty");
+  } else if (audio.startsWith("data:")) {
+    const match = /^data:[^,]*;base64,(.+)$/s.exec(audio);
+    if (!match) throw new Error("Speech-to-text audio must be base64 encoded");
+    audio = match[1];
+  }
+  return { ...input, audio };
+};
+
+const modelInputAdapters: Record<string, (input: Record<string, unknown>) => Record<string, unknown> | Promise<Record<string, unknown>>> = {
+  voice_to_text: createVoiceToTextModelInput,
+  image_to_text: createImageToTextModelInput,
+};
+
+export const adaptBuiltInToolModelInput = (toolName: string, input: Record<string, unknown>) =>
+  modelInputAdapters[toolName]?.(input) ?? input;
 
 export type VoiceOutput = {
   type: "blob";
@@ -129,12 +163,18 @@ export const runBuiltInMediaTool = async <ToolName extends BuiltInMediaToolName>
     }
 
     const gateway = createGateway();
+    let input: unknown = taskContext;
+    if (toolName === "voice_to_text" && toolConfig?.schema.fields.some((field) => field.name === "audio")
+      && !toolConfig.schema.fields.some((field) => field.name === "file")) {
+      const { file, ...options } = taskContext as VoiceToTextContext;
+      input = { ...options, audio: file };
+    }
     const output = await runToolWithContext({
       model: gateway(unified(normalizeGatewayModelId(settings.toolPlannerModel))),
       toolName,
       tool,
       toolConfig,
-      taskContext,
+      taskContext: input,
       toolCallId: `media_${toolName}`,
     });
 
@@ -142,7 +182,6 @@ export const runBuiltInMediaTool = async <ToolName extends BuiltInMediaToolName>
   } catch (error) {
     console.error("[tool-media] Built-in media tool failed", {
       toolName,
-      context: taskContext,
       error,
     });
     throw error;

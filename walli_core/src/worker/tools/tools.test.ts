@@ -13,7 +13,7 @@ import {
   telegramSettingsPatchSchema,
   telegramWhitelistCreateSchema,
 } from "../../shared/client";
-import { handleTelegramWebhookUpdate, telegramRoute } from "../api/telegram";
+import { createTelegramDeps, handleTelegramWebhookUpdate, telegramRoute } from "../api/telegram";
 import { getSettings, settingsRoute } from "../api/settings";
 import { uploadRoute } from "../api/upload";
 import type { AppBindings } from "../api/types";
@@ -42,8 +42,8 @@ import { normalizeGatewayModelId } from "../lib/llm";
 import { renderTelegramHtmlFromMarkdown } from "../utils/telegram-format";
 import {
   extractVoiceOutput,
+  transcribeVoice,
   synthesizeVoice,
-  type ImageToTextContext,
   type VoiceToTextContext,
 } from "./tool-media";
 import { toolsRoute } from ".";
@@ -460,8 +460,7 @@ describe("chat tools", () => {
         expect.objectContaining({
           text: "[Automatically detect the language of the following text and read it with a natural native accent for that language. For Chinese, use standard Mandarin with a warm, natural tone, slightly slower pacing, and clear pronunciation.] voice reminder",
           output_format: "opus",
-        }),
-      );
+        }));
       expect(fetchMock).toHaveBeenCalledWith(
         "https://api.telegram.org/bottest-token/sendVoice",
         expect.objectContaining({
@@ -745,6 +744,55 @@ describe("chat tools", () => {
     ]);
   });
 
+  it.each([
+    ["data:audio/mpeg;base64,SUQz", "SUQz"],
+    ["data:audio/webm;base64,GkXfow==", "GkXfow=="],
+    ["data:audio/ogg;base64,T2dnUw==", "T2dnUw=="],
+    ["https://media.test/api/telegram/file/voice.oga?signature=test", "T2dnUw=="],
+  ])("transcribes shared web/TG input through an audio schema: %s", async (file, audio) => {
+    const configuredTool = {
+      ...voiceToTextTool,
+      invocation: { type: "model" as const, model: "configured-speech-model" },
+      schema: { fields: [{ ...voiceToTextTool.schema.fields[0], name: "audio" }] },
+    };
+    const fetchMock = vi.fn(async () => new Response(new Uint8Array([79, 103, 103, 83])));
+    vi.stubGlobal("fetch", fetchMock);
+    aiRun.mockResolvedValueOnce({ text: "recognized speech" });
+    try {
+      await runWithChatAsyncContext({
+        env: { ...env, AI: fakeRuntime.AI, APP_KV: {
+          get: vi.fn(async (key: string) => key === "settings:built-in-tools"
+            ? JSON.stringify([configuredTool]) : null),
+          put: vi.fn(async () => undefined),
+        } } as unknown as Env,
+        origin: "https://chat.test",
+      }, async () => {
+        await expect(transcribeVoice({ file })).resolves.toEqual({ text: "recognized speech" });
+      });
+      expect(aiRun).toHaveBeenCalledWith("configured-speech-model", { audio });
+      expect(fetchMock).toHaveBeenCalledTimes(file.startsWith("https:") ? 1 : 0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does not invoke the speech model when the Telegram audio download fails", async () => {
+    const tools = buildChatTools([{
+      ...voiceToTextTool,
+      schema: { fields: [{ ...voiceToTextTool.schema.fields[0], name: "audio" }] },
+    }]);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 404 })));
+    try {
+      await expect(tools.voice_to_text.execute?.(
+        { audio: "https://media.test/api/telegram/file/voice.oga" },
+        {} as Parameters<NonNullable<typeof tools.voice_to_text.execute>>[1],
+      )).rejects.toThrow("Speech-to-text audio download failed");
+      expect(aiRun).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("creates input schema from default voice_to_text tool", () => {
     const schema = createToolInputSchema(voiceToTextTool);
 
@@ -897,6 +945,40 @@ describe("chat tools", () => {
     expect(tools.image_to_text.description).toBe(imageToTextTool.description);
   });
 
+  it.each([
+    "https://api.telegram.org/file/bot-test/voice.ogg",
+    "data:audio/ogg;base64,T2dnUw==",
+    "data:audio/mpeg;base64,SUQz",
+    "data:audio/webm;base64,GkXfow==",
+    "data:audio/mp4;base64,ZnR5cA==",
+  ])("passes %s unchanged to the configured transcription model", async (file) => {
+    const tools = buildChatTools([{
+      ...voiceToTextTool,
+      invocation: { type: "model", model: "openai/gpt-4o-transcribe" },
+    }]);
+    const options = {} as Parameters<NonNullable<typeof tools.voice_to_text.execute>>[1];
+    const input = { file, language: "zh", prompt: "Technical discussion", temperature: 0 };
+    await tools.voice_to_text.execute?.(input, options);
+    expect(aiRun).toHaveBeenCalledWith("openai/gpt-4o-transcribe", input);
+  });
+
+  it("unwraps the transcription result", async () => {
+    const input = { file: "data:audio/mpeg;base64,SUQz" };
+    aiRun.mockResolvedValueOnce({ state: "Completed", result: { text: "Hello" } });
+    await runWithChatAsyncContext({
+      env: { ...fakeRuntime, AI_GATEWAY_ID: "audio-gateway" } as Env,
+      origin: "https://test.local",
+    }, async () => {
+      const tools = buildChatTools([{
+        ...voiceToTextTool,
+        invocation: { type: "model", model: "openai/gpt-4o-transcribe" },
+      }]);
+      const options = {} as Parameters<NonNullable<typeof tools.voice_to_text.execute>>[1];
+      await expect(tools.voice_to_text.execute?.(input, options)).resolves.toEqual({ text: "Hello" });
+    });
+    expect(aiRun).toHaveBeenCalledWith("openai/gpt-4o-transcribe", input);
+  });
+
   it("executes default model tools through env.AI.run", async () => {
     const tools = buildChatTools(DEFAULT_SETTINGS.builtInTools);
     const executionOptions = {} as Parameters<NonNullable<typeof tools.voice_to_text.execute>>[1];
@@ -911,17 +993,11 @@ describe("chat tools", () => {
     ).resolves.toEqual({
       ok: true,
       input: {
-        audio: "https://example.com/audio.mp3",
-        initial_prompt: undefined,
-        language: undefined,
-        task: "transcribe",
+        file: "https://example.com/audio.mp3",
       },
     });
-    expect(aiRun).toHaveBeenCalledWith("@cf/openai/whisper-large-v3-turbo", {
-      audio: "https://example.com/audio.mp3",
-      initial_prompt: undefined,
-      language: undefined,
-      task: "transcribe",
+    expect(aiRun).toHaveBeenCalledWith("openai/gpt-4o-transcribe", {
+      file: "https://example.com/audio.mp3",
     });
 
     await expect(
@@ -1069,7 +1145,10 @@ describe("chat tools", () => {
     expect(new URL(temporaryUrl).searchParams.get("expires")).toMatch(/^\d+$/);
     expect(new URL(temporaryUrl).searchParams.get("signature")).toMatch(/^[a-f\d]{64}$/);
 
-    const response = await uploadRoute.fetch(new Request(temporaryUrl), testEnv);
+    const response = await runWithChatAsyncContext(
+      { env: testEnv, origin: "https://example.com" },
+      () => uploadRoute.fetch(new Request(temporaryUrl), testEnv),
+    );
 
     expect(response.status).toBe(200);
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(imageBytes);
@@ -1121,17 +1200,11 @@ describe("chat tools", () => {
     ).resolves.toEqual({
       ok: true,
       input: {
-        audio: "AAAA",
-        initial_prompt: undefined,
-        language: undefined,
-        task: "transcribe",
+        file: "data:audio/ogg;base64,AAAA",
       },
     });
-    expect(aiRun).toHaveBeenCalledWith("@cf/openai/whisper-large-v3-turbo", {
-      audio: "AAAA",
-      initial_prompt: undefined,
-      language: undefined,
-      task: "transcribe",
+    expect(aiRun).toHaveBeenCalledWith("openai/gpt-4o-transcribe", {
+      file: "data:audio/ogg;base64,AAAA",
     });
   });
 
@@ -1210,7 +1283,7 @@ describe("chat tools", () => {
       ok: true,
       input: {},
     });
-    expect(aiRun).toHaveBeenCalledWith("@cf/openai/whisper-large-v3-turbo", {});
+    expect(aiRun).toHaveBeenCalledWith("openai/gpt-4o-transcribe", {});
   });
 
   it("adapts image model results to text output", async () => {
@@ -2565,6 +2638,68 @@ describe("telegram webhook", () => {
         content: "new question",
       },
     ]);
+  });
+
+  it.each(["file", "audio"])("uses the signed Telegram proxy with the %s schema", async (fieldName) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const audioTool = {
+      ...voiceToTextTool,
+      invocation: { type: "model" as const, model: "configured-speech-model" },
+      schema: { fields: [{ ...voiceToTextTool.schema.fields[0], name: fieldName }] },
+    };
+    const statement = { bind: () => statement, raw: async () => [["second-bot", "Bot", "bot", "telegram"]] };
+    const db = { prepare: () => statement } as unknown as D1Database;
+    const appKv = {
+      get: vi.fn(async (key: string) => {
+        if (key === "client:second-bot:telegram-settings") return { botToken: "second-token" };
+        if (key === "settings:built-in-tools") return JSON.stringify([audioTool]);
+        return null;
+      }),
+      put: vi.fn(),
+    } as unknown as KVNamespace;
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith("https://chat.test/api/telegram/file/")) {
+        throw new Error("Public self-fetch would fail with 522");
+      }
+      if (url.endsWith("/getFile")) {
+        return Response.json({ ok: true, result: { file_path: "voice/file_16.oga" } });
+      }
+      return new Response(new Uint8Array([79, 103, 103, 83]));
+    });
+    aiRun.mockResolvedValueOnce({ text: "voice recognized" });
+    try {
+      await runWithChatAsyncContext({
+        env: { ...env, DB: db, APP_KV: appKv, AI: fakeRuntime.AI } as Env,
+        origin: "https://chat.test",
+      }, async () => {
+        const deps = await createTelegramDeps("https://chat.test", "second-bot");
+        const file = await deps.getFileUrl("voice-file");
+        expect(new URL(file).searchParams.has("clientId")).toBe(false);
+        expect(file).not.toContain("second-token");
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const tampered = new URL(file);
+        tampered.searchParams.set("fileId", "another-file");
+        const rejected = await telegramRoute.fetch(new Request(tampered), { ...env, DB: db, APP_KV: appKv, AI: fakeRuntime.AI } as Env);
+        expect(rejected.status).toBe(403);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        await expect(deps.transcribeVoice?.({ file })).resolves.toEqual({ text: "voice recognized" });
+        expect(aiRun).toHaveBeenCalledWith("configured-speech-model",
+          fieldName === "audio" ? { audio: "T2dnUw==" } : { file });
+        if (fieldName === "file") {
+          // A model fetching the public proxy receives the original audio stream.
+          const response = await telegramRoute.fetch(new Request(file), { ...env, DB: db, APP_KV: appKv } as Env);
+          expect(response.status).toBe(200);
+          expect(response.headers.get("content-type")).toBe("audio/ogg");
+          expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array([79, 103, 103, 83]));
+        }
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock).toHaveBeenNthCalledWith(1, "https://api.telegram.org/botsecond-token/getFile", expect.any(Object));
+      expect(fetchMock).toHaveBeenLastCalledWith("https://api.telegram.org/file/botsecond-token/voice/file_16.oga");
+    } finally {
+      fetchMock.mockRestore();
+    }
   });
 
   it("proxies Telegram files with a filename suffix and forced content type", async () => {
