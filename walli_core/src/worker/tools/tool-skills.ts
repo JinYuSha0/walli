@@ -4,10 +4,11 @@ import { skillsTool } from "@shared/tools/skills";
 import { Hono } from "hono";
 import type { AppBindings } from "../api/types";
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { getClientSkillCatalog } from "../api/client-skills";
 import { createDb } from "../db/client";
 import { clientSkill } from "../db/schema";
+import { BUILT_IN_SKILLS } from "../skills/built-in";
 import { bindAsyncContext, getAsyncContext } from "../lib/async-context";
 import { countTextTokens } from "../utils/llm";
 
@@ -48,13 +49,17 @@ export async function createSkillContext(clientId: string, inputTokenLimit?: num
   let remainingTokens = Math.min(CONTENT_TOKENS,
     inputTokenLimit && inputTokenLimit > 0 ? Math.floor(inputTokenLimit * 0.1) : CONTENT_TOKENS);
   // Request-local state: neither loaded bodies nor budgets leak into another turn/client.
-  const loaded = new Map<string, Promise<typeof clientSkill.$inferSelect | undefined>>();
+  const loaded = new Map<string, Promise<Pick<typeof clientSkill.$inferSelect, "name" | "content" | "updatedAt"> | undefined>>();
   const delivered = new Map<string, Array<{ start: number; end: number }>>();
 
   const readSkill = bindAsyncContext(async ({ skillId, offset }: { skillId: string; offset: number }) => {
+    if (!catalog.some((skill) => skill.id === skillId)) return { error: "Skill not found" };
     if (!loaded.has(skillId)) {
-      loaded.set(skillId, createDb().select().from(clientSkill)
-        .where(and(eq(clientSkill.clientId, clientId), eq(clientSkill.id, skillId), eq(clientSkill.enabled, true))).get());
+      const builtIn = BUILT_IN_SKILLS.find((skill) => skill.id === skillId);
+      loaded.set(skillId, builtIn
+        ? Promise.resolve({ name: builtIn.name, content: builtIn.content, updatedAt: 0 })
+        : createDb().select().from(clientSkill)
+          .where(and(eq(clientSkill.clientId, clientId), eq(clientSkill.id, skillId), eq(clientSkill.enabled, true), isNull(clientSkill.builtInKey))).get());
     }
     const skill = await loaded.get(skillId);
     if (!skill) return { error: "Skill not found" };

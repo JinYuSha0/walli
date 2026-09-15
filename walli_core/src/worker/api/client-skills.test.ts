@@ -14,6 +14,8 @@ import type { AppBindings } from "./types";
 
 let sqlite: DatabaseSync;
 let env: Env;
+let queries: string[];
+let kvReads: number;
 const a = "11111111-1111-4111-8111-111111111111";
 const b = "22222222-2222-4222-8222-222222222222";
 const app = new Hono<AppBindings>().use("*", async (c, next) => {
@@ -31,6 +33,8 @@ const catalog = (clientId: string) =>
   runWithChatAsyncContext({ env, origin: "https://test.example" }, () => getClientSkillCatalog(clientId));
 
 beforeEach(() => {
+  queries = [];
+  kvReads = 0;
   sqlite = new DatabaseSync(":memory:");
   sqlite.exec("PRAGMA foreign_keys = ON;");
   sqlite.exec(readFileSync("migrations/0000_initial.sql", "utf8"));
@@ -39,6 +43,7 @@ beforeEach(() => {
   const prepare = (sql: string, values: SQLInputValue[] = []) => ({
     bind: (...args: SQLInputValue[]) => prepare(sql, args),
     raw: async () => {
+      queries.push(sql);
       const statement = sqlite.prepare(sql);
       statement.setReturnArrays(true);
       return statement.all(...values);
@@ -46,7 +51,11 @@ beforeEach(() => {
     all: async () => ({ results: sqlite.prepare(sql).all(...values), success: true }),
     run: async () => ({ results: [], success: true, meta: sqlite.prepare(sql).run(...values) }),
   });
-  env = { API_TOKEN: "test-api-token", DB: { prepare } } as unknown as Env;
+  const kv = new Map<string, string>();
+  env = { API_TOKEN: "test-api-token", DB: { prepare }, APP_KV: {
+    get: async (key: string) => { kvReads++; return JSON.parse(kv.get(key) ?? "null"); },
+    put: async (key: string, value: string) => { kv.set(key, value); },
+  } } as unknown as Env;
 });
 afterEach(() => sqlite.close());
 
@@ -248,7 +257,7 @@ it("disables custom skills without losing content and blocks reads of disabled s
   expect((await request(a, "DELETE", undefined, skill.id)).status).toBe(200);
 });
 
-it("adds the web custom-block built-in once and only allows toggling its state", async () => {
+it("reads built-in content from code and persists only its switch in KV", async () => {
   sqlite.prepare("UPDATE client SET platform = 'web' WHERE id = ?").run(a);
   const lists = await Promise.all([request(a), request(a)]);
   const skills = await lists[0]!.json() as Array<{ id: string; builtInKey: string; content: string }>;
@@ -258,6 +267,7 @@ it("adds the web custom-block built-in once and only allows toggling its state",
   expect(skill.content).toContain(":::notice info");
   expect(skill.content).toContain(":::recommended-replies");
   expect(skill.content).toContain(":::confirmation-card");
+  expect(skill.content).toBe(readFileSync("../walli_chat_blocks/README.md", "utf8"));
   expect(await (await request(b)).json()).toEqual([]);
   expect(await catalog(a)).toMatchObject([{ id: skill.id }]);
   expect((await request(a, "DELETE", undefined, skill.id)).status).toBe(403);
@@ -269,9 +279,57 @@ it("adds the web custom-block built-in once and only allows toggling its state",
   expect((await request(b, "PUT", { enabled: false }, skill.id)).status).toBe(404);
   expect((await request(a, "PUT", { enabled: false }, skill.id)).status).toBe(200);
   expect(await catalog(a)).toEqual([]);
+  expect(sqlite.prepare("SELECT count(*) AS count FROM client_skill").get()!.count).toBe(0);
+  expect(skill.content).toContain("Always include `format`");
   expect(await (await request(a)).json()).toMatchObject([{ id: skill.id, enabled: false, content: skill.content, builtInKey: "custom-blocks" }]);
   expect((await request(a, "PUT", { builtInKey: null }, skill.id)).status).toBe(400);
   expect((await request(a, "POST", { name: "Fake", content: "Fake", builtInKey: "custom-blocks" })).status).toBe(400);
   await request(a, "PUT", { enabled: true }, skill.id);
   expect(await read((await context(a))!, skill.id)).toMatchObject({ content: skill.content });
+});
+
+
+it("uses one metadata query and one KV read per catalog, with no database reads for built-in bodies", async () => {
+  sqlite.prepare("UPDATE client SET platform = 'web' WHERE id = ?").run(a);
+  const ctx = (await context(a))!;
+  expect(queries).toHaveLength(1);
+  expect(queries[0]).not.toContain('"content"');
+  expect(kvReads).toBe(1);
+  const [{ id }] = ctx.searchSkills({ query: "", offset: 0 }).skills;
+  await read(ctx, id);
+  expect(queries).toHaveLength(1);
+  expect(kvReads).toBe(1);
+  expect(sqlite.prepare("SELECT count(*) AS count FROM client_skill").get()!.count).toBe(0);
+});
+
+it("preserves legacy switches without reading or rewriting stored built-in content", async () => {
+  sqlite.prepare("UPDATE client SET platform = 'web' WHERE id = ?").run(a);
+  const legacyId = crypto.randomUUID();
+  sqlite.prepare("INSERT INTO client_skill (id, client_id, name, content, built_in_key, enabled, created_at, updated_at) VALUES (?, ?, 'Old skill', 'Outdated instructions', 'custom-blocks', 0, 1, 1)")
+    .run(legacyId, a);
+  expect(await catalog(a)).toEqual([]);
+  const [skill] = await (await request(a)).json() as Array<{ id: string; content: string; enabled: boolean }>;
+  expect(skill.enabled).toBe(false);
+  expect(skill.content).toContain("Always include `format`");
+  await request(a, "PUT", { enabled: true }, legacyId);
+  expect(await catalog(a)).toMatchObject([{ id: skill.id }]);
+  expect(sqlite.prepare("SELECT content, enabled FROM client_skill").get()).toMatchObject({ content: "Outdated instructions", enabled: 0 });
+});
+
+
+it("skips skill storage entirely when the tool is disabled", async () => {
+  await runWithChatAsyncContext({ env, origin: "https://test.example" }, () => prepareSkillTools(
+    DEFAULT_SETTINGS.builtInTools.map((tool) => ({ ...tool, enabled: false })), a,
+  ));
+  expect(queries).toEqual([]);
+  expect(kvReads).toBe(0);
+});
+
+it("keeps built-in switches isolated between web clients", async () => {
+  sqlite.prepare("UPDATE client SET platform = 'web'").run();
+  const [skill] = await catalog(a);
+  await request(a, "PUT", { enabled: false }, skill.id);
+  expect(await catalog(a)).toEqual([]);
+  expect(await catalog(b)).toMatchObject([{ id: skill.id }]);
+  expect(await read((await context(b))!, skill.id)).toHaveProperty("content");
 });

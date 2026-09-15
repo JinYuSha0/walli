@@ -74,3 +74,7 @@ During development, keep one initial SQL file per existing database/migration di
 ## Configuration Storage
 
 Use KV for individual configuration values. Store substantial content and managed content collections, such as client skills, in SQL.
+
+## Chat Latency and Built-in Skills
+
+Keep the conversation hot path free of avoidable asynchronous work. Never seed, synchronize, or write skill definitions while preparing a response. Store built-in skill definitions in code; only per-client switches belong in KV, while custom skill content remains in SQL. Load independent inputs concurrently, reuse already available data, and fetch custom skill bodies only when the tool requests them. Read built-in bodies from memory. Avoid redundant queries, serial lookups, and cross-request caches that can leak client state or serve stale settings. Verify query counts and behavior when changing this path.

@@ -219,6 +219,8 @@ Set message `meta.showBubble` to `false` to hide the people bubble background an
 
 When generating a message rather than application code, emit these directives directly in the message. Do not wrap the rendered blocks in code fences. Put opening and closing directives on their own lines, with blank lines around each block.
 
+Use blocks when they help answer the request, and write visible text in the user's language. Keep responses focused on the requested content; do not add implementation details or integration instructions. Use confirmation cards for read-only previews with `action.disabled: true` and `editable: false` on every field. Use plain questions or recommended replies when user input is needed. Claim an operation succeeded only when its result is confirmed.
+
 Recommended replies use a nonempty bullet list:
 
 ```markdown
@@ -236,10 +238,10 @@ Review the details before continuing.
 :::
 ```
 
-Confirmation cards contain valid JSON matching `ConfirmationCardData`. Before emitting a card, check all of these rules:
+Confirmation cards contain a JSON object. Before emitting a card, check these requirements:
 
 - Use a nonempty `fields` array. Every field needs a unique, nonempty `id`, a nonempty `label`, and a `type` of `text`, `number`, or `time`. Do not invent field types.
-- Always include `format` for every generated `time` field: exactly `YYYY-MM-DD` or `YYYY-MM-DD HH:mm`. Format inference is a renderer fallback, not a reason to omit it. Use `"2026-08-28"` for a date and `"2026-08-28 10:30"` for a date and time. Do not use `datetime`, `HH:mm`, ISO timestamps, seconds, or timezone suffixes as the format or value.
+- Always include `format` for every generated `time` field: exactly `YYYY-MM-DD` or `YYYY-MM-DD HH:mm`. Use `"2026-08-28"` for a date and `"2026-08-28 10:30"` for a date and time. Do not use `datetime`, `HH:mm`, ISO timestamps, seconds, or timezone suffixes as the format or value.
 - Time `value`, `min`, and `max` must match the chosen format and be valid dates. Only `min` may use `"now"`. Keep `min` no later than `max`.
 - Text values must be strings. Number values and bounds must be JSON numbers, not quoted strings; `decimals` must be an integer from 0 to 20. Keep number bounds ordered and text length limits nonnegative integers with `minLength <= maxLength`.
 - Omit unknown optional values rather than supplying `null`, empty time strings, or fabricated values. Use JSON booleans for `required`, `editable`, and `disabled`.
@@ -253,5 +255,3 @@ Complete preview with an explicit time format:
 {"title":"Details preview","fields":[{"id":"name","label":"Name","type":"text","value":"Ada","editable":false},{"id":"time","label":"Time","type":"time","format":"YYYY-MM-DD HH:mm","value":"2026-08-28 10:30","editable":false}],"action":{"id":"preview","label":"Preview","disabled":true}}
 :::
 ```
-
-An enabled confirmation action requires the host application to handle `onAction`. Rendering a card does not execute or persist any business operation.

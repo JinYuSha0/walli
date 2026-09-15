@@ -375,23 +375,12 @@ export const prepareChatCompletion = async ({
     ? [...new Set([...excludeToolNames, "image_to_text"])]
     : excludeToolNames;
 
-  let skillContext: Awaited<ReturnType<typeof prepareSkillTools>>["skills"];
-  let tools: ToolSet | undefined;
-
-  if (toolsEnabled) {
-    const prepared = await prepareSkillTools(
-      createToolConfigs(resolvedSettings, toolExclusions),
-      session.clientId,
-      inputTokenLimit,
-    );
-    skillContext = prepared.skills;
-    tools = extendChatAsyncContext(
-      { sessionId: chatSession?.id, userInfo, skills: skillContext },
-      () => ({ ...buildChatTools(prepared.toolConfigs), ...extraTools }),
-    );
-  }
-  const modelMessages = primaryModelSupportsImages
-    ? await prepareModelMessagesWithAssets(limitedMessageResult.messages, {
+  const [prepared, modelMessages] = await Promise.all([
+    toolsEnabled ? prepareSkillTools(
+      createToolConfigs(resolvedSettings, toolExclusions), session.clientId, inputTokenLimit,
+    ) : undefined,
+    primaryModelSupportsImages
+    ? prepareModelMessagesWithAssets(limitedMessageResult.messages, {
         bucket: env.R2,
         clientId: userInfo?.clientId,
         images: env.IMAGES,
@@ -404,7 +393,15 @@ export const prepareChatCompletion = async ({
               )
           : undefined,
       })
-    : limitedMessageResult.messages;
+    : limitedMessageResult.messages,
+  ]);
+  const skillContext = prepared?.skills;
+  const tools: ToolSet | undefined = prepared
+    ? extendChatAsyncContext(
+        { sessionId: chatSession?.id, userInfo, skills: skillContext },
+        () => ({ ...buildChatTools(prepared.toolConfigs), ...extraTools }),
+      )
+    : undefined;
 
   return {
     sessionId: chatSession?.id,
