@@ -29,7 +29,7 @@ export function parseInlineMarkdownBlocks(
     return parseBlockTokens(tokens, { listDepth: 0, quoteDepth: 0, role, inlineVariant: variant });
   }
   return resolveBuiltInBlockDefinition("inline", role)
-    .prepare(marked.Lexer.lexInline(markdown), variant, { listDepth: 0, quoteDepth: 0, role })
+    .prepare(marked.Lexer.lexInline(markdown, { ...marked.defaults, gfm: true, breaks: role === "user" }), variant, { listDepth: 0, quoteDepth: 0, role })
     .map((block) => ({ ...block, role }));
 }
 
@@ -37,9 +37,10 @@ export function parseMarkdownBlocks(
   markdown: string,
   streaming = false,
   role: WalliChatMessageRole = "assistant",
+  getCustomBlockLabel?: (blockName: string) => string,
 ): PreparedBlock[] {
   const source = streaming ? remend(markdown) : markdown;
-  const tokens = lexMarkdown(source, role);
+  const tokens = lexMarkdown(source, role, streaming, getCustomBlockLabel);
   return mergeAssetsGroups(parseBlockTokens(tokens, { listDepth: 0, quoteDepth: 0, role }));
 }
 
@@ -86,26 +87,38 @@ function groupUserMessageBlocks(blocks: readonly PreparedBlock[]): PreparedBlock
 export function prepareRoleMessageBlock(
   markdown: string,
   role: WalliChatMessageRole,
+  streaming = false,
+  getCustomBlockLabel?: (blockName: string) => string,
 ): PreparedBlock[] | undefined {
   const definition = resolveRoleBlockDefinition(role);
   if (!definition) return undefined;
+  if (streaming) {
+    markdown = lexMarkdown(markdown, role, true, getCustomBlockLabel)
+      .map((token) => token.raw).join("");
+    if (!markdown.trim()) return [];
+  }
   const base = createBlockBase({ role, listDepth: 0, quoteDepth: 0 });
   return [resolveBuiltInBlockDefinition("custom", role).prepare(markdown, definition, base)];
 }
 
 export class StreamingMarkdownParser {
   private readonly role: WalliChatMessageRole;
+  private readonly getCustomBlockLabel?: (blockName: string) => string;
 
-  constructor(role: WalliChatMessageRole = "assistant") {
+  constructor(
+    role: WalliChatMessageRole = "assistant",
+    getCustomBlockLabel?: (blockName: string) => string,
+  ) {
     this.role = role;
+    this.getCustomBlockLabel = getCustomBlockLabel;
   }
   private stableBlocks: PreparedBlock[] = [];
   private stableTokenKeys: string[] = [];
 
   parse(markdown: string): PreparedBlock[] {
-    const roleBlocks = prepareRoleMessageBlock(remend(markdown), this.role);
+    const roleBlocks = prepareRoleMessageBlock(remend(markdown), this.role, true, this.getCustomBlockLabel);
     if (roleBlocks) return roleBlocks;
-    const tokens = lexMarkdown(remend(markdown), this.role);
+    const tokens = lexMarkdown(remend(markdown), this.role, true, this.getCustomBlockLabel);
     const stableTokenCount = Math.max(0, tokens.length - 1);
     const reusableCount = Math.min(stableTokenCount, this.stableTokenKeys.length);
 
@@ -146,12 +159,32 @@ function mergeAssetsGroups(blocks: readonly PreparedBlock[]): PreparedBlock[] {
   return grouped;
 }
 
-function lexMarkdown(markdown: string, role: WalliChatMessageRole): Token[] {
-  return marked.lexer(markdown, {
+function lexMarkdown(
+  markdown: string,
+  role: WalliChatMessageRole,
+  streaming = false,
+  getCustomBlockLabel?: (blockName: string) => string,
+): Token[] {
+  const tokens = marked.lexer(markdown, {
     ...marked.defaults,
     gfm: true,
+    breaks: role === "user",
     walliRole: role,
-  } as MarkedOptions & { walliRole: WalliChatMessageRole });
+    walliStreaming: streaming,
+  } as MarkedOptions & { walliRole: WalliChatMessageRole; walliStreaming: boolean });
+  return tokens.flatMap((token, index) => {
+    const { pending, blockName } = token as Token & { pending?: boolean; blockName?: string };
+    if (!pending) return [token];
+    if (!blockName) {
+      return tokens.slice(0, index).some((previous) => previous.type !== "space")
+        ? [] : lexMarkdown(":::start-block\n", role);
+    }
+    return lexMarkdown(`:::toolcall-block\n${JSON.stringify({
+      toolCallId: `render-${blockName}`,
+      toolName: blockName,
+      label: getCustomBlockLabel?.(blockName) ?? `rendering ${blockName}`,
+    })}\n:::\n`, role);
+  });
 }
 
 function tokenKey(token: Token): string {

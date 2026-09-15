@@ -216,6 +216,7 @@ export const confirmationCardBlockDefinition = {
   marginTop: 12,
   styles: [walliChatBlocksUnoCss, blockBaseStyles],
   tokenizer: {
+    streamingPrefix: ":::confirmation-card",
     tokenize(source) {
       const match = /^:::confirmation-card[ \t]*\n([\s\S]*?)\n:::[ \t]*(?:\n|$)/.exec(source);
       if (!match) return undefined;

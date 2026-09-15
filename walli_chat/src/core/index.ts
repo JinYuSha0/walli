@@ -42,10 +42,10 @@ export type MessageLayoutCache = Map<
 
 export function createPreparedChatMessages(
   messages: readonly WalliChatMessage[],
-  options: { bottomPaddingHeight?: number; streaming?: boolean } = {},
+  options: { bottomPaddingHeight?: number; streaming?: boolean; getCustomBlockLabel?: (blockName: string) => string } = {},
 ): PreparedChatMessage[] {
   return messages.map((seed) => {
-    let blocks = prepareRoleMessageBlock(seed.markdown, seed.role);
+    let blocks = prepareRoleMessageBlock(seed.markdown, seed.role, options.streaming, options.getCustomBlockLabel);
     if (!blocks) {
       switch (seed.role) {
         case "system":
@@ -55,7 +55,7 @@ export function createPreparedChatMessages(
           blocks = parseUserMarkdownBlocks(seed.markdown, options.streaming);
           break;
         default:
-          blocks = parseMarkdownBlocks(seed.markdown, options.streaming, seed.role);
+          blocks = parseMarkdownBlocks(seed.markdown, options.streaming, seed.role, options.getCustomBlockLabel);
       }
     }
 

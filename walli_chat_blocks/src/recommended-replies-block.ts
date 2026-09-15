@@ -46,6 +46,7 @@ export const recommendedRepliesBlockDefinition = {
   marginTop: 12,
   styles,
   tokenizer: {
+    streamingPrefix: ":::recommended-replies",
     tokenize(source) {
       const match = /^:::recommended-replies[ \t]*\n([\s\S]*?)\n:::[ \t]*(?:\n|$)/.exec(source);
       if (!match) return undefined;

@@ -2862,6 +2862,7 @@ function renderFullChat(mode: "bottomPadding" | "stickToBottom") {
             );
             composer.value = "";
             const commonOptions = {
+              getCustomBlockLabel: (blockName: string) => `Rendering ${blockName}…`,
               getToolLabel: (toolName: string) =>
                 toolName === "web_search" ? "Searching the web" : toolName,
               messageId: `full-chat-assistant-${crypto.randomUUID()}`,
@@ -3174,5 +3175,17 @@ export const TopOcclusionHeight: Story = {
       expect(viewport.clientHeight).toBe(height);
       expect(viewport.scrollHeight).toBe(scrollHeight);
     });
+  },
+};
+
+export const UserLineBreaks: Story = {
+  args: { messages: [{ id: "user-line-breaks", role: "user", markdown: "First line\nSecond line" }] },
+  play: async () => {
+    const height = (markdown: string, role = "user") =>
+      buildConversationFrame(createPreparedChatMessages([{ id: "lines", role, markdown }]), 800).messages[0]!.frame.totalHeight;
+    expect(height("First line\nSecond line")).toBeGreaterThan(height("First line Second line"));
+    expect(height("First line\r\nSecond line")).toBe(height("First line\nSecond line"));
+    expect(height("**First line**\nSecond line")).toBeGreaterThan(height("**First line** Second line"));
+    expect(height("First line\nSecond line", "assistant")).toBe(height("First line Second line", "assistant"));
   },
 };

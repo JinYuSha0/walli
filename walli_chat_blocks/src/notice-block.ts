@@ -42,6 +42,7 @@ export const noticeBlockDefinition = {
   marginTop: 12,
   styles: [walliChatBlocksUnoCss, blockBaseStyles],
   tokenizer: {
+    streamingPrefix: ":::notice",
     tokenize(source) {
       const match =
         /^:::notice(?:[ \t]+(info|success|error))?[ \t]*\n([\s\S]*?)\n:::[ \t]*(?:\n|$)/.exec(

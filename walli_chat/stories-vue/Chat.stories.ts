@@ -617,6 +617,7 @@ const FullChatDemo = defineComponent({
       );
       value.value = "";
       const commonOptions = {
+              getCustomBlockLabel: (blockName: string) => `Rendering ${blockName}…`,
         getToolLabel: (name: string) =>
           ({ web_search: "Searching the web" })[name as "web_search"] ?? name,
         messageId: `vue-assistant-${crypto.randomUUID()}`,

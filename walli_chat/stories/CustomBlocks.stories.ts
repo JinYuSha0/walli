@@ -772,3 +772,119 @@ document.body.append(chat);`,
     chat.messages = originalMessages;
   },
 };
+
+export const IncompleteStreamingBlocks: Story = {
+  args: { messages: [noticeMessages[0]!] },
+  play: async () => {
+    for (const markdown of [
+      createNoticeMarkdown({ variant: "info", text: "Wait for completion." }),
+      createRecommendedRepliesMarkdown(["Continue", "Show an example"]),
+      createConfirmationCardMarkdown(confirmationCardData),
+    ]) {
+      const parser = new StreamingMarkdownParser("stream-test");
+      for (let end = 1; end < markdown.length; end++) {
+        const partial = markdown.slice(0, end);
+        for (const blocks of [parseMarkdownBlocks(partial, true), parser.parse(partial)]) {
+          expect(blocks).toHaveLength(1);
+          expect(blocks[0]!.kind).toBe("custom");
+          if (blocks[0]!.kind === "custom") {
+            expect(["start-block", "toolcall-block"]).toContain(blocks[0]!.definition.name);
+          }
+        }
+      }
+      expect(parseMarkdownBlocks(markdown, true).some((block) => block.kind === "custom")).toBe(true);
+      expect(parser.parse(markdown).some((block) => block.kind === "custom")).toBe(true);
+      expect(parseMarkdownBlocks(markdown.slice(0, -3), false).length).toBeGreaterThan(0);
+      const text = "Text before the block.\n\n";
+      const withText = parseMarkdownBlocks(text + markdown.slice(0, -3), true);
+      expect(withText.slice(0, -1)).toEqual(parseMarkdownBlocks(text, true));
+      const pending = withText.at(-1)!;
+      expect(pending.kind).toBe("custom");
+      if (pending.kind === "custom") expect(pending.definition.name).toBe("toolcall-block");
+    }
+    const custom = parseMarkdownBlocks(":::notice info\nWaiting", true, "assistant", (name) => `Preparing ${name}`)[0]!;
+    expect(custom.kind).toBe("custom");
+    if (custom.kind === "custom") expect(custom.data).toMatchObject({ label: "Preparing notice", toolName: "notice" });
+    const defaultLabel = parseMarkdownBlocks(":::notice info\nWaiting", true)[0]!;
+    if (defaultLabel.kind === "custom") expect(defaultLabel.data).toMatchObject({ label: "rendering notice" });
+    expect(parseMarkdownBlocks(":::unknown\nVisible text", true).length).toBeGreaterThan(0);
+    expect(parseMarkdownBlocks(":::noticeboard\nVisible text", true).length).toBeGreaterThan(0);
+    expect(parseMarkdownBlocks("\x60\x60\x60markdown\n:::notice info\nExample\n\x60\x60\x60", true).some((block) => block.kind === "code")).toBe(true);
+  },
+};
+
+export const CustomBlockRenderingLabel: Story = {
+  parameters: {
+    docs: {
+      description: {
+        story: "Compare the default pending label (rendering notice) with getCustomBlockLabel. The incomplete body stays hidden until the closing marker arrives. The callback is a streaming option for Vanilla, React, and Vue refs.",
+      },
+      source: {
+        language: "ts",
+        code: `chat.insertStreamingMessageAtBottom(stream, {
+  messageId: crypto.randomUUID(),
+  getCustomBlockLabel: (blockName) =>
+    blockName === "notice" ? "Preparing your notice…" : \`Rendering \${blockName}…\`,
+});`,
+      },
+    },
+  },
+  render: () => {
+    let chat: WalliChatElement | undefined;
+    let running = false;
+    const start = async (custom: boolean) => {
+      if (!chat || running) return;
+      running = true;
+      chat.messages = [];
+      const chunks = [":::notice info\n", "Your notice is ready.", "\n:::"];
+      let index = 0;
+      const stream = new ReadableStream<string>({
+        async pull(controller) {
+          const delta = chunks[index++];
+          if (delta === undefined) {
+            controller.close();
+            return;
+          }
+          if (index > 1) await new Promise((resolve) => setTimeout(resolve, 900));
+          controller.enqueue(`data: ${JSON.stringify({ type: "text-delta", id: "notice", delta })}\n\n`);
+        },
+      });
+      try {
+        await chat.insertStreamingMessageAtBottom(stream, {
+          messageId: crypto.randomUUID(),
+          stickToBottom: true,
+          getCustomBlockLabel: custom
+            ? (blockName) => blockName === "notice" ? "Preparing your notice…" : `Rendering ${blockName}…`
+            : undefined,
+        }).finished;
+      } finally {
+        running = false;
+      }
+    };
+    return html`<div class="grid gap-3">
+      <div class="flex gap-3">
+        <button class="rounded-lg border px-3 py-2" data-label-mode="default" @click=${() => void start(false)}>Default label</button>
+        <button class="rounded-lg border px-3 py-2" data-label-mode="custom" @click=${() => void start(true)}>Custom label</button>
+      </div>
+      <walli-chat ${ref((element) => { chat = element as WalliChatElement; })} style="display:block;height:320px"></walli-chat>
+    </div>`;
+  },
+  play: async ({ canvasElement }) => {
+    const chat = canvasElement.querySelector<WalliChatElement>("walli-chat")!;
+    const renderedText = () => {
+      const read = (root: ParentNode): string => [...root.querySelectorAll("*")]
+        .filter((element) => element.tagName !== "STYLE")
+        .map((element) => element.shadowRoot ? read(element.shadowRoot) : element.children.length ? "" : element.textContent ?? "")
+        .join(" ");
+      return read(chat.renderRoot);
+    };
+    for (const [mode, label] of [["default", "rendering notice"], ["custom", "Preparing your notice…"]]) {
+      canvasElement.querySelector<HTMLButtonElement>(`[data-label-mode="${mode}"]`)!.click();
+      await waitFor(() => expect(renderedText()).toContain(label));
+      expect(renderedText()).not.toContain(":::notice");
+      expect(renderedText()).not.toContain("Your notice is ready.");
+      await waitFor(() => expect(renderedText()).toContain("Your notice is ready."), { timeout: 4000 });
+      expect(renderedText()).not.toContain(label);
+    }
+  },
+};

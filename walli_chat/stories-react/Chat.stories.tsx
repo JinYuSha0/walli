@@ -783,6 +783,7 @@ function FullChatDemo({ mode }: { mode: "bottomPadding" | "stickToBottom" }) {
             );
             setValue("");
             const commonOptions = {
+              getCustomBlockLabel: (blockName: string) => `Rendering ${blockName}…`,
               getToolLabel: (name: string) => ({ web_search: "Searching the web" })[name] ?? name,
               messageId: `react-assistant-${crypto.randomUUID()}`,
             };

@@ -33,3 +33,9 @@ When stage types differ, the corresponding prepare/materialize function is requi
 `WalliChatRoleBlockDefinition` uses `scope: "message"`, a required role, optional `getContentInsetX(meta)`, and no tokenizer. Inspect the installed declarations for exact built-in hook signatures; they differ from custom tokenized definitions.
 
 For the existing recommended replies, confirmation card, notice, and people definitions in `@wallilabs/chat-blocks`, read [existing custom blocks](existing-blocks.md). See [installation](installation.md) for packages and styles.
+
+## Incomplete blocks during streaming
+
+Set `tokenizer.streamingPrefix` to the opening marker (for example, `":::notice"`) to hide unfinished custom block content while its Markdown is streaming. A recognized block displays the existing tool-call indicator with the default label `rendering ${blockName}`. Before the opening marker identifies a block, an otherwise empty message retains its start indicator. Pass `getCustomBlockLabel: (blockName) => string` to `insertStreamingMessageAtBottom` to customize the pending label.
+
+The tokenizer still decides when a block is complete. Once it returns a token, that block renders normally. Incomplete content remains visible as ordinary Markdown when streaming ends, so malformed output is not silently lost. Code fences are handled as code and are not hidden.

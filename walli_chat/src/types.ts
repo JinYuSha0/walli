@@ -228,6 +228,8 @@ type WalliChatStreamingOptionsBase = {
   meta?: WalliChatMessage["meta"];
   role?: WalliChatMessageRole;
   getToolLabel?: (toolName: string) => string;
+  /** Label shown while a custom block is waiting for its closing marker. */
+  getCustomBlockLabel?: (blockName: string) => string;
   messageId: string;
   reasoningLabels?: {
     thinking?: string;

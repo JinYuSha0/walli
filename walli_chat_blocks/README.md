@@ -214,3 +214,34 @@ Message `meta` replaces the block's default `meta` when provided. Custom block r
 People is registered as a role-level message wrapper (`scope: "message", role: "people"`), rather than a Markdown tokenizer. The wrapper is selected once per message; its body uses `prepareMarkdownContent(markdown, { role: "people" })`. Markdown and nested custom blocks still resolve their role-specific definitions normally.
 
 Set message `meta.showBubble` to `false` to hide the people bubble background and pointer while keeping the avatar, nickname, and Markdown content. It defaults to `true` and can also be configured in the registered default meta.
+
+## Markdown output reference
+
+When generating a message rather than application code, emit these directives directly in the message. Do not wrap the rendered blocks in code fences. Put opening and closing directives on their own lines, with blank lines around each block.
+
+Recommended replies use a nonempty bullet list:
+
+```markdown
+:::recommended-replies
+- Show an example
+- Explain the next step
+:::
+```
+
+Notices contain plain text, not JSON. The optional variant is `info`, `success`, or `error` (default: `info`):
+
+```markdown
+:::notice info
+Review the details before continuing.
+:::
+```
+
+Confirmation cards contain valid JSON matching `ConfirmationCardData`:
+
+```markdown
+:::confirmation-card
+{"title":"Details preview","fields":[{"id":"name","label":"Name","type":"text","value":"Ada","editable":false}],"action":{"id":"preview","label":"Preview","disabled":true}}
+:::
+```
+
+An enabled confirmation action requires the host application to handle `onAction`. Rendering a card does not execute or persist any business operation.

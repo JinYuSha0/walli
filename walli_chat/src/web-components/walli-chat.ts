@@ -536,7 +536,7 @@ export class WalliChatElement extends LitElement {
       meta: options.meta,
       markdown: STREAMING_START_MARKDOWN,
     };
-    const parser = new StreamingMarkdownParser(message.role);
+    const parser = new StreamingMarkdownParser(message.role, options.getCustomBlockLabel);
     const bottomPaddingHeight = Number.isFinite(options.bottomPaddingHeight)
       ? Math.max(0, options.bottomPaddingHeight ?? 0)
       : 0;

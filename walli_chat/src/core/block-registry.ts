@@ -99,6 +99,8 @@ export type WalliChatTokenizedBlockRenderContext<T> = {
 
 export type WalliChatBlockTokenizer<T> = {
   level?: "block";
+  /** Hide an unfinished block with this opening marker while streaming. */
+  streamingPrefix?: string;
   tokenize: (source: string, tokens: readonly Token[]) => { data: T; raw: string } | undefined;
 };
 
@@ -308,13 +310,21 @@ export function registerBlock(
         level: definition.tokenizer.level ?? "block",
         name: `${tokenTypePrefix}${name}`,
         tokenizer(source, tokens) {
-          const role = (
-            this.lexer.options as typeof this.lexer.options & { walliRole?: WalliChatMessageRole }
-          ).walliRole;
+          const { walliRole: role, walliStreaming: streaming } = this.lexer.options as
+            typeof this.lexer.options & { walliRole?: WalliChatMessageRole; walliStreaming?: boolean };
           const current = resolveDefinition(definitions, name, role);
           if (current === undefined) return undefined;
           const result = current.tokenizer.tokenize(source, tokens);
-          if (!result) return undefined;
+          if (!result) {
+            const prefix = current.tokenizer.streamingPrefix;
+            if (streaming && prefix && source && (
+              prefix.startsWith(source) ||
+              (source.startsWith(prefix) && /^(?:\s|$)/.test(source.slice(prefix.length)))
+            )) {
+              return { type: "space", raw: source, pending: true, blockName: source.startsWith(prefix) ? name : undefined };
+            }
+            return undefined;
+          }
           if (result.raw.length === 0) {
             throw new Error(`Custom block "${name}" tokenizer returned an empty raw value`);
           }
