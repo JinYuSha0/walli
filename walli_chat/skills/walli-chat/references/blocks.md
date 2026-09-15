@@ -38,4 +38,6 @@ For the existing recommended replies, confirmation card, notice, and people defi
 
 Set `tokenizer.streamingPrefix` to the opening marker (for example, `":::notice"`) to hide unfinished custom block content while its Markdown is streaming. A recognized block displays the existing tool-call indicator with the default label `rendering ${blockName}`. Before the opening marker identifies a block, an otherwise empty message retains its start indicator. Pass `getCustomBlockLabel: (blockName) => string` to `insertStreamingMessageAtBottom` to customize the pending label.
 
+If a tokenizer throws while parsing a closed `streamingPrefix` directive, the directive is displayed as a plain code block. Other message content continues rendering. Invalid input is not coerced or submitted. Tokenizers without a matching closed directive fall back to normal Markdown parsing.
+
 The tokenizer still decides when a block is complete. Once it returns a token, that block renders normally. Incomplete content remains visible as ordinary Markdown when streaming ends, so malformed output is not silently lost. Code fences are handled as code and are not hidden.

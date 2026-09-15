@@ -151,12 +151,21 @@ const numberFieldSchema = baseFieldSchema
 const timeFormatSchema = z.enum(["YYYY-MM-DD", "YYYY-MM-DD HH:mm"]);
 const timeFieldSchema = baseFieldSchema
   .extend({
-    format: timeFormatSchema,
+    format: timeFormatSchema.optional(),
     max: z.string().optional(),
     min: z.string().optional(),
     type: z.literal("time"),
     value: z.string().optional(),
   })
+  .transform((field) => ({
+    ...field,
+    format: field.format ?? (
+      [field.value, field.min, field.max].some((value) => value !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(value))
+        && ![field.value, field.min, field.max].some((value) => value?.includes(" "))
+        ? "YYYY-MM-DD" as const
+        : "YYYY-MM-DD HH:mm" as const
+    ),
+  }))
   .superRefine((field, context) => {
     for (const key of ["min", "max", "value"] as const) {
       const value = field[key];

@@ -888,3 +888,70 @@ export const CustomBlockRenderingLabel: Story = {
     }
   },
 };
+
+
+export const InvalidCustomBlocks: Story = {
+  args: {
+    messages: [{
+      id: "invalid-form",
+      role: "assistant",
+      markdown: 'Before the form.\n\n:::confirmation-card\n{"fields":[{"id":"date","label":"Date","type":"time","format":"invalid","value":"2026-09-15"}],"action":{"id":"confirm"}}\n:::\n\nAfter the form.',
+    }],
+  },
+  play: async () => {
+    for (const [value, format] of [
+      ["2026-08-28 10:30", "YYYY-MM-DD HH:mm"],
+      ["2026-08-28", "YYYY-MM-DD"],
+      [undefined, "YYYY-MM-DD HH:mm"],
+    ]) {
+      const markdown = `:::confirmation-card\n${JSON.stringify({
+        title: "Form preview",
+        fields: [
+          { id: "name", label: "Name", type: "text", value: "Ada", editable: false },
+          { id: "time", label: "Time", type: "time", value, editable: false },
+        ],
+        action: { id: "confirm", label: "Confirm", disabled: true },
+      })}\n:::`;
+      const block = parseMarkdownBlocks(markdown)[0]!;
+      expect(block.kind).toBe("custom");
+      if (block.kind === "custom") expect(block.data).toMatchObject({ fields: [{ id: "name" }, { id: "time", format, ...(value === undefined ? {} : { value }) }] });
+    }
+    const invalidCards = [
+      "{invalid JSON}",
+      JSON.stringify({ ...confirmationCardData, fields: [{ id: "date", label: "Date", type: "time", format: "invalid" }] }),
+      JSON.stringify({ ...confirmationCardData, fields: [{ id: "number", label: "Number", type: "number", value: "invalid" }] }),
+      JSON.stringify({ ...confirmationCardData, fields: [confirmationCardData.fields[0], confirmationCardData.fields[0]] }),
+    ];
+    for (const body of invalidCards) {
+      const markdown = `:::confirmation-card\n${body}\n:::`;
+      for (const streaming of [false, true]) {
+        const blocks = parseMarkdownBlocks(`${markdown}\n\nFollowing text.`, streaming);
+        expect(blocks[0]!.kind).toBe("code");
+        expect(blocks.length).toBeGreaterThan(1);
+      }
+    }
+    const registration = registerBlock({
+      name: "invalid-table-test",
+      tokenizer: {
+        streamingPrefix: ":::invalid-table-test",
+        tokenize(source) {
+          if (/^:::invalid-table-test\n[\s\S]*?\n:::(?:\n|$)/.test(source)) throw new Error("Invalid table data");
+          return undefined;
+        },
+      },
+      measure: () => ({ height: 0 }),
+      render: () => html``,
+    });
+    try {
+      const markdown = ":::invalid-table-test\n{invalid rows}\n:::\n\n| Name |\n| --- |\n| Ada |";
+      for (const streaming of [false, true]) {
+        const blocks = parseMarkdownBlocks(markdown, streaming);
+        expect(blocks[0]!.kind).toBe("code");
+        expect(blocks.some((block) => block.kind === "table")).toBe(true);
+      }
+      expect(parseMarkdownBlocks(createConfirmationCardMarkdown(confirmationCardData))[0]!.kind).toBe("custom");
+    } finally {
+      registration.unregister();
+    }
+  },
+};

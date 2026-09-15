@@ -168,7 +168,7 @@ The `onAction` callback receives confirmation data in this shape:
 }
 ```
 
-Time fields support `YYYY-MM-DD` and `YYYY-MM-DD HH:mm`. Every field supports `required`, `editable`, and custom error messages.
+Time fields support `YYYY-MM-DD` and `YYYY-MM-DD HH:mm`. When `format` is omitted in Markdown, it is inferred from `value`, `min`, and `max`; empty time fields default to `YYYY-MM-DD HH:mm`. Every field supports `required`, `editable`, and custom error messages.
 
 ## Notice
 
@@ -236,11 +236,21 @@ Review the details before continuing.
 :::
 ```
 
-Confirmation cards contain valid JSON matching `ConfirmationCardData`:
+Confirmation cards contain valid JSON matching `ConfirmationCardData`. Before emitting a card, check all of these rules:
+
+- Use a nonempty `fields` array. Every field needs a unique, nonempty `id`, a nonempty `label`, and a `type` of `text`, `number`, or `time`. Do not invent field types.
+- Always include `format` for every generated `time` field: exactly `YYYY-MM-DD` or `YYYY-MM-DD HH:mm`. Format inference is a renderer fallback, not a reason to omit it. Use `"2026-08-28"` for a date and `"2026-08-28 10:30"` for a date and time. Do not use `datetime`, `HH:mm`, ISO timestamps, seconds, or timezone suffixes as the format or value.
+- Time `value`, `min`, and `max` must match the chosen format and be valid dates. Only `min` may use `"now"`. Keep `min` no later than `max`.
+- Text values must be strings. Number values and bounds must be JSON numbers, not quoted strings; `decimals` must be an integer from 0 to 20. Keep number bounds ordered and text length limits nonnegative integers with `minLength <= maxLength`.
+- Omit unknown optional values rather than supplying `null`, empty time strings, or fabricated values. Use JSON booleans for `required`, `editable`, and `disabled`.
+- Include an `action` object with a nonempty `id`; its optional `label` must be nonempty. Web previews require `action.disabled: true` and `editable: false` on every field.
+- Use valid JSON with double quotes, no comments, and no trailing commas. If the requested data cannot be represented correctly, respond with plain text instead of emitting an invalid card.
+
+Complete preview with an explicit time format:
 
 ```markdown
 :::confirmation-card
-{"title":"Details preview","fields":[{"id":"name","label":"Name","type":"text","value":"Ada","editable":false}],"action":{"id":"preview","label":"Preview","disabled":true}}
+{"title":"Details preview","fields":[{"id":"name","label":"Name","type":"text","value":"Ada","editable":false},{"id":"time","label":"Time","type":"time","format":"YYYY-MM-DD HH:mm","value":"2026-08-28 10:30","editable":false}],"action":{"id":"preview","label":"Preview","disabled":true}}
 :::
 ```
 

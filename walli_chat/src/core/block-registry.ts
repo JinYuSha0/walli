@@ -314,7 +314,20 @@ export function registerBlock(
             typeof this.lexer.options & { walliRole?: WalliChatMessageRole; walliStreaming?: boolean };
           const current = resolveDefinition(definitions, name, role);
           if (current === undefined) return undefined;
-          const result = current.tokenizer.tokenize(source, tokens);
+          let result;
+          try {
+            result = current.tokenizer.tokenize(source, tokens);
+          } catch (error) {
+            console.error(`Failed to parse custom block "${name}"`, error);
+            // Invalid generated content must not prevent the rest of the message from rendering.
+            const prefix = current.tokenizer.streamingPrefix;
+            const closing = prefix && source.startsWith(prefix)
+              ? /\n:::[ \t]*(?:\n|$)/.exec(source)
+              : null;
+            if (!closing) return undefined;
+            const raw = source.slice(0, closing.index + closing[0].length);
+            return { type: "code", raw, text: raw.trimEnd(), lang: "text" };
+          }
           if (!result) {
             const prefix = current.tokenizer.streamingPrefix;
             if (streaming && prefix && source && (
