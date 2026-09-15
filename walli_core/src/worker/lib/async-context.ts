@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { BackgroundExecutionContext } from "../utils/common";
+import type { createSkillContext } from "../tools/tool-skills";
 import type { ChatUserInfo } from "./chat-runner";
 
 export type ChatAsyncContext = {
@@ -7,6 +8,7 @@ export type ChatAsyncContext = {
   origin: string;
   ctx?: BackgroundExecutionContext;
   sessionId?: string;
+  skills?: Awaited<ReturnType<typeof createSkillContext>>;
   userInfo?: ChatUserInfo;
 };
 

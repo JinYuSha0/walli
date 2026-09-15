@@ -548,6 +548,7 @@ describe("chat tools", () => {
   it("keeps the expected built-in tool order", () => {
     expect(BUILT_IN_TOOLS.map((toolConfig) => toolConfig.name)).toEqual([
       "timestamp",
+      "skills",
       "memory_search",
       "memory_summary",
       "scheduled_task",
@@ -695,6 +696,7 @@ describe("chat tools", () => {
 
     expect(Object.keys(tools)).toEqual([
       "timestamp",
+      "skills",
       "memory_search",
       "memory_summary",
       "scheduled_task",
@@ -712,6 +714,7 @@ describe("chat tools", () => {
 
     expect(Object.keys(tools)).toEqual([
       "timestamp",
+      "skills",
       "memory_search",
       "memory_summary",
       "voice_to_text",
@@ -737,6 +740,7 @@ describe("chat tools", () => {
 
     expect(Object.keys(tools)).toEqual([
       "timestamp",
+      "skills",
       "memory_search",
       "memory_summary",
       "voice_to_text",
@@ -915,6 +919,7 @@ describe("chat tools", () => {
 
     expect(Object.keys(tools)).toEqual([
       "timestamp",
+      "skills",
       "memory_search",
       "memory_summary",
       "scheduled_task",
@@ -2084,6 +2089,7 @@ describe("settings tool migration", () => {
 
     expect(settings.builtInTools.map((tool) => tool.name)).toEqual([
       "timestamp",
+      "skills",
       "memory_search",
       "memory_summary",
       "scheduled_task",

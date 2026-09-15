@@ -1,4 +1,4 @@
-import { integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const user = sqliteTable("user", {
   id: text("id").primaryKey(),
@@ -79,4 +79,19 @@ export const telegramWhitelistUser = sqliteTable("telegram_whitelist_user", {
   primaryKey({
     columns: [table.type, table.id],
   }),
+]);
+
+export const clientSkill = sqliteTable("client_skill", {
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  builtInKey: text("built_in_key"),
+  id: text("id").primaryKey(),
+  clientId: text("client_id").notNull().references(() => client.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  content: text("content").notNull(),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, (table) => [
+  index("client_skill_client_id_idx").on(table.clientId),
+  uniqueIndex("client_skill_builtin_idx").on(table.clientId, table.builtInKey),
 ]);

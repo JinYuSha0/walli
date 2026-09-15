@@ -22,7 +22,7 @@ export function WebChatLoading() {
   return (
     <div className="web-chat-loading relative flex h-dvh overflow-hidden bg-background text-foreground">
       <aside
-        className="web-chat-sidebar hidden h-full shrink-0 bg-muted/40 md:block"
+        className="web-chat-sidebar hidden h-full shrink-0 md:block"
         aria-label={t("webChatSessions")}
       >
         <div className="flex h-full min-h-0 w-full flex-col">

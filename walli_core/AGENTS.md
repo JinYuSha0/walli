@@ -70,3 +70,7 @@ If the application uses Durable Objects or Workflows, refer to the relevant best
 ## Development Database Changes
 
 During development, keep one initial SQL file per existing database/migration directory. Edit that initial SQL directly for schema changes; do not generate new incremental SQL files (such as `0001_*.sql`). Keep the schema, initial snapshot, journal, and bundled migration imports synchronized. D1, UserDO, and LangGraph have separate databases and retain their own initial SQL files. Do not run migration-generation commands as part of development changes unless the user explicitly requests incremental migrations. Consolidating SQL does not authorize deleting or resetting existing local or remote database data.
+
+## Configuration Storage
+
+Use KV for individual configuration values. Store substantial content and managed content collections, such as client skills, in SQL.

@@ -1,3 +1,4 @@
+import type { ClientSkillInput, ClientSkillPatch } from "@shared/client";
 import { hc, parseResponse } from "hono/client";
 import type { AppType } from "@worker/index";
 import type {
@@ -217,3 +218,12 @@ export const uploadAssistantAvatar = async (file: File): Promise<string> => {
 };
 
 export const updateClientWebSettings = (clientId: string, json: ClientWebSettings) => patchClientConfig(clientId, json);
+
+export const getClientSkills = (clientId: string) =>
+  parseResponse(apiClient.api.admin.clients[":clientId"].skills.$get({ param: { clientId } }));
+export const createClientSkill = (clientId: string, json: ClientSkillInput) =>
+  parseResponse(apiClient.api.admin.clients[":clientId"].skills.$post({ param: { clientId }, json }));
+export const updateClientSkill = (clientId: string, skillId: string, json: ClientSkillPatch) =>
+  parseResponse(apiClient.api.admin.clients[":clientId"].skills[":skillId"].$put({ param: { clientId, skillId }, json }));
+export const deleteClientSkill = (clientId: string, skillId: string) =>
+  parseResponse(apiClient.api.admin.clients[":clientId"].skills[":skillId"].$delete({ param: { clientId, skillId } }));

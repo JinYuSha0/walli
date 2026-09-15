@@ -1,3 +1,4 @@
+import { clientSkillsRoute } from "./client-skills";
 import { isTurnstileConfigured } from "./helper/turnstile";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -368,6 +369,7 @@ const resetClientSettings = async (client: Client) => {
 };
 
 export const clientsRoute = new Hono<AppBindings>()
+  .route("/", clientSkillsRoute)
   .use("/api/admin/clients/*", requireAdmin)
   .get("/api/admin/clients", async (c) => c.json(await getClients()))
   .post("/api/admin/clients", async (c) => {

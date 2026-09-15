@@ -391,7 +391,7 @@ const getTokenizer = () => {
   return tokenizer;
 };
 
-const countTextTokens = (text: string): number => getTokenizer().encode(text).length;
+export const countTextTokens = (text: string): number => getTokenizer().encode(text).length;
 
 const countModelMessageTokens = (message: ModelMessage): number => {
   if (typeof message.content === "string") {

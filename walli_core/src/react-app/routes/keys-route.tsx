@@ -1,3 +1,4 @@
+import { SkillsTab } from "./settings/components/skills-tab";
 import {
   IconBrandFlutter,
   IconBrandReactNative,
@@ -121,16 +122,16 @@ type ClientBasicSettingsForm = Pick<
   "enabled" | "additionalSystemPrompt" | "autoDeletePeriod"
 > & { name: string };
 
-const clientTabs = ["basic", "web-settings", "dialog-settings", "auth", "cors", "usage"] as const;
+const clientTabs = ["basic", "web-settings", "dialog-settings", "skills", "auth", "cors", "usage"] as const;
 
 type ClientTab = (typeof clientTabs)[number];
 
 const getClientTabs = (platform: ClientPlatform): ClientTab[] =>
   platform === "telegram"
-    ? ["basic", "auth", "usage"]
+    ? ["basic", "skills", "auth", "usage"]
     : platform === "web"
       ? [...clientTabs]
-      : ["basic", "dialog-settings", "auth", "usage"];
+      : ["basic", "dialog-settings", "skills", "auth", "usage"];
 
 const isClientTab = (value: string): value is ClientTab =>
   clientTabs.includes(value as ClientTab);
@@ -1480,6 +1481,7 @@ export function ClientsRoute() {
                           {t("clientsDialogSettingsTab")}
                         </TabsTrigger>
                       )}
+                      <TabsTrigger value="skills">{t("skillsSettingsTab")}</TabsTrigger>
                       <TabsTrigger value="auth">
                         {t("authSettingsTab")}
                       </TabsTrigger>
@@ -1493,6 +1495,9 @@ export function ClientsRoute() {
                       </TabsTrigger>
                     </TabsList>
 
+                    <TabsContent value="skills">
+                      <SkillsTab key={selectedClient.id} clientId={selectedClient.id} />
+                    </TabsContent>
                     {clientConfigQuery.data.platform === "web" && (
                       <TabsContent value="web-settings">
                         <WebSettingsTab

@@ -292,3 +292,26 @@ export type TelegramWhitelistCreate = z.output<typeof telegramWhitelistCreateSch
 export type ClientConfigResponse = z.output<typeof clientConfigResponseSchema>;
 export type Client = z.output<typeof clientSchema>;
 export type ClientCreate = z.output<typeof clientCreateSchema>;
+
+export const clientSkillInputSchema = z.object({
+  enabled: z.boolean().default(true),
+  description: z.string().trim().max(300).default(""),
+  name: z.string().trim().min(1).max(100),
+  content: z.string().trim().min(1).max(100_000),
+}).strict();
+export const clientSkillPatchSchema = clientSkillInputSchema.extend({
+  enabled: clientSkillInputSchema.shape.enabled.removeDefault(),
+  description: clientSkillInputSchema.shape.description.removeDefault(),
+}).partial().refine(
+  (value) => Object.keys(value).length > 0, "At least one field is required",
+);
+export const clientSkillSchema = clientSkillInputSchema.extend({
+  builtInKey: z.string().nullable(),
+  id: z.uuid(),
+  clientId: z.uuid(),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+export type ClientSkillInput = z.infer<typeof clientSkillInputSchema>;
+export type ClientSkillPatch = z.input<typeof clientSkillPatchSchema>;
+export type ClientSkill = z.infer<typeof clientSkillSchema>;

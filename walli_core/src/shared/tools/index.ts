@@ -7,10 +7,12 @@ import { scheduledTaskTool } from "./scheduled-task";
 import { textToVoiceTool } from "./text-to-voice";
 import { timestampTool } from "./timestamp";
 import { createVoiceToTextModelOutput, voiceToTextTool } from "./voice-to-text";
+import { skillsTool } from "./skills";
 import type { ToolConfig } from "../const";
 
 export const BUILT_IN_TOOLS = [
   timestampTool,
+  skillsTool,
   memorySearchTool,
   memorySummaryTool,
   scheduledTaskTool,

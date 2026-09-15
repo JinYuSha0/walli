@@ -1,3 +1,4 @@
+import { prepareSkillTools, compactSkillToolResults } from "../tools/tool-skills";
 import { generateText, isStepCount, type LanguageModel, type ToolSet, Output } from "ai";
 import type { ModelMessage } from "ai";
 import type { DurableObject } from "cloudflare:workers";
@@ -314,11 +315,11 @@ export const prepareChatCompletion = async ({
     throw new ChatCompletionLimitError("usage_limit_reached", "Usage limit reached.");
   }
 
-  const historyMessages = sanitizeModelMessageHistory(
+  const historyMessages = compactSkillToolResults(sanitizeModelMessageHistory(
     storedMessages
       .map(parseStoredChatMessage)
       .filter((storedMessage): storedMessage is ModelMessage => storedMessage !== undefined),
-  );
+  ));
   const dailyInputRemaining =
     usageLimitSettings && todayTokenUsage
       ? getRemainingTokenLimit(
@@ -374,12 +375,21 @@ export const prepareChatCompletion = async ({
     ? [...new Set([...excludeToolNames, "image_to_text"])]
     : excludeToolNames;
 
-  const tools = toolsEnabled
-    ? extendChatAsyncContext({ sessionId: chatSession?.id, userInfo }, () => ({
-        ...createChatRunnerTools(resolvedSettings, toolExclusions),
-        ...extraTools,
-      }))
-    : undefined;
+  let skillContext: Awaited<ReturnType<typeof prepareSkillTools>>["skills"];
+  let tools: ToolSet | undefined;
+
+  if (toolsEnabled) {
+    const prepared = await prepareSkillTools(
+      createToolConfigs(resolvedSettings, toolExclusions),
+      session.clientId,
+      inputTokenLimit,
+    );
+    skillContext = prepared.skills;
+    tools = extendChatAsyncContext(
+      { sessionId: chatSession?.id, userInfo, skills: skillContext },
+      () => ({ ...buildChatTools(prepared.toolConfigs), ...extraTools }),
+    );
+  }
   const modelMessages = primaryModelSupportsImages
     ? await prepareModelMessagesWithAssets(limitedMessageResult.messages, {
         bucket: env.R2,
@@ -407,6 +417,7 @@ export const prepareChatCompletion = async ({
         ? createImageAttachmentInstructions(messages)
         : undefined,
       extraInstructions,
+      skillContext?.instructions,
     ),
     messages: modelMessages,
     tools,
@@ -430,7 +441,7 @@ export const prepareChatCompletion = async ({
                 inputToken: index === messages.length - 1 ? inputTokens : 0,
                 outputToken: 0,
               })),
-              ...responseMessages.map((responseMessage, index) => ({
+              ...compactSkillToolResults(responseMessages).map((responseMessage, index) => ({
                 sessionId: chatSession.id,
                 content: serializeChatMessage(responseMessage),
                 inputToken: !persistInputMessages && index === 0 ? inputTokens : 0,

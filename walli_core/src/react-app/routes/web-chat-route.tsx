@@ -339,7 +339,7 @@ function WebChatSessions({
   return (
     <div className="relative flex h-full min-h-0 overflow-hidden bg-background text-foreground">
       <aside
-        className="web-chat-sidebar hidden shrink-0 bg-muted/40 md:block"
+        className="web-chat-sidebar hidden shrink-0 md:block"
         data-collapsed={sidebarCollapsed}
         aria-label={t("webChatSessions")}
       >
@@ -444,6 +444,21 @@ function Conversation({
   requestedSessionId?: string;
 }) {
   const { t } = useTranslation();
+  const chatLabels = useMemo(() => ({
+    actionConfig: {
+      assistant: { copy: { visible: true, label: t("webChatCopy") } },
+      user: { copy: { visible: true, label: t("webChatCopy") } },
+    },
+    locales: { copyCode: t("webChatCopyCode") },
+    reasoningLabels: { thinking: t("webChatThinking"), thought: t("webChatThought") },
+    getToolLabel: (name: string) => t("webChatCallingTool", {
+      name: t(`webChatToolNames.${name}`, { defaultValue: name }),
+    }),
+    getCustomBlockLabel: (name: string) => t("webChatRenderingBlock", {
+      name: t(`webChatBlockNames.${name}`, { defaultValue: name }),
+    }),
+  }), [t]);
+
   const isMobile = useIsMobile();
   const queryClient = useQueryClient();
   const [conversationStore] = useState(() => {
@@ -590,6 +605,9 @@ function Conversation({
       const stream = chatRef.current?.insertStreamingMessageAtBottom(body, {
         messageId,
         meta,
+        getToolLabel: chatLabels.getToolLabel,
+        getCustomBlockLabel: chatLabels.getCustomBlockLabel,
+        reasoningLabels: chatLabels.reasoningLabels,
         bottomPaddingHeight: isMobile
           ? (document.documentElement.clientHeight * 2) / 3
           : ((chatRef.current?.element?.clientHeight ?? 600) * 2) / 3,
@@ -693,6 +711,8 @@ function Conversation({
         ref={chatRef}
         loading={!!sessionId && history.isPending}
         messages={messages}
+        actionConfig={chatLabels.actionConfig}
+        locales={chatLabels.locales}
         onEndReached={loadOlder}
         onEndReachedThreshold={0.2}
       >

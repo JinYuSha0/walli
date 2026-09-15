@@ -70,3 +70,22 @@ CREATE TABLE `verification` (
 	`createdAt` integer,
 	`updatedAt` integer
 );
+
+--> statement-breakpoint
+CREATE TABLE `client_skill` (
+  `enabled` integer DEFAULT true NOT NULL,
+  `built_in_key` text,
+  `id` text PRIMARY KEY NOT NULL,
+  `client_id` text NOT NULL,
+  `name` text NOT NULL,
+  `description` text DEFAULT '' NOT NULL,
+  `content` text NOT NULL,
+  `created_at` integer NOT NULL,
+  `updated_at` integer NOT NULL,
+  FOREIGN KEY (`client_id`) REFERENCES `client`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `client_skill_client_id_idx` ON `client_skill` (`client_id`);
+
+--> statement-breakpoint
+CREATE UNIQUE INDEX `client_skill_builtin_idx` ON `client_skill` (`client_id`, `built_in_key`);

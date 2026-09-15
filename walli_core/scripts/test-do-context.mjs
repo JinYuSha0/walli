@@ -16,7 +16,7 @@ const result = await build({
   conditions: ["workerd", "worker", "browser"],
   mainFields: ["module", "main"],
   external: ["cloudflare:*", "node:*"],
-  loader: { ".sql": "text" },
+  loader: { ".sql": "text", ".md": "text" },
   tsconfig: "tsconfig.worker.json",
 });
 
