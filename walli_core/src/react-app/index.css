@@ -172,6 +172,37 @@ select {
   background: color-mix(in oklch, var(--muted-foreground) 48%, transparent);
 }
 
+.settings-tabs-scrollbar {
+  --tabs-scrollbar-thumb: color-mix(in oklch, var(--muted-foreground) 18%, transparent);
+  scrollbar-color: var(--tabs-scrollbar-thumb) transparent;
+  scrollbar-width: thin;
+}
+
+.settings-tabs-scrollbar:hover,
+.settings-tabs-scrollbar:focus-within {
+  --tabs-scrollbar-thumb: color-mix(in oklch, var(--muted-foreground) 38%, transparent);
+}
+
+@supports selector(::-webkit-scrollbar) {
+  .settings-tabs-scrollbar {
+    scrollbar-width: auto;
+  }
+
+  .settings-tabs-scrollbar::-webkit-scrollbar {
+    height: 3px;
+  }
+
+  .settings-tabs-scrollbar::-webkit-scrollbar-track {
+    margin-inline: 8px;
+    background: transparent;
+  }
+
+  .settings-tabs-scrollbar::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: var(--tabs-scrollbar-thumb);
+  }
+}
+
 .app-shell {
   margin: 0 auto;
   max-width: 1080px;

@@ -55,7 +55,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TextEditor } from "@/components/ui/text_editor";
+import { SlashMarkdownEditor } from "@/components/ui/slash-markdown-editor";
 import { useUnsavedChangesPrompt } from "@/hooks/use-unsaved-changes-prompt";
 import {
   CLIENT_PLATFORMS,
@@ -120,19 +120,19 @@ type TelegramWhitelistCreateForm = {
 
 type ClientBasicSettingsForm = Pick<
   ClientBasicSettings,
-  "enabled" | "additionalSystemPrompt" | "autoDeletePeriod"
+  "enabled" | "autoDeletePeriod"
 > & { name: string };
 
-const clientTabs = ["basic", "web-settings", "dialog-settings", "skills", "datasets", "auth", "cors", "usage"] as const;
+const clientTabs = ["basic", "system-prompt", "web-settings", "dialog-settings", "skills", "datasets", "auth", "cors", "usage"] as const;
 
 type ClientTab = (typeof clientTabs)[number];
 
 const getClientTabs = (platform: ClientPlatform): ClientTab[] =>
   platform === "telegram"
-    ? ["basic", "skills", "datasets", "auth", "usage"]
+    ? ["basic", "system-prompt", "skills", "datasets", "auth", "usage"]
     : platform === "web"
       ? [...clientTabs]
-      : ["basic", "dialog-settings", "skills", "datasets", "auth", "usage"];
+      : ["basic", "system-prompt", "dialog-settings", "skills", "datasets", "auth", "usage"];
 
 const isClientTab = (value: string): value is ClientTab =>
   clientTabs.includes(value as ClientTab);
@@ -284,14 +284,12 @@ function ClientBasicSettingsTab({
       name,
       autoDeletePeriod,
       enabled: basicSettings.enabled,
-      additionalSystemPrompt: basicSettings.additionalSystemPrompt,
     },
   });
   const savedBasicSettings: ClientBasicSettingsForm = {
     name,
     autoDeletePeriod,
     enabled: basicSettings.enabled,
-    additionalSystemPrompt: basicSettings.additionalSystemPrompt,
   };
   const saveMutation = useMutation({
     mutationFn: onSaveBasicSettings,
@@ -300,7 +298,6 @@ function ClientBasicSettingsTab({
         name: values.name,
         autoDeletePeriod: values.autoDeletePeriod,
         enabled: values.enabled,
-        additionalSystemPrompt: values.additionalSystemPrompt,
       });
       toast.success(t("clientsBasicSettingsSaveSuccess"));
     },
@@ -313,28 +310,24 @@ function ClientBasicSettingsTab({
   }) as ClientBasicSettingsForm;
   const watchedName = watchedBasicSettings.name;
   const watchedEnabled = watchedBasicSettings.enabled;
-  const watchedAdditionalSystemPrompt = watchedBasicSettings.additionalSystemPrompt;
 
   useEffect(() => {
     form.reset({
       name,
       autoDeletePeriod,
       enabled: basicSettings.enabled,
-      additionalSystemPrompt: basicSettings.additionalSystemPrompt,
     });
-  }, [autoDeletePeriod, basicSettings.additionalSystemPrompt, basicSettings.enabled, name, form]);
+  }, [autoDeletePeriod, basicSettings.enabled, name, form]);
 
   useEffect(() => {
     onDraftChange?.({
       autoDeletePeriod: watchedBasicSettings.autoDeletePeriod,
       name: watchedName,
       enabled: watchedEnabled,
-      additionalSystemPrompt: watchedAdditionalSystemPrompt,
     });
   }, [
     onDraftChange,
     watchedBasicSettings.autoDeletePeriod,
-    watchedAdditionalSystemPrompt,
     watchedName,
     watchedEnabled,
   ]);
@@ -396,37 +389,6 @@ function ClientBasicSettingsTab({
         <Input id={`client-id-${platform}`} readOnly value={clientId} />
       </div>
 
-      <section className="grid gap-3 border-t border-border pt-8">
-        <div className="grid gap-1">
-          <Label htmlFor={`client-additional-system-prompt-${platform}`}>
-            {t("clientsAdditionalSystemPromptTitle")}
-          </Label>
-          <p className="text-sm text-muted-foreground">
-            {t("clientsAdditionalSystemPromptDescription")}
-          </p>
-        </div>
-        <Controller
-          control={form.control}
-          name="additionalSystemPrompt"
-          render={({ field, fieldState }) => (
-            <div className="grid gap-2">
-              <TextEditor
-                id={`client-additional-system-prompt-${platform}`}
-                aria-invalid={fieldState.invalid}
-                disabled={pending}
-                placeholder={t("clientsAdditionalSystemPromptPlaceholder")}
-                {...field}
-              />
-              {fieldState.error?.message && (
-                <p className="text-sm text-destructive">
-                  {fieldState.error.message}
-                </p>
-              )}
-            </div>
-          )}
-        />
-      </section>
-
       <section className="grid gap-4">
         <div className="grid gap-1">
           <h2 className="text-sm font-medium">{t("usageSettingsConversationCleanupTitle")}</h2>
@@ -478,6 +440,78 @@ function ClientBasicSettingsTab({
   );
 }
 
+function ClientSystemPromptSettingsTab({
+  platform,
+  additionalSystemPrompt,
+  onSave,
+}: {
+  platform: ClientPlatform;
+  additionalSystemPrompt: string;
+  onSave: (values: Pick<ClientBasicSettings, "additionalSystemPrompt">) => Promise<ClientBasicSettings>;
+}) {
+  const { t } = useTranslation();
+  const savedSettings = { additionalSystemPrompt };
+  const form = useForm<Pick<ClientBasicSettings, "additionalSystemPrompt">>({
+    defaultValues: savedSettings,
+  });
+  const watchedSettings = useWatch({ control: form.control, defaultValue: savedSettings });
+  const saveMutation = useMutation({
+    mutationFn: onSave,
+    onSuccess: (values) => {
+      form.reset({ additionalSystemPrompt: values.additionalSystemPrompt });
+      toast.success(t("clientsBasicSettingsSaveSuccess"));
+    },
+    onError: () => toast.error(t("clientsUpdateFailed")),
+  });
+  const pending = saveMutation.isPending;
+  useEffect(() => {
+    form.reset({ additionalSystemPrompt });
+  }, [additionalSystemPrompt, form]);
+  useUnsavedChangesPrompt({ current: watchedSettings, saved: savedSettings, disabled: pending });
+
+  return (
+    <form className="grid gap-8" onSubmit={form.handleSubmit((values) => saveMutation.mutate(values))}>
+      <section className="grid gap-3">
+        <div className="grid gap-1">
+          <Label id={`client-additional-system-prompt-${platform}-label`} htmlFor={`client-additional-system-prompt-${platform}`}>
+            {t("clientsAdditionalSystemPromptTitle")}
+          </Label>
+          <p className="text-sm text-muted-foreground">
+            {t("clientsAdditionalSystemPromptDescription")}
+          </p>
+        </div>
+        <Controller
+          control={form.control}
+          name="additionalSystemPrompt"
+          render={({ field, fieldState }) => (
+            <div className="grid gap-2">
+              <fieldset disabled={pending}>
+                <SlashMarkdownEditor
+                  id={`client-additional-system-prompt-${platform}`}
+                  invalid={fieldState.invalid}
+                  disabled={pending}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                />
+              </fieldset>
+              {fieldState.error?.message && (
+                <p className="text-sm text-destructive">
+                  {fieldState.error.message}
+                </p>
+              )}
+            </div>
+          )}
+        />
+      </section>
+
+      <div className="flex justify-end border-t border-border pt-8">
+        <Button type="submit" disabled={pending}>{t("saveSettings")}</Button>
+      </div>
+    </form>
+  );
+}
+
 function TelegramBasicSettingsTab({
   config,
   onSave,
@@ -494,7 +528,6 @@ function TelegramBasicSettingsTab({
     name: config.name,
     autoDeletePeriod: config.basicSettings.autoDeletePeriod,
     enabled: config.basicSettings.enabled,
-    additionalSystemPrompt: config.basicSettings.additionalSystemPrompt,
   });
   const basicSettingsDraftRef = useRef<ClientBasicSettingsForm>(basicSettingsDraft);
   const handleBasicSettingsDraftChange = useCallback((values: ClientBasicSettingsForm) => {
@@ -562,7 +595,6 @@ function TelegramBasicSettingsTab({
         name: config.name,
         autoDeletePeriod: config.basicSettings.autoDeletePeriod,
         enabled: config.basicSettings.enabled,
-        additionalSystemPrompt: config.basicSettings.additionalSystemPrompt,
       },
       botToken: config.telegramSettings.botTokenMask,
     },
@@ -1216,6 +1248,7 @@ export function ClientsRoute() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
+  const settingsTabsRef = useRef<HTMLDivElement>(null);
   const [, , currentPlatform = "", currentTab = ""] =
     location.pathname.split("/");
   const clientsQuery = useQuery({ queryKey: ["clients"], queryFn: getClients });
@@ -1241,6 +1274,19 @@ export function ClientsRoute() {
       });
     }
   }, [activeTab, currentTab, navigate, selectedClient]);
+
+  useEffect(() => {
+    const list = settingsTabsRef.current;
+    const active = list?.querySelector<HTMLElement>('[data-state="active"]');
+    if (!list || !active) return;
+    const listBounds = list.getBoundingClientRect();
+    const activeBounds = active.getBoundingClientRect();
+    if (activeBounds.left < listBounds.left) {
+      list.scrollLeft += activeBounds.left - listBounds.left;
+    } else if (activeBounds.right > listBounds.right) {
+      list.scrollLeft += activeBounds.right - listBounds.right;
+    }
+  }, [activeTab, selectedClient?.id, clientConfigQuery.data, t]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createValues, setCreateValues] = useState<ClientCreate>({
@@ -1453,9 +1499,9 @@ export function ClientsRoute() {
                 {clientConfigQuery.isPending ? (
                   <RouteLoading />
                 ) : clientConfigQuery.data ? (
-                  <div className={activeTab === "datasets" ? "flex h-full min-h-0 flex-col gap-4" : "grid gap-4"}>
+                  <div className={activeTab === "datasets" ? "flex h-full min-h-0 min-w-0 flex-col gap-4" : "grid min-w-0 gap-4"}>
                   <Tabs
-                    className={activeTab === "datasets" ? "flex min-h-0 flex-1 flex-col" : undefined}
+                    className={activeTab === "datasets" ? "flex min-h-0 min-w-0 flex-1 flex-col" : "min-w-0"}
                     activationMode="manual"
                     value={activeTab}
                     onValueChange={(value) => {
@@ -1472,10 +1518,11 @@ export function ClientsRoute() {
                       });
                     }}
                   >
-                    <TabsList className="w-full sm:w-fit">
+                    <TabsList ref={settingsTabsRef} className="settings-tabs-scrollbar h-auto min-h-10 w-full min-w-0 shrink-0 overflow-x-auto sm:w-fit">
                       <TabsTrigger value="basic">
                         {t("clientsBasicSettingsTab")}
                       </TabsTrigger>
+                      <TabsTrigger value="system-prompt">{t("clientsSystemPromptTab")}</TabsTrigger>
                       {availableTabs.includes("web-settings") && (
                         <TabsTrigger value="web-settings">{t("clientsWebSettingsTab")}</TabsTrigger>
                       )}
@@ -1518,6 +1565,18 @@ export function ClientsRoute() {
                         />
                       </TabsContent>
                     )}
+
+                    <TabsContent value="system-prompt">
+                      <ClientSystemPromptSettingsTab
+                        platform={platform}
+                        additionalSystemPrompt={clientConfigQuery.data.basicSettings.additionalSystemPrompt}
+                        onSave={async (values) => {
+                          const updatedClientConfig = await updateClientBasicSettings(selectedClient.id, values);
+                          queryClient.setQueryData(["client-config", selectedClient.id], updatedClientConfig);
+                          return updatedClientConfig.basicSettings;
+                        }}
+                      />
+                    </TabsContent>
 
                     <TabsContent value="basic">
                       {clientConfigQuery.data.platform === "telegram" ? (

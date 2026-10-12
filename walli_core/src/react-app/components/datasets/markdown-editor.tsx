@@ -2,9 +2,7 @@ import { useEffect, useState } from "react";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
-import { Markdown } from "@tiptap/markdown";
-import { Slice } from "@tiptap/pm/model";
-import { Plugin } from "@tiptap/pm/state";
+import { PasteMarkdown } from "@/components/ui/markdown-paste";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,55 +24,6 @@ import {
   RemoveFormatting,
 } from "lucide-react";
 
-const PasteMarkdown = Markdown.extend({
-  // Run before StarterKit's code block paste handler for editor clipboard data.
-  priority: 1000,
-  addProseMirrorPlugins() {
-    return [
-      new Plugin({
-        props: {
-          handlePaste: (view, event) => {
-            const clipboard = event.clipboardData;
-            const text = clipboard?.getData("text/plain");
-            const sourceMetadata = clipboard?.getData("vscode-editor-data");
-            if (sourceMetadata) {
-              try {
-                const { mode } = JSON.parse(sourceMetadata);
-                if (mode && mode !== "markdown" && mode !== "plaintext") return false;
-              } catch {
-                // Ignore malformed optional metadata and inspect the content.
-              }
-            }
-            const html = clipboard?.getData("text/html");
-            const hasMarkdownBlocks = /^ {0,3}(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|>\s|`{3}|~{3})/m.test(text ?? "");
-            // Source editors can attach HTML to raw Markdown. Prefer Markdown
-            // when block syntax is present, but preserve ordinary rich text.
-            if (
-              !text ||
-              (html && !hasMarkdownBlocks) ||
-              view.state.selection.$from.parent.type.spec.code ||
-              !this.editor.markdown
-            )
-              return false;
-            try {
-              const document = view.state.schema.nodeFromJSON(this.editor.markdown.parse(text));
-              view.dispatch(
-                view.state.tr
-                  .replaceSelection(Slice.maxOpen(document.content))
-                  .setMeta("paste", true)
-                  .setMeta("uiEvent", "paste")
-                  .scrollIntoView(),
-              );
-              return true;
-            } catch {
-              return false;
-            }
-          },
-        },
-      }),
-    ];
-  },
-});
 
 export function MarkdownEditor({
   value,
@@ -82,12 +31,14 @@ export function MarkdownEditor({
   onBlur,
   id,
   invalid,
+  disabled = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   onBlur?: () => void;
   id: string;
   invalid?: boolean;
+  disabled?: boolean;
 }) {
   const { t } = useTranslation();
   const [linkOpen, setLinkOpen] = useState(false);
@@ -107,6 +58,7 @@ export function MarkdownEditor({
     content: value,
     contentType: "markdown",
     immediatelyRender: false,
+    editable: !disabled,
     editorProps: {
       attributes: {
         id,
@@ -124,6 +76,9 @@ export function MarkdownEditor({
     if (editor && editor.getMarkdown() !== value)
       editor.commands.setContent(value, { contentType: "markdown", emitUpdate: false });
   }, [editor, value]);
+  useEffect(() => {
+    editor?.setEditable(!disabled);
+  }, [disabled, editor]);
   const state = useEditorState({
     editor,
     selector: ({ editor }) => ({

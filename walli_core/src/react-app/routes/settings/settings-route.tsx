@@ -5,6 +5,7 @@ import { getSettings } from "@/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RouteLoading } from "../route-loading";
+import { BasicSettingsTab } from "./components/basic-settings-tab";
 import { ModelSettingsTab } from "./components/model-settings-tab";
 import { SystemPromptSettingsTab } from "./components/system-prompt-settings-tab";
 import { ToolSettingsTab } from "./components/tool-settings-tab";
@@ -12,10 +13,10 @@ import { UsageSettingsTab } from "./components/usage-settings-tab";
 
 const settingsTabs = [
   "basic",
+  "system-prompt",
   "model",
   "tool",
   "usage",
-  "system-prompt",
 ] as const;
 
 type SettingsTab = (typeof settingsTabs)[number];
@@ -32,11 +33,7 @@ export function SettingsRoute() {
     queryFn: getSettings,
   });
   const currentTab = location.pathname.split("/").at(-1) ?? "";
-  const activeTab = currentTab === "system-prompt"
-    ? "basic"
-    : isSettingsTab(currentTab)
-      ? currentTab
-      : "basic";
+  const activeTab = isSettingsTab(currentTab) ? currentTab : "basic";
 
   if (isPending || !data) {
     return <RouteLoading />;
@@ -44,13 +41,14 @@ export function SettingsRoute() {
 
   return (
     <div className="flex justify-center p-4 lg:p-6">
-      <Card className="w-full max-w-5xl">
+      <Card className="w-full min-w-0 max-w-5xl">
         <CardHeader>
           <CardTitle>{t("promptTitle")}</CardTitle>
           <CardDescription>{t("promptDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs
+            className="min-w-0"
             activationMode="manual"
             value={activeTab}
             onValueChange={(value) => {
@@ -66,9 +64,12 @@ export function SettingsRoute() {
               });
             }}
           >
-            <TabsList className="w-full sm:w-fit">
+            <TabsList className="settings-tabs-scrollbar h-auto min-h-10 w-full min-w-0 shrink-0 sm:w-fit">
               <TabsTrigger value="basic">
                 {t("settingsBasicTab")}
+              </TabsTrigger>
+              <TabsTrigger value="system-prompt">
+                {t("systemPromptSettingsTab")}
               </TabsTrigger>
               <TabsTrigger value="model">
                 {t("modelSettingsTab")}
@@ -82,6 +83,10 @@ export function SettingsRoute() {
             </TabsList>
 
             <TabsContent value="basic">
+              <BasicSettingsTab settings={data} />
+            </TabsContent>
+
+            <TabsContent value="system-prompt">
               <SystemPromptSettingsTab settings={data} />
             </TabsContent>
 
