@@ -46,3 +46,18 @@ export const LazyWebChatRoute = createLazyRoute(
   () => import("./web-chat-route").then((module) => ({ default: module.WebChatRoute })),
   <WebChatLoading />,
 );
+
+export const LazyDatasetsRoute = createLazyRoute(() =>
+  import("./datasets-route").then((module) => ({ default: module.DatasetsRoute })),
+);
+
+export const LazyNewDatasetModelRoute = createLazyRoute(() =>
+  import("./dataset-create-route").then((module) => ({ default: module.NewDatasetModelRoute })),
+);
+export const LazyNewDatasetRecordRoute = createLazyRoute(() =>
+  import("./dataset-create-route").then((module) => ({ default: module.NewDatasetRecordRoute })),
+);
+
+export const LazyEditDatasetRecordRoute = createLazyRoute(() =>
+  import("./dataset-create-route").then((module) => ({ default: module.EditDatasetRecordRoute })),
+);

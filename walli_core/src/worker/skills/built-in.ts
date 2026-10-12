@@ -24,6 +24,7 @@ export const getBuiltInClientSkills = (
   name: skill.name,
   description: skill.description,
   content: skill.content,
+  resident: settings?.[`resident:${skill.id}`] ?? true,
   enabled: settings?.[skill.key] ?? legacy.find((item) => item.builtInKey === skill.key)?.enabled ?? true,
   createdAt: 0,
   updatedAt: 0,

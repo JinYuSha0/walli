@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { createClientSkill, deleteClientSkill, getClientSkills, updateClientSkill } from "@/api";
+import { setClientSkillResident, createClientSkill, deleteClientSkill, getClientSkills, updateClientSkill } from "@/api";
 import type { ClientSkill } from "@shared/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,7 +45,7 @@ export function SkillsTab({ clientId }: { clientId: string }) {
     onError: () => toast.error(t("skillsDeleteFailed")),
   });
   const toggle = useMutation({
-    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => updateClientSkill(clientId, id, { enabled }),
+    mutationFn: ({ id, enabled, resident }: { id: string; enabled?: boolean; resident?: boolean }) => resident === undefined ? updateClientSkill(clientId, id, { enabled }) : setClientSkillResident(clientId, id, resident),
     onSuccess: async (skill) => {
       await queryClient.cancelQueries({ queryKey });
       queryClient.setQueryData<ClientSkill[]>(queryKey, (current = []) =>
@@ -87,9 +87,17 @@ export function SkillsTab({ clientId }: { clientId: string }) {
             <p className="mt-1 line-clamp-3 whitespace-pre-wrap break-words text-sm text-muted-foreground">{skill.description || t("skillsMissingDescription")}</p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <Switch className="mr-2" checked={skill.enabled} disabled={pending}
-              aria-label={t("skillsEnabled", { name: skill.name })}
-              onCheckedChange={(enabled) => toggle.mutate({ id: skill.id, enabled })} />
+            <div className="mr-2 flex flex-col items-end gap-3">
+              <Switch checked={skill.enabled} disabled={pending}
+                aria-label={t("skillsEnabled", { name: skill.name })}
+                onCheckedChange={(enabled) => toggle.mutate({ id: skill.id, enabled })} />
+              <label className="flex items-center gap-2 text-xs text-muted-foreground" title={t("skillsResidentHint")}>
+                {t("skillsResident")}
+                <Switch checked={skill.resident} disabled={pending}
+                  aria-label={t("skillsResidentLabel", { name: skill.name })}
+                  onCheckedChange={(resident) => toggle.mutate({ id: skill.id, resident })} />
+              </label>
+            </div>
             {!skill.builtInKey && <Button variant="ghost" size="icon" disabled={pending} aria-label={t("skillsEdit")} onClick={() => setEditing(skill)}><Pencil className="size-4" /></Button>}
             {!skill.builtInKey && <Button variant="ghost" size="icon" disabled={pending} aria-label={t("skillsDelete")} onClick={() => remove.mutate(skill.id)}><Trash2 className="size-4" /></Button>}
           </div>

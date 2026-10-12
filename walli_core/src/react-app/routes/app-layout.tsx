@@ -79,7 +79,9 @@ export function AppLayout() {
     "/settings": t("routeSettings"),
     "/clients": t("routeKeys"),
   };
-  const title = location.pathname.startsWith("/settings/")
+  const title = location.pathname.startsWith("/datasets")
+    ? t("datasets.title")
+    : location.pathname.startsWith("/settings/")
     ? t("routeSettings")
     : location.pathname.startsWith("/clients/")
       ? t("routeKeys")

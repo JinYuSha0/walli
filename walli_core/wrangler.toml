@@ -47,3 +47,19 @@ storage = "sqlite"
 [exports.ConfirmFlowDO]
 type = "durable-object"
 storage = "sqlite"
+
+# Dedicated private namespace. Never enable public instance or namespace endpoints.
+[[ai_search_namespaces]]
+binding = "DATASET_SEARCH"
+namespace = "walli-datasets"
+
+[[queues.producers]]
+binding = "DATASET_SYNC_QUEUE"
+queue = "walli-dataset-sync"
+
+[[queues.consumers]]
+queue = "walli-dataset-sync"
+max_batch_size = 5
+max_batch_timeout = 1
+max_retries = 5
+dead_letter_queue = "walli-dataset-sync-dlq"

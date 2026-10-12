@@ -306,6 +306,7 @@ export const clientSkillPatchSchema = clientSkillInputSchema.extend({
   (value) => Object.keys(value).length > 0, "At least one field is required",
 );
 export const clientSkillSchema = clientSkillInputSchema.extend({
+  resident: z.boolean().default(false),
   builtInKey: z.string().nullable(),
   id: z.uuid(),
   clientId: z.uuid(),

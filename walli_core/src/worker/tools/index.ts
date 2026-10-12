@@ -1,3 +1,4 @@
+import { knowledgeToolRoute } from "./tool-knowledge";
 import { Hono } from "hono";
 import type { MiddlewareHandler } from "hono";
 import type { AppBindings } from "../api/types";
@@ -27,6 +28,7 @@ const requireApiToken: MiddlewareHandler<AppBindings> = async (c, next) => {
 
 export const toolsRoute = new Hono<AppBindings>()
   .use("/api/tools/*", requireApiToken)
+  .route("/", knowledgeToolRoute)
   .route("/", skillToolRoute)
   .route("/", timestampToolRoute)
   .route("/", memoryToolRoute)

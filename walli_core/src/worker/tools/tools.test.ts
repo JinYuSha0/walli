@@ -547,6 +547,7 @@ describe("chat tools", () => {
 
   it("keeps the expected built-in tool order", () => {
     expect(BUILT_IN_TOOLS.map((toolConfig) => toolConfig.name)).toEqual([
+      "knowledge_search",
       "timestamp",
       "skills",
       "memory_search",
@@ -695,6 +696,7 @@ describe("chat tools", () => {
     const tools = buildChatTools([...BUILT_IN_TOOLS, ...DEFAULT_SETTINGS.tools]);
 
     expect(Object.keys(tools)).toEqual([
+      "knowledge_search",
       "timestamp",
       "skills",
       "memory_search",
@@ -713,6 +715,7 @@ describe("chat tools", () => {
     );
 
     expect(Object.keys(tools)).toEqual([
+      "knowledge_search",
       "timestamp",
       "skills",
       "memory_search",
@@ -739,6 +742,7 @@ describe("chat tools", () => {
     );
 
     expect(Object.keys(tools)).toEqual([
+      "knowledge_search",
       "timestamp",
       "skills",
       "memory_search",
@@ -918,6 +922,7 @@ describe("chat tools", () => {
     const tools = buildChatTools(DEFAULT_SETTINGS.builtInTools);
 
     expect(Object.keys(tools)).toEqual([
+      "knowledge_search",
       "timestamp",
       "skills",
       "memory_search",
@@ -2088,6 +2093,7 @@ describe("settings tool migration", () => {
     const settings = await getSettings(appKv);
 
     expect(settings.builtInTools.map((tool) => tool.name)).toEqual([
+      "knowledge_search",
       "timestamp",
       "skills",
       "memory_search",

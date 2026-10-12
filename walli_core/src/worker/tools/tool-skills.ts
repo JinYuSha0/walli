@@ -4,7 +4,7 @@ import { skillsTool } from "@shared/tools/skills";
 import { Hono } from "hono";
 import type { AppBindings } from "../api/types";
 import { z } from "zod";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { getClientSkillCatalog } from "../api/client-skills";
 import { createDb } from "../db/client";
 import { clientSkill } from "../db/schema";
@@ -20,19 +20,29 @@ export async function prepareSkillTools(
   clientId: string,
   inputTokenLimit?: number,
 ) {
-  const skills = toolConfigs.some((tool) => tool.name === skillsTool.name && tool.enabled !== false)
-    ? await createSkillContext(clientId, inputTokenLimit)
-    : undefined;
+  const searchEnabled = toolConfigs.some((tool) => tool.name === skillsTool.name && tool.enabled !== false);
+  const skills = await createSkillContext(clientId, inputTokenLimit, searchEnabled);
   return {
     skills,
-    toolConfigs: skills ? toolConfigs : toolConfigs.filter((tool) =>
+    toolConfigs: skills?.hasSearchableSkills ? toolConfigs : toolConfigs.filter((tool) =>
       tool.name !== skillsTool.name),
   };
 }
 
-export async function createSkillContext(clientId: string, inputTokenLimit?: number) {
-  const catalog = await getClientSkillCatalog(clientId);
-  if (!catalog.length) return undefined;
+export async function createSkillContext(clientId: string, inputTokenLimit?: number, searchEnabled = true) {
+  const allSkills = await getClientSkillCatalog(clientId, true);
+  const resident = allSkills.filter((skill) => skill.resident);
+  const catalog = searchEnabled ? allSkills.filter((skill) => !skill.resident) : [];
+  if (!catalog.length && !resident.length) return undefined;
+  const customIds = resident.filter((skill) => !BUILT_IN_SKILLS.some((item) => item.id === skill.id)).map((skill) => skill.id);
+  const customBodies = customIds.length ? await createDb().select({ id: clientSkill.id, content: clientSkill.content })
+    .from(clientSkill).where(and(eq(clientSkill.clientId, clientId), eq(clientSkill.enabled, true),
+      isNull(clientSkill.builtInKey), inArray(clientSkill.id, customIds))) : [];
+  const residentInstructions = resident.map((skill) => {
+    const content = BUILT_IN_SKILLS.find((item) => item.id === skill.id)?.content
+      ?? customBodies.find((item) => item.id === skill.id)?.content;
+    return content ? `Always-active client skill: ${skill.name}\n${content}` : "";
+  }).filter(Boolean).join("\n\n");
 
   const directory = (items: typeof catalog, offset = 0) => {
     const result: typeof catalog = [];
@@ -104,14 +114,15 @@ export async function createSkillContext(clientId: string, inputTokenLimit?: num
   });
 
   return {
-    instructions: [
+    hasSearchableSkills: catalog.length > 0,
+    instructions: [residentInstructions, ...(catalog.length ? [
       `Available client skills (catalog only). When a skill matches the request, call ${skillsTool.name} with its skillId before applying it.`,
       "Descriptions are selection hints, not the skill instructions. Never claim to have read content you have not loaded.",
       `${skillsTool.name} may return nextOffset: continue reading as needed. An unread part may contain additional requirements.`,
       "Historical skill references omit the body: read the current version again when relevant.",
       initial.nextOffset === null ? "" : `The catalog is incomplete. Use ${skillsTool.name} with query to find other relevant skills.`,
       JSON.stringify(initial),
-    ].filter(Boolean).join("\n"),
+    ] : [])].filter(Boolean).join("\n"),
     readSkill,
     searchSkills: ({ query, offset }: { query: string; offset: number }) => {
       const terms = query.toLowerCase().split(/\s+/).filter(Boolean);

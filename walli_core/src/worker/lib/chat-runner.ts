@@ -376,9 +376,9 @@ export const prepareChatCompletion = async ({
     : excludeToolNames;
 
   const [prepared, modelMessages] = await Promise.all([
-    toolsEnabled ? prepareSkillTools(
-      createToolConfigs(resolvedSettings, toolExclusions), session.clientId, inputTokenLimit,
-    ) : undefined,
+    prepareSkillTools(
+      toolsEnabled ? createToolConfigs(resolvedSettings, toolExclusions) : [], session.clientId, inputTokenLimit,
+    ),
     primaryModelSupportsImages
     ? prepareModelMessagesWithAssets(limitedMessageResult.messages, {
         bucket: env.R2,
@@ -396,7 +396,7 @@ export const prepareChatCompletion = async ({
     : limitedMessageResult.messages,
   ]);
   const skillContext = prepared?.skills;
-  const tools: ToolSet | undefined = prepared
+  const tools: ToolSet | undefined = toolsEnabled && prepared
     ? extendChatAsyncContext(
         { sessionId: chatSession?.id, userInfo, skills: skillContext },
         () => ({ ...buildChatTools(prepared.toolConfigs), ...extraTools }),

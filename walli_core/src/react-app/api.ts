@@ -225,5 +225,7 @@ export const createClientSkill = (clientId: string, json: ClientSkillInput) =>
   parseResponse(apiClient.api.admin.clients[":clientId"].skills.$post({ param: { clientId }, json }));
 export const updateClientSkill = (clientId: string, skillId: string, json: ClientSkillPatch) =>
   parseResponse(apiClient.api.admin.clients[":clientId"].skills[":skillId"].$put({ param: { clientId, skillId }, json }));
+export const setClientSkillResident = (clientId: string, skillId: string, resident: boolean) =>
+  parseResponse(apiClient.api.admin.clients[":clientId"].skills[":skillId"].resident.$put({ param: { clientId, skillId }, json: { resident } }));
 export const deleteClientSkill = (clientId: string, skillId: string) =>
   parseResponse(apiClient.api.admin.clients[":clientId"].skills[":skillId"].$delete({ param: { clientId, skillId } }));

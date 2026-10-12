@@ -269,13 +269,13 @@ it("reads built-in content from code and persists only its switch in KV", async 
   expect(skill.content).toContain(":::confirmation-card");
   expect(skill.content).toBe(readFileSync("../walli_chat_blocks/README.md", "utf8"));
   expect(await (await request(b)).json()).toEqual([]);
-  expect(await catalog(a)).toMatchObject([{ id: skill.id }]);
+  expect(await catalog(a)).toEqual([]);
   expect((await request(a, "DELETE", undefined, skill.id)).status).toBe(403);
   expect((await request(b, "DELETE", undefined, skill.id)).status).toBe(404);
   for (const input of [{ name: "Changed" }, { description: "Changed" }, { content: "Changed" }, { enabled: false, content: "Changed" }]) {
     expect((await request(a, "PUT", input, skill.id)).status).toBe(403);
   }
-  expect(await catalog(a)).toMatchObject([{ id: skill.id }]);
+  expect(await catalog(a)).toEqual([]);
   expect((await request(b, "PUT", { enabled: false }, skill.id)).status).toBe(404);
   expect((await request(a, "PUT", { enabled: false }, skill.id)).status).toBe(200);
   expect(await catalog(a)).toEqual([]);
@@ -285,7 +285,7 @@ it("reads built-in content from code and persists only its switch in KV", async 
   expect((await request(a, "PUT", { builtInKey: null }, skill.id)).status).toBe(400);
   expect((await request(a, "POST", { name: "Fake", content: "Fake", builtInKey: "custom-blocks" })).status).toBe(400);
   await request(a, "PUT", { enabled: true }, skill.id);
-  expect(await read((await context(a))!, skill.id)).toMatchObject({ content: skill.content });
+  expect((await context(a))?.instructions).toContain(skill.content);
 });
 
 
@@ -295,8 +295,8 @@ it("uses one metadata query and one KV read per catalog, with no database reads 
   expect(queries).toHaveLength(1);
   expect(queries[0]).not.toContain('"content"');
   expect(kvReads).toBe(1);
-  const [{ id }] = ctx.searchSkills({ query: "", offset: 0 }).skills;
-  await read(ctx, id);
+  expect(ctx.searchSkills({ query: "", offset: 0 }).skills).toEqual([]);
+  expect(ctx.instructions).toContain("Always include `format`");
   expect(queries).toHaveLength(1);
   expect(kvReads).toBe(1);
   expect(sqlite.prepare("SELECT count(*) AS count FROM client_skill").get()!.count).toBe(0);
@@ -312,24 +312,57 @@ it("preserves legacy switches without reading or rewriting stored built-in conte
   expect(skill.enabled).toBe(false);
   expect(skill.content).toContain("Always include `format`");
   await request(a, "PUT", { enabled: true }, legacyId);
-  expect(await catalog(a)).toMatchObject([{ id: skill.id }]);
+  expect(await catalog(a)).toEqual([]);
   expect(sqlite.prepare("SELECT content, enabled FROM client_skill").get()).toMatchObject({ content: "Outdated instructions", enabled: 0 });
 });
 
 
-it("skips skill storage entirely when the tool is disabled", async () => {
+it("checks residency without loading on-demand bodies when the tool is disabled", async () => {
   await runWithChatAsyncContext({ env, origin: "https://test.example" }, () => prepareSkillTools(
     DEFAULT_SETTINGS.builtInTools.map((tool) => ({ ...tool, enabled: false })), a,
   ));
-  expect(queries).toEqual([]);
-  expect(kvReads).toBe(0);
+  expect(queries).toHaveLength(1);
+  expect(queries[0]).not.toContain('"content"');
+  expect(kvReads).toBe(1);
+});
+
+it("loads resident skills directly even without tools and excludes them from discovery", async () => {
+  const skill = await (await request(a, "POST", { name: "Always", content: "Use recommended reply components." })).json() as { id: string };
+  expect((await request(b, "PUT", { resident: true }, `${skill.id}/resident`)).status).toBe(404);
+  expect((await request(a, "PUT", { resident: true }, `${skill.id}/resident`)).status).toBe(200);
+  expect(await catalog(a)).toEqual([]);
+  const active = await context(a);
+  expect(active?.instructions).toContain("Use recommended reply components.");
+  expect(active?.searchSkills({ query: "", offset: 0 }).skills).toEqual([]);
+  expect(await active?.readSkill({ skillId: skill.id, offset: 0 })).toEqual({ error: "Skill not found" });
+  const prepared = await runWithChatAsyncContext({ env, origin: "https://test.example" }, () => prepareSkillTools([], a));
+  expect(prepared.skills?.instructions).toContain("Use recommended reply components.");
+  expect(await context(b)).toBeUndefined();
+  await request(a, "PUT", { enabled: false }, skill.id);
+  expect(await context(a)).toBeUndefined();
+  await request(a, "PUT", { enabled: true }, skill.id);
+  expect((await context(a))?.instructions).toContain("Use recommended reply components.");
+  await request(a, "PUT", { resident: false }, `${skill.id}/resident`);
+  expect((await context(a))?.instructions).not.toContain("Use recommended reply components.");
+  expect(await catalog(a)).toMatchObject([{ id: skill.id }]);
+});
+
+it("supports resident built-in skills without storing their contents in D1", async () => {
+  sqlite.prepare("UPDATE client SET platform = 'web' WHERE id = ?").run(a);
+  expect(await (await request(a)).json()).toMatchObject([{ resident: true }]);
+  const active = await context(a);
+  expect(active?.instructions).toContain("Always include `format`");
+  expect(active?.searchSkills({ query: "", offset: 0 }).skills).toEqual([]);
+  expect(sqlite.prepare("SELECT count(*) AS count FROM client_skill").get()?.count).toBe(0);
 });
 
 it("keeps built-in switches isolated between web clients", async () => {
   sqlite.prepare("UPDATE client SET platform = 'web'").run();
-  const [skill] = await catalog(a);
+  const [skill] = await (await request(a)).json() as Array<{ id: string }>;
   await request(a, "PUT", { enabled: false }, skill.id);
   expect(await catalog(a)).toEqual([]);
+  expect((await context(b))?.instructions).toContain("Always include `format`");
+  await request(b, "PUT", { resident: false }, `${skill.id}/resident`);
   expect(await catalog(b)).toMatchObject([{ id: skill.id }]);
-  expect(await read((await context(b))!, skill.id)).toHaveProperty("content");
+  expect((await context(b))?.instructions).not.toContain("Always include `format`");
 });

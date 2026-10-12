@@ -1,3 +1,5 @@
+import { datasetsRoute } from "./api/datasets";
+import { consumeDatasetSync, type DatasetSyncMessage } from "./datasets/sync";
 import { webChatRoute } from "./api/web-chat";
 import { Hono } from "hono";
 import { createAuth, type AppSession, type AppUser } from "./api/helper/auth";
@@ -48,6 +50,7 @@ app.use("*", async (c, next) => {
 app.on(["GET", "POST"], "/api/auth/*", (c) => createAuth().handler(c.req.raw));
 
 const routes = app
+  .route("/", datasetsRoute)
   .route("/", rootRoute)
   .route("/", meRoute)
   .route("/", toolsRoute)
@@ -61,4 +64,10 @@ const routes = app
 
 export type AppType = typeof routes;
 
-export default routes;
+export default {
+  fetch: routes.fetch,
+  queue: (batch: MessageBatch<DatasetSyncMessage>, env: Env, ctx: ExecutionContext) =>
+    runWithChatAsyncContext({ env, ctx, origin: "https://queue.internal" }, () =>
+      consumeDatasetSync(batch),
+    ),
+} satisfies ExportedHandler<Env, DatasetSyncMessage>;

@@ -26,3 +26,11 @@ Create a managed Turnstile widget for your frontend domains, then configure thes
 Local placeholders are in `.dev.vars.example`. Enable the switch after configuration. Missing keys, failed validation or unavailable Siteverify all block protected requests. Google sign-in still completes first, and the saved question continues through bot verification after returning.
 
 Before enabling in production, verify a successful protected request using a real widget token, then replay the same token and confirm rejection. Automated tests use mocked Siteverify responses; they do not validate a real widget or secret.
+
+## Always-active client skills
+
+Each built-in or custom client skill has an **Always active** switch in client settings. Enabled, always-active skills are loaded in full into every turn's system instructions, including when tool calling is disabled. They are excluded from skill discovery and on-demand reads. Other enabled skills continue to use catalog search and lazy loading. Disabling a skill prevents either loading mode. Built-in skills default to always active; custom skills default to on-demand. Residency is stored with per-client skill settings in KV; no SQL migration is needed. Changes take effect on subsequent turns after KV propagation. Full resident contents consume model context, so use residency for concise instructions needed on every turn.
+
+## Dataset knowledge library
+
+Manage versioned schema-constrained JSON datasets at `/datasets`, bind each dataset to one or more clients, and retrieve authorized reference records with the built-in `knowledge_search` tool. D1 stores the source data and durable synchronization jobs; private, per-dataset AI Search instances provide hybrid retrieval. See [setup, access boundaries, schema evolution, and verification](docs/datasets.md).

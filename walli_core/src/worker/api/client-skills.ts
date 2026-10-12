@@ -16,10 +16,10 @@ export const getClientSkills = async (clientId: string, platform: string) => {
       .orderBy(asc(clientSkill.createdAt), asc(clientSkill.id)).all(),
     getAsyncContext().env.APP_KV.get<Record<string, boolean>>(clientSkillSettingsKey(clientId), "json"),
   ]);
-  return [...getBuiltInClientSkills(clientId, platform, settings, rows), ...rows.filter((row) => row.builtInKey === null)];
+  return [...getBuiltInClientSkills(clientId, platform, settings, rows), ...rows.filter((row) => row.builtInKey === null)].map((skill) => ({ ...skill, resident: settings?.[`resident:${skill.id}`] ?? (skill.builtInKey !== null) }));
 };
 
-export const getClientSkillCatalog = async (clientId: string) => {
+export const getClientSkillCatalog = async (clientId: string, includeResident = false) => {
   // Join the owner in the metadata query; never initialize or synchronize skills during a turn.
   const [rows, settings] = await Promise.all([
     createDb().select({
@@ -37,7 +37,9 @@ export const getClientSkillCatalog = async (clientId: string) => {
   return [
     ...getBuiltInClientSkills(clientId, rows[0]!.platform, settings, custom),
     ...custom.filter((skill) => skill.builtInKey === null),
-  ].filter((skill) => skill.enabled).map(({ id, name, description }) => ({ id, name, description }));
+  ].map((skill) => ({ ...skill, resident: settings?.[`resident:${skill.id}`] ?? (skill.builtInKey !== null) }))
+    .filter((skill) => skill.enabled && (includeResident || !skill.resident))
+    .map(({ id, name, description, resident }) => ({ id, name, description, ...(resident ? { resident: true } : {}) }));
 };
 
 const validateSkill = validator("json", (value, c) => {
@@ -69,7 +71,7 @@ export const clientSkillsRoute = new Hono<AppBindings & { Variables: { skillClie
       ...c.req.valid("json"), id: crypto.randomUUID(), clientId: c.req.param("clientId"),
       createdAt: now, updatedAt: now,
     }).returning();
-    return c.json(skill!, 201);
+    return c.json({ ...skill!, resident: false }, 201);
   })
   .put("/api/admin/clients/:clientId/skills/:skillId", validateSkillPatch, async (c) => {
     const db = createDb();
@@ -97,7 +99,24 @@ export const clientSkillsRoute = new Hono<AppBindings & { Variables: { skillClie
       .set({ ...input, updatedAt: Date.now() })
       .where(and(eq(clientSkill.clientId, c.req.param("clientId")), eq(clientSkill.id, c.req.param("skillId"))))
       .returning();
-    return skill ? c.json(skill) : c.json({ error: "Skill not found" }, 404);
+    const settings = await getAsyncContext().env.APP_KV.get<Record<string, boolean>>(clientSkillSettingsKey(c.req.param("clientId")), "json");
+    return skill ? c.json({ ...skill, resident: settings?.[`resident:${skill.id}`] ?? (skill.builtInKey !== null) }) : c.json({ error: "Skill not found" }, 404);
+  })
+  .put("/api/admin/clients/:clientId/skills/:skillId/resident", validator("json", (value, c) => {
+    const result = z.object({ resident: z.boolean() }).strict().safeParse(value);
+    return result.success ? result.data : c.json({ error: "Invalid residency setting" }, 400);
+  }), async (c) => {
+    const clientId = c.req.param("clientId");
+    const skills = await getClientSkills(clientId, c.get("skillClientPlatform"));
+    const skill = skills.find((item) => item.id === c.req.param("skillId"));
+    if (!skill) return c.json({ error: "Skill not found" }, 404);
+    const kv = getAsyncContext().env.APP_KV;
+    const key = clientSkillSettingsKey(clientId);
+    const settings = await kv.get<Record<string, boolean>>(key, "json") ?? {};
+    const { resident } = c.req.valid("json");
+    settings[`resident:${skill.id}`] = resident;
+    await kv.put(key, JSON.stringify(settings));
+    return c.json({ ...skill, resident });
   })
   .delete("/api/admin/clients/:clientId/skills/:skillId", async (c) => {
     const builtIn = BUILT_IN_SKILLS.find((skill) => skill.id === c.req.param("skillId"));

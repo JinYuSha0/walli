@@ -1,3 +1,4 @@
+import { knowledgeTool } from "./knowledge";
 import {
   createImageToTextModelOutput,
   imageToTextTool,
@@ -11,6 +12,7 @@ import { skillsTool } from "./skills";
 import type { ToolConfig } from "../const";
 
 export const BUILT_IN_TOOLS = [
+  knowledgeTool,
   timestampTool,
   skillsTool,
   memorySearchTool,

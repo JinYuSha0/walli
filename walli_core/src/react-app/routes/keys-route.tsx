@@ -1,3 +1,4 @@
+import { ClientDatasetsTab } from "./settings/components/client-datasets-tab";
 import { SkillsTab } from "./settings/components/skills-tab";
 import {
   IconBrandFlutter,
@@ -122,16 +123,16 @@ type ClientBasicSettingsForm = Pick<
   "enabled" | "additionalSystemPrompt" | "autoDeletePeriod"
 > & { name: string };
 
-const clientTabs = ["basic", "web-settings", "dialog-settings", "skills", "auth", "cors", "usage"] as const;
+const clientTabs = ["basic", "web-settings", "dialog-settings", "skills", "datasets", "auth", "cors", "usage"] as const;
 
 type ClientTab = (typeof clientTabs)[number];
 
 const getClientTabs = (platform: ClientPlatform): ClientTab[] =>
   platform === "telegram"
-    ? ["basic", "skills", "auth", "usage"]
+    ? ["basic", "skills", "datasets", "auth", "usage"]
     : platform === "web"
       ? [...clientTabs]
-      : ["basic", "dialog-settings", "skills", "auth", "usage"];
+      : ["basic", "dialog-settings", "skills", "datasets", "auth", "usage"];
 
 const isClientTab = (value: string): value is ClientTab =>
   clientTabs.includes(value as ClientTab);
@@ -1288,8 +1289,8 @@ export function ClientsRoute() {
   };
 
   return (
-    <div className="flex justify-center p-4 lg:p-6">
-      <Card className="w-full max-w-5xl">
+    <div className={`flex justify-center p-4 lg:p-6 ${activeTab === "datasets" ? "h-full min-h-[36rem]" : ""}`}>
+      <Card className={`w-full max-w-5xl ${activeTab === "datasets" ? "min-h-0" : ""}`}>
         <CardHeader>
           <div className="flex items-center justify-between gap-4">
             <CardTitle>{t("clientsTitle")}</CardTitle>
@@ -1357,12 +1358,13 @@ export function ClientsRoute() {
             {t("clientsKvDelayNote")}
           </p>
         </CardHeader>
-        <CardContent>
+        <CardContent className={activeTab === "datasets" ? "min-h-0 flex-1" : undefined}>
           {!clientsQuery.isPending && clientsQuery.data?.length === 0 && (
             <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">{t("clientsEmpty")}</div>
           )}
           {(clientsQuery.data?.length ?? 0) > 0 && (
           <Tabs
+            className={activeTab === "datasets" ? "flex h-full min-h-0 flex-col" : undefined}
             activationMode="manual"
             value={selectedClient?.id ?? ""}
             onValueChange={(value) => {
@@ -1447,12 +1449,13 @@ export function ClientsRoute() {
             </div>
 
             {selectedClient && (
-              <TabsContent key={selectedClient.id} value={selectedClient.id}>
+              <TabsContent key={selectedClient.id} value={selectedClient.id} className={activeTab === "datasets" ? "min-h-0 flex-1" : undefined}>
                 {clientConfigQuery.isPending ? (
                   <RouteLoading />
                 ) : clientConfigQuery.data ? (
-                  <div className="grid gap-4">
+                  <div className={activeTab === "datasets" ? "flex h-full min-h-0 flex-col gap-4" : "grid gap-4"}>
                   <Tabs
+                    className={activeTab === "datasets" ? "flex min-h-0 flex-1 flex-col" : undefined}
                     activationMode="manual"
                     value={activeTab}
                     onValueChange={(value) => {
@@ -1482,6 +1485,7 @@ export function ClientsRoute() {
                         </TabsTrigger>
                       )}
                       <TabsTrigger value="skills">{t("skillsSettingsTab")}</TabsTrigger>
+                      <TabsTrigger value="datasets">{t("datasets.title")}</TabsTrigger>
                       <TabsTrigger value="auth">
                         {t("authSettingsTab")}
                       </TabsTrigger>
@@ -1495,6 +1499,7 @@ export function ClientsRoute() {
                       </TabsTrigger>
                     </TabsList>
 
+                    <TabsContent value="datasets" className="min-h-0 flex-1"><ClientDatasetsTab key={selectedClient.id} clientId={selectedClient.id} /></TabsContent>
                     <TabsContent value="skills">
                       <SkillsTab key={selectedClient.id} clientId={selectedClient.id} />
                     </TabsContent>

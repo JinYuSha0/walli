@@ -2,6 +2,7 @@ import * as React from "react";
 import { Link } from "@tanstack/react-router";
 import {
   IconDashboard,
+  IconDatabase,
   IconKey,
   IconSettings,
 } from "@tabler/icons-react";
@@ -56,6 +57,7 @@ export function AppSidebar({
         to: "/clients",
         icon: IconKey,
       },
+      { activePrefix: "/datasets", title: t("datasets.title"), to: "/datasets", icon: IconDatabase },
     ],
     navSecondary: [],
   };
